@@ -1,0 +1,15 @@
+{
+  "id": "voice_ai",
+  "name": "Asistente IA por Voz",
+  "version": "1.0.0",
+  "description": "Reconocimiento de voz, cerebro con Gemini LLM y síntesis de voz natural",
+  "eventsEmitted": [
+    "voice:state",
+    "voice:command_received",
+    "privacy:toggle",
+    "wallpaper:cycle"
+  ],
+  "eventsSubscribed": [
+    "voice:trigger"
+  ]
+}

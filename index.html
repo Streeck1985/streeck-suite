@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Windows 11 Custom Suite - Mockups y Personalización Avanzada</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Orbitron:wght@700;900&family=Outfit:wght@700;900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR DE NAVEGACIÓN ENTRE VISTAS -->
+  <nav class="suite-nav" id="suiteNav">
+    <div class="nav-brand">
+      <span class="nav-logo">⚡</span>
+      <strong>Windows 11 Customizer</strong>
+      <span class="nav-tag">Suite Pro</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" data-tab="desktop">🖥️ 1. Simulador de Escritorio</button>
+      <button class="nav-tab" data-tab="showcase">🎨 2. Galería de Diseños Individuales</button>
+      <button class="nav-tab" data-tab="code">💻 3. Cómo se está Programando</button>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-btn-aero" id="quickAeroToggle">🛡️ Modo Privacidad: <strong id="quickAeroStatus">OFF</strong></button>
+    </div>
+  </nav>
+
+  <!-- =========================================================================
+       VISTA 1: SIMULADOR DE ESCRITORIO COMPLETO
+       ========================================================================= -->
+  <main class="view-section active" id="viewDesktop">
+    <div class="desktop-screen" id="desktopScreen">
+
+      <!-- 1. CAPAS DEL FONDO CON RELOJ DE PROFUNDIDAD (3D DEPTH) -->
+      <div class="wallpaper-system" id="wallpaperSystem">
+        <div class="wallpaper-layer bg-layer" id="bgLayer"></div>
+
+        <!-- Reloj de Profundidad Móvil -->
+        <div class="depth-clock-container font-ios" id="depthClock">
+          <div class="clock-date" id="clockDate">LUNES, 26 DE OCTUBRE</div>
+          <div class="clock-time" id="clockTime">20:55</div>
+          <div class="clock-weather-badge">
+            <span class="weather-icon">⛅</span> 24°C • Despejado
+          </div>
+        </div>
+
+        <!-- Sujeto en Primer Plano (Silueta recortada) -->
+        <div class="wallpaper-layer subject-layer" id="subjectLayer"></div>
+      </div>
+
+      <!-- 2. CAPA AERO PRIVACY / FOCUS BLUR -->
+      <div class="aero-privacy-backdrop" id="aeroBackdrop">
+        <div class="aero-grain"></div>
+        <div class="aero-reflection"></div>
+      </div>
+
+      <!-- 3. VENTANA ACTIVA SIMULADA (CON ANIMACIÓN FLUIDA DE MINIMIZAR / MAXIMIZAR) -->
+      <div class="active-app-window glass-aero" id="activeAppWindow">
+        <div class="window-titlebar" id="windowTitlebar">
+          <div class="window-info">
+            <span class="app-icon">💻</span>
+            <span class="app-title">Visual Studio Code - Suite Personalizada Windows 11</span>
+          </div>
+          <div class="window-controls">
+            <button class="win-btn win-min" id="winMinBtn" title="Minimizar (con animación al dock)">─</button>
+            <button class="win-btn win-max" id="winMaxBtn" title="Maximizar / Restaurar">□</button>
+            <button class="win-btn win-close" id="winCloseBtn" title="Cerrar">✕</button>
+          </div>
+        </div>
+        <div class="window-content">
+          <div class="code-preview">
+            <p><span class="tok-kw">const</span> <span class="tok-fn">windowsSuiteConfig</span> = {</p>
+            <p>&nbsp;&nbsp;taskbarFormat: <span class="tok-str" id="cfgTaskbarFormat">"3 Islas / Globos Flotantes"</span>,</p>
+            <p>&nbsp;&nbsp;clockFont: <span class="tok-str" id="activeFontPreview">"Plus Jakarta Sans (iOS)"</span>,</p>
+            <p>&nbsp;&nbsp;minimizeAnimation: <span class="tok-str">"Genie / Spring Scale hacia el dock"</span>,</p>
+            <p>&nbsp;&nbsp;systemFontsLoaded: <span class="tok-bool" id="cfgFontsCount">"Nativas de Windows listas"</span></p>
+            <p>};</p>
+            <div class="privacy-tag">
+              <span class="shield-icon">🛡️</span> Ventana Interactiva: Haz clic en <strong>─</strong> para ver la animación al dock
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. WIDGETS DE ESCRITORIO PERSONALIZABLES -->
+      <div class="desktop-widgets" id="desktopWidgets">
+        
+        <!-- Widget 1: Telemetría Hardware -->
+        <div class="widget-card glass-panel hardware-widget" id="widgetTelemetry">
+          <div class="widget-header">
+            <span class="widget-title">TELEMETRÍA</span>
+            <span class="pulse-dot"></span>
+          </div>
+          <div class="hardware-bars">
+            <div class="hw-item">
+              <div class="hw-label"><span>CPU (Ryzen 7)</span><strong id="cpuVal">18%</strong></div>
+              <div class="hw-progress"><div class="bar-fill" id="cpuBar" style="width: 18%;"></div></div>
+            </div>
+            <div class="hw-item">
+              <div class="hw-label"><span>RAM (DDR5)</span><strong id="ramVal">42%</strong></div>
+              <div class="hw-progress"><div class="bar-fill" id="ramBar" style="width: 42%;"></div></div>
+            </div>
+            <div class="hw-item">
+              <div class="hw-label"><span>GPU (RTX)</span><strong id="gpuVal">27%</strong></div>
+              <div class="hw-progress"><div class="bar-fill" id="gpuBar" style="width: 27%;"></div></div>
+            </div>
+          </div>
+          <div class="suite-footprint-badge">
+            <span class="footprint-dot"></span>
+            <span>Consumo Suite: <strong>~38 MB RAM</strong> • <strong>0.1% CPU</strong> (DirectX 12)</span>
+          </div>
+        </div>
+
+        <!-- Widget 2: Reproductor Spotify -->
+        <div class="widget-card glass-panel quick-media-widget" id="widgetMedia">
+          <div class="widget-header">
+            <span class="widget-title">REPRODUCTOR</span>
+            <span class="widget-badge">Spotify</span>
+          </div>
+          <div class="widget-media-row">
+            <div class="widget-media-thumb">🎵</div>
+            <div class="widget-media-info">
+              <strong>Blinding Lights</strong>
+              <small>The Weeknd • Reproduciendo</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Widget 3: Tareas Rápidas / Notas -->
+        <div class="widget-card glass-panel notes-widget" id="widgetNotes">
+          <div class="widget-header">
+            <span class="widget-title">TAREAS PENDIENTES</span>
+            <span class="widget-badge">3 Notas</span>
+          </div>
+          <ul class="widget-tasks-list">
+            <li><span class="check-icon">✓</span> Barra en 3 islas flotantes</li>
+            <li><span class="check-icon">✓</span> Animación de minimizar ventana</li>
+            <li><span class="check-icon">○</span> Leer fuentes locales de Windows</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- 5. EL NOTCH DINÁMICO (DYNAMIC ISLAND) CON IA POR VOZ -->
+      <header class="notch-wrapper">
+        <div class="dynamic-notch" id="dynamicNotch" data-state="idle">
+          <div class="ai-glow-aura" id="aiGlowAura"></div>
+
+          <div class="notch-content state-idle" id="notchIdle">
+            <div class="notch-left">
+              <span class="island-camera"></span>
+              <span class="island-time">20:55</span>
+            </div>
+            <div class="notch-center-indicator">
+              <span class="ai-status-orb"></span>
+            </div>
+            <div class="notch-right">
+              <span class="status-icon">🔋 98%</span>
+              <span class="status-icon">📶</span>
+            </div>
+          </div>
+
+          <div class="notch-content state-music" id="notchMusic">
+            <div class="media-thumb">
+              <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150&auto=format&fit=crop&q=80" alt="Album" class="album-art">
+            </div>
+            <div class="media-details">
+              <span class="song-title">Starboy</span>
+              <span class="song-artist">The Weeknd • Spotify</span>
+              <div class="media-controls">
+                <button class="media-btn">⏮</button>
+                <button class="media-btn play-btn" id="playPauseBtn">⏸</button>
+                <button class="media-btn">⏭</button>
+              </div>
+            </div>
+            <div class="audio-bars-wave">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+
+          <div class="notch-content state-notification" id="notchNotification">
+            <div class="notif-badge">💬</div>
+            <div class="notif-body">
+              <strong class="notif-sender">WhatsApp • Carlos M.</strong>
+              <p class="notif-msg">¿Ya viste cómo quedó la barra dividida en 3 globos flotantes? Quedó brutal.</p>
+            </div>
+            <div class="notif-actions">
+              <button class="action-btn-reply">Responder</button>
+            </div>
+          </div>
+
+          <div class="notch-content state-voice-ai" id="notchVoiceAI">
+            <div class="ai-voice-header">
+              <div class="ai-brand">
+                <span class="ai-sparkle">✦</span>
+                <strong>Asistente IA • Escuchando voz...</strong>
+              </div>
+              <span class="ai-mode-pill">Gemini Voice Core</span>
+            </div>
+            <div class="ai-waveform-container">
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+              <div class="sound-wave-bar"></div>
+            </div>
+            <div class="ai-transcription" id="aiTranscript">
+              "Hola, estoy lista. Di 'minimizar ventana' o 'dividir barra en 3 islas'..."
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- 5.5. MENÚ DE INICIO AERO GLASS (MODERNO, TRANSLÚCIDO E INTERACTIVO) -->
+      <div class="streeck-start-menu glass-aero" id="streeckStartMenu">
+        <!-- Barra de Búsqueda Integrada con Gemini AI -->
+        <div class="start-search-box">
+          <span class="start-search-icon">🔍</span>
+          <input type="text" placeholder="Escribe para buscar apps, archivos o consultar a Gemini..." class="start-search-input" id="startSearchInput">
+          <div class="start-search-ai-pill" title="Asistente IA integrado en el Menú">
+            <span class="ai-sparkle">✨</span> Gemini
+          </div>
+        </div>
+
+        <!-- Sección de Aplicaciones Ancladas -->
+        <div class="start-section-header">
+          <span class="section-title">Anclados</span>
+          <button class="section-all-btn" id="startAllAppsBtn">Todas las apps ›</button>
+        </div>
+
+        <div class="start-pinned-grid">
+          <div class="pinned-app-item" data-app-name="Microsoft Edge" title="Microsoft Edge">
+            <div class="pinned-icon-box bg-edge">🌐</div>
+            <span class="pinned-name">Edge</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Visual Studio Code" title="Visual Studio Code">
+            <div class="pinned-icon-box bg-vscode">💻</div>
+            <span class="pinned-name">VS Code</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Explorador de Archivos" title="Explorador de Archivos">
+            <div class="pinned-icon-box bg-explorer">📁</div>
+            <span class="pinned-name">Archivos</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Spotify" title="Spotify">
+            <div class="pinned-icon-box bg-spotify">🎵</div>
+            <span class="pinned-name">Spotify</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Terminal" title="Windows Terminal">
+            <div class="pinned-icon-box bg-terminal">⚡</div>
+            <span class="pinned-name">Terminal</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Configuración" title="Configuración">
+            <div class="pinned-icon-box bg-settings">⚙️</div>
+            <span class="pinned-name">Ajustes</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Discord" title="Discord">
+            <div class="pinned-icon-box bg-discord">💬</div>
+            <span class="pinned-name">Discord</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Steam" title="Steam">
+            <div class="pinned-icon-box bg-steam">🎮</div>
+            <span class="pinned-name">Steam</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Photoshop" title="Adobe Photoshop">
+            <div class="pinned-icon-box bg-photoshop">🎨</div>
+            <span class="pinned-name">Photoshop</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Calculadora" title="Calculadora">
+            <div class="pinned-icon-box bg-calc">🧮</div>
+            <span class="pinned-name">Calculadora</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Microsoft Store" title="Microsoft Store">
+            <div class="pinned-icon-box bg-store">🛍️</div>
+            <span class="pinned-name">Store</span>
+          </div>
+          <div class="pinned-app-item" data-app-name="Gemini Assistant" title="Gemini Assistant">
+            <div class="pinned-icon-box bg-gemini">✨</div>
+            <span class="pinned-name">Gemini</span>
+          </div>
+        </div>
+
+        <!-- Sección de Archivos y Recomendados -->
+        <div class="start-section-header">
+          <span class="section-title">Recomendados</span>
+          <button class="section-all-btn">Más ›</button>
+        </div>
+
+        <div class="start-recommended-list">
+          <div class="recommended-item" title="Abrir archivo reciente">
+            <div class="rec-icon">📦</div>
+            <div class="rec-details">
+              <span class="rec-title">Personalizar_windows_11.zip</span>
+              <span class="rec-time">Hace 5 min • Descargas</span>
+            </div>
+          </div>
+          <div class="recommended-item" title="Abrir documento">
+            <div class="rec-icon">📐</div>
+            <div class="rec-details">
+              <span class="rec-title">Arquitectura_Modular.md</span>
+              <span class="rec-time">Hace 20 min • Documentos</span>
+            </div>
+          </div>
+          <div class="recommended-item" title="Abrir tema DWM">
+            <div class="rec-icon">💎</div>
+            <div class="rec-details">
+              <span class="rec-title">Aero_Glass_Theme_DWM.reg</span>
+              <span class="rec-time">Hace 1 hora • Configuración</span>
+            </div>
+          </div>
+          <div class="recommended-item" title="Abrir proyecto C#">
+            <div class="rec-icon">⚡</div>
+            <div class="rec-details">
+              <span class="rec-title">Voice_AI_Island.cs</span>
+              <span class="rec-time">Ayer a las 18:30 • Workspace</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pie de Página: Perfil de Usuario y Opciones de Apagado -->
+        <div class="start-footer">
+          <div class="start-user-pill" title="Cuenta de usuario activa">
+            <div class="user-avatar-badge">👤</div>
+            <div class="user-meta">
+              <span class="user-name">Jonathan CR</span>
+              <span class="user-role">Administrador del Sistema</span>
+            </div>
+          </div>
+          <div class="start-power-box">
+            <button class="start-power-btn" id="startPowerBtn" title="Opciones de energía y apagado">
+              ⏻
+            </button>
+            <div class="power-dropdown-menu" id="powerMenu">
+              <div class="power-menu-item" data-power="sleep"><span class="p-icon">🌙</span> Suspender</div>
+              <div class="power-menu-item" data-power="restart"><span class="p-icon">🔄</span> Reiniciar</div>
+              <div class="power-menu-item" data-power="shutdown"><span class="p-icon">⏻</span> Apagar</div>
+              <div class="power-menu-item" data-power="lock"><span class="p-icon">🔒</span> Bloquear sesión</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. BARRA DE TAREAS MODULAR: SOPORTE PARA 3 GLOBOS / ISLAS FLOTANTES -->
+      <footer class="taskbar-wrapper" id="taskbarWrapper">
+        <div class="streeck-taskbar taskbar-mode-split glass-aero" id="streeckTaskbar">
+          
+          <!-- GLOBO / ISLA 1: INICIO Y BÚSQUEDA -->
+          <div class="tb-island island-start-search" id="islandStartSearch">
+            <button class="taskbar-item start-button" title="Inicio" id="startBtn">
+              <svg viewBox="0 0 24 24" class="win-logo-icon">
+                <path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/>
+              </svg>
+            </button>
+            <div class="taskbar-search" id="taskbarSearch" title="Buscar">
+              <span class="search-icon">🔍</span>
+              <input type="text" placeholder="Buscar o preguntar a IA..." class="search-input" readonly>
+            </div>
+          </div>
+
+          <!-- GLOBO / ISLA 2: APLICACIONES EN EJECUCIÓN (CON ANIMACIÓN DE MINIMIZAR) -->
+          <div class="tb-island island-apps" id="islandApps">
+            <button class="taskbar-item app-icon-btn active" id="taskbarVsCodeBtn" title="Visual Studio Code (Haz clic para minimizar/restaurar)">
+              <span class="icon-glyph">💻</span>
+              <span class="active-dot"></span>
+            </button>
+            <button class="taskbar-item app-icon-btn" title="Explorador de Archivos">
+              <span class="icon-glyph">📁</span>
+            </button>
+            <button class="taskbar-item app-icon-btn active" title="Spotify">
+              <span class="icon-glyph">🎵</span>
+              <span class="active-dot"></span>
+            </button>
+            <button class="taskbar-item app-icon-btn" title="Navegador Arc">
+              <span class="icon-glyph">🌐</span>
+            </button>
+            <button class="taskbar-item app-icon-btn" title="Terminal Powershell">
+              <span class="icon-glyph">⚡</span>
+            </button>
+          </div>
+
+          <!-- GLOBO / ISLA 3: BANDEJA DEL SISTEMA (TRAY + RELOJ) -->
+          <div class="tb-island island-tray" id="islandTray">
+            <button class="tray-btn" title="Ocultar iconos">⌃</button>
+            <button class="tray-btn" title="Modo Privacidad Aero" id="trayAeroBtn">🛡️</button>
+            <button class="tray-btn" title="Internet / Audio / Batería">
+              <span class="tray-status">📶</span>
+              <span class="tray-status">🔊</span>
+              <span class="tray-status">🔋</span>
+            </button>
+            <div class="tray-clock" title="Centro de Notificaciones">
+              <div class="tray-time">20:55</div>
+              <div class="tray-date">26/10/2026</div>
+            </div>
+          </div>
+
+        </div>
+      </footer>
+
+      <!-- 7. PANEL DE CONTROL DE PERSONALIZACIÓN AVANZADA -->
+      <aside class="control-panel glass-panel" id="controlPanel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>⚙️</span>
+            <strong>Personalizador en Vivo</strong>
+          </div>
+          <button class="panel-minimize-btn" id="togglePanelBtn">−</button>
+        </div>
+        
+        <div class="panel-body" id="panelBody">
+
+          <!-- SECCIÓN 1: FORMATO DE LA BARRA (3 ISLAS VS DOCK VS COMPLETO) -->
+          <div class="control-group highlight-group">
+            <label class="group-label">🏝️ FORMATO DE BARRA DE TAREAS:</label>
+            <div class="btn-grid-3">
+              <button class="btn-ctrl active" data-tb-format="split">🏝️ 3 Islas</button>
+              <button class="btn-ctrl" data-tb-format="dock">💊 Cápsula</button>
+              <button class="btn-ctrl" data-tb-format="full">📏 Completa</button>
+            </div>
+            
+            <!-- Separación entre Cápsulas / Globos -->
+            <div class="range-field" id="islandGapContainer" style="margin-top: 6px;">
+              <span>Separación entre Globos: <strong id="islandGapLabel">14px</strong></span>
+              <input type="range" id="islandGapRange" min="0" max="80" value="14">
+            </div>
+            <div class="btn-grid-3" style="margin-top: 4px;">
+              <button class="btn-ctrl" data-gap-preset="0">Juntas (0px)</button>
+              <button class="btn-ctrl active" data-gap-preset="14">Flotantes (14px)</button>
+              <button class="btn-ctrl" data-gap-preset="edges">A los Extremos</button>
+            </div>
+            <small class="hint-text">Elige si quieres que las 3 cápsulas estén pegadas, con espacio flotante o ancladas a las esquinas.</small>
+          </div>
+
+          <!-- SECCIÓN 2: ANIMACIÓN DE VENTANA Y SELECCIÓN DE ESTILO -->
+          <div class="control-group">
+            <label class="group-label">🎬 ANIMACIÓN DE MINIMIZAR:</label>
+            <div class="select-field-box">
+              <label>Elige la física de animación:</label>
+              <select id="animSelect" class="custom-select">
+                <option value="anim-genie" selected>🧞 1. Genie / Lámpara Mágica (Succión fluida en 'S')</option>
+                <option value="anim-jelly">💧 2. Gota Líquida / Gelatina (Deformación elástica)</option>
+                <option value="anim-vortex">🌀 3. Vórtice Galáctico (Espiral 540° hacia el dock)</option>
+                <option value="anim-origami">📄 4. Plegado Origami 3D (Dobleces en perspectiva)</option>
+                <option value="anim-abyss">🌌 5. Abismo Cósmico 3D (Caída en profundidad Z)</option>
+                <option value="anim-spring">🍏 6. Escala Elástica Suave (Spring tipo Apple / Win 11)</option>
+                <option value="anim-holo">⚡ 7. Disolución Holográfica (Escaneo Sci-Fi)</option>
+              </select>
+            </div>
+
+            <!-- Control de Velocidad y Cámara Lenta -->
+            <div class="range-field" style="margin-top: 6px;">
+              <span>Velocidad / Duración: <strong id="animDurationLabel">0.85s (Cinemática)</strong></span>
+              <input type="range" id="animDurationRange" min="0.3" max="2.5" step="0.05" value="0.85">
+            </div>
+            <div class="btn-grid-3" style="margin-top: 4px;">
+              <button class="btn-ctrl" data-speed="0.38">⚡ Rápida (0.4s)</button>
+              <button class="btn-ctrl active" data-speed="0.85">🎬 Cinemática (0.85s)</button>
+              <button class="btn-ctrl" data-speed="1.75">🐢 Cámara Lenta (1.75s)</button>
+            </div>
+
+            <div class="btn-grid" style="margin-top: 6px;">
+              <button class="btn-ctrl btn-accent" id="testMinimizeBtn">🔽 Probar Minimizar</button>
+              <button class="btn-ctrl" id="testMaximizeBtn">⏹ Maximizar</button>
+            </div>
+            <small class="hint-text">En "Cámara Lenta" puedes apreciar cuadro por cuadro la física de la animación.</small>
+          </div>
+
+          <!-- SECCIÓN DE INTENSIDAD DEL MODO PRIVACIDAD -->
+          <div class="control-group">
+            <label class="group-label">🛡️ INTENSIDAD DEL MODO PRIVACIDAD:</label>
+            <div class="range-field">
+              <span>Intensidad de Desenfoque (Blur): <strong id="privacyBlurLabel">25px</strong></span>
+              <input type="range" id="privacyBlurRange" min="5" max="50" value="25">
+            </div>
+            <div class="range-field">
+              <span>Nivel de Oscurecimiento: <strong id="privacyDimLabel">60%</strong></span>
+              <input type="range" id="privacyDimRange" min="15" max="85" value="60">
+            </div>
+          </div>
+          
+          <!-- SECCIÓN 3: FUENTES DEL SISTEMA WINDOWS & WEB -->
+          <div class="control-group">
+            <label class="group-label">🔤 FUENTES DE WINDOWS PARA EL RELOJ:</label>
+            
+            <!-- Botón para leer fuentes de la PC del usuario -->
+            <button class="btn-ctrl btn-accent-cyan" id="scanWindowsFontsBtn">💻 Escanear Fuentes de mi Windows</button>
+
+            <!-- Selector de fuentes nativas -->
+            <div class="select-field-box">
+              <label>Seleccionar de la lista:</label>
+              <select id="windowsFontSelector" class="custom-select">
+                <optgroup label="Nativas de Windows 11">
+                  <option value="Segoe UI Variable">Segoe UI Variable (Nativo Win 11)</option>
+                  <option value="Bahnschrift">Bahnschrift (Variable Dinámica)</option>
+                  <option value="Century Gothic">Century Gothic (Geométrica)</option>
+                  <option value="Consolas">Consolas (Monospace)</option>
+                  <option value="Trebuchet MS">Trebuchet MS</option>
+                  <option value="Georgia">Georgia (Serif Clásico)</option>
+                  <option value="Arial Black">Arial Black (Impacto)</option>
+                </optgroup>
+                <optgroup label="Estilos Modernos / Mockup">
+                  <option value="Plus Jakarta Sans" selected>Plus Jakarta Sans (iOS / Clean)</option>
+                  <option value="Orbitron">Orbitron (Cyberpunk)</option>
+                  <option value="Outfit">Outfit (Bold Display)</option>
+                  <option value="Playfair Display">Playfair Display (Elegante)</option>
+                  <option value="Share Tech Mono">Share Tech Mono (Digital HUD)</option>
+                  <option value="JetBrains Mono">JetBrains Mono</option>
+                </optgroup>
+              </select>
+            </div>
+
+            <!-- Escribir cualquier fuente instalada -->
+            <div class="input-text-field">
+              <span>O escribe el nombre de cualquier fuente de tu PC:</span>
+              <input type="text" id="customFontInput" placeholder="Ej: Cascadia Code, Helvetica, Tahoma..." class="custom-text-input">
+            </div>
+          </div>
+
+          <!-- SECCIÓN 4: MOVIMIENTO Y POSICIÓN DEL RELOJ -->
+          <div class="control-group">
+            <label class="group-label">📍 POSICIÓN DEL RELOJ EN PANTALLA:</label>
+            <div class="btn-grid-4">
+              <button class="btn-ctrl" data-align="top-left">↖ Izq</button>
+              <button class="btn-ctrl active" data-align="top-center">⬆ Centro</button>
+              <button class="btn-ctrl" data-align="top-right">↗ Der</button>
+              <button class="btn-ctrl" data-align="center">🎯 Medio</button>
+            </div>
+            
+            <div class="sliders-subgrid">
+              <div class="range-field">
+                <span>Eje Y (Vertical): <strong id="clockYLabel">140px</strong></span>
+                <input type="range" id="clockYRange" min="20" max="450" value="140">
+              </div>
+              <div class="range-field">
+                <span>Eje X (Horizontal): <strong id="clockXLabel">50%</strong></span>
+                <input type="range" id="clockXRange" min="15" max="85" value="50">
+              </div>
+              <div class="range-field">
+                <span>Tamaño: <strong id="clockSizeLabel">9.5rem</strong></span>
+                <input type="range" id="clockSizeRange" min="4" max="14" step="0.5" value="9.5">
+              </div>
+            </div>
+
+            <div class="btn-grid">
+              <button class="btn-ctrl active" id="toggleDepthBtn">Silueta 3D: ON</button>
+              <button class="btn-ctrl" id="changeWallpaperBtn">Cambiar Silueta</button>
+            </div>
+            <button class="btn-ctrl btn-3d-explode" id="explode3DBtn">👁️ Desglose de Capas 3D</button>
+          </div>
+
+          <!-- SECCIÓN 5: PERSONALIZACIÓN DE WIDGETS -->
+          <div class="control-group">
+            <label class="group-label">🧩 PERSONALIZAR WIDGETS:</label>
+            <div class="toggle-chips-grid">
+              <button class="chip-toggle active" data-widget="widgetTelemetry">📊 Telemetría</button>
+              <button class="chip-toggle active" data-widget="widgetMedia">🎵 Música</button>
+              <button class="chip-toggle active" data-widget="widgetNotes">📝 Notas/Tareas</button>
+            </div>
+            
+            <div class="color-picker-row">
+              <span>Color de Acento:</span>
+              <div class="color-dots">
+                <button class="color-dot active" data-accent="cyan" style="background: #00d2ff;" title="Aero Cyan"></button>
+                <button class="color-dot" data-accent="purple" style="background: #a855f7;" title="Púrpura Neon"></button>
+                <button class="color-dot" data-accent="green" style="background: #10b981;" title="Esmeralda"></button>
+                <button class="color-dot" data-accent="orange" style="background: #f97316;" title="Naranja"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECCIÓN 6: BARRA DE TAREAS - BÚSQUEDA Y CRISTAL -->
+          <div class="control-group">
+            <label class="group-label">🪟 BÚSQUEDA EN LA BARRA:</label>
+            <div class="btn-grid-3">
+              <button class="btn-ctrl active" data-search="full">🔎 Completa</button>
+              <button class="btn-ctrl" data-search="icon">🔍 Solo Icono</button>
+              <button class="btn-ctrl" data-search="hidden">🚫 Oculta</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="group-label">✨ ESTILO DE CRISTAL / AERO DWM:</label>
+            <div class="btn-grid-2">
+              <button class="btn-ctrl active" data-tb-glass="glass-aero">💎 Aero Acrílico</button>
+              <button class="btn-ctrl" data-tb-glass="glass-pure">🪟 100% Transparente</button>
+              <button class="btn-ctrl" data-tb-glass="glass-dark">🌑 Obsidiana Frosted</button>
+              <button class="btn-ctrl" data-tb-glass="glass-neon">⚡ Resplandor Neón</button>
+            </div>
+            <div class="aero-scope-badge">
+              <span class="badge-icon">🌐</span>
+              <span><strong>Aplica Globalmente:</strong> Ventanas, Menú Inicio, Barra y Widgets se transforman al unísono.</span>
+            </div>
+          </div>
+
+          <!-- SECCIÓN 7: ACCESO RÁPIDO AL MENÚ DE INICIO -->
+          <div class="control-group">
+            <label class="group-label">🪟 MENÚ DE INICIO AERO:</label>
+            <button class="btn-ctrl" id="ctrlToggleStartMenu" style="width: 100%; justify-content: center; background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); font-weight: 700;">
+              ✨ Abrir / Cerrar Menú de Inicio
+            </button>
+          </div>
+
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- =========================================================================
+       VISTA 2: GALERÍA DE DISEÑOS INDIVIDUALES (MOCKUPS AISLADOS)
+       ========================================================================= -->
+  <section class="view-section" id="viewShowcase">
+    <div class="showcase-container">
+      <div class="showcase-header">
+        <h2>🎨 Catálogo de Diseños y Variaciones</h2>
+        <p>Inspecciona las variaciones de tipografías del reloj, modos de barra y estilos de cristal:</p>
+      </div>
+
+      <div class="cards-grid">
+
+        <!-- TARJETA FORMATO 3 ISLAS -->
+        <article class="showcase-card">
+          <div class="card-badge">Diseño Exclusivo</div>
+          <h3>Barra de Tareas Dividida en 3 Globos Flotantes</h3>
+          <p class="card-desc">Cada sección vive en su propia isla de cristal esmerilado con esquinas redondeadas independientes:</p>
+          <div class="mini-stage split-stage">
+            <div class="split-islands-preview">
+              <div class="mini-island">🪟 🔍</div>
+              <div class="mini-island center-island">💻 📁 🎵 🌐 ⚡</div>
+              <div class="mini-island">📶 🔊 20:55</div>
+            </div>
+          </div>
+          <div class="card-specs">
+            <div><strong>Composición:</strong> 3 píldoras desacopladas con gap de 14px</div>
+            <div><strong>Efecto:</strong> Micro-elevación independiente en hover</div>
+          </div>
+        </article>
+
+        <!-- TARJETA ANIMACIÓN DE MINIMIZAR -->
+        <article class="showcase-card">
+          <div class="card-badge">Física y Animaciones</div>
+          <h3>Animación de Minimizar Ventana hacia el Dock</h3>
+          <p class="card-desc">Efecto suave de absorción (Genie / Spring Scale) directamente hacia el icono de la barra de tareas.</p>
+          <div class="mini-stage anim-stage">
+            <div class="anim-ghost-window">
+              <span>💻 VS Code</span>
+            </div>
+            <div class="anim-curve-indicator">⇣ Absorción fluida</div>
+            <div class="anim-target-icon">💻</div>
+          </div>
+          <div class="card-specs">
+            <div><strong>Curva:</strong> Cubic-bezier elástica (0.16, 1, 0.3, 1)</div>
+            <div><strong>Duración:</strong> 380ms a 60/120 FPS</div>
+          </div>
+        </article>
+
+        <!-- TARJETA FUENTES NATIVAS WINDOWS -->
+        <article class="showcase-card">
+          <div class="card-badge">Tipografías de Windows</div>
+          <h3>Lector de Fuentes Locales (queryLocalFonts)</h3>
+          <p class="card-desc">Carga directa de todas las fuentes TTF/OTF instaladas en Windows para el reloj 3D:</p>
+          <div class="fonts-preview-grid">
+            <div class="font-sample-item" style="font-family: 'Segoe UI Variable', sans-serif;"><span>20:55</span><small>Segoe UI Variable (Windows 11)</small></div>
+            <div class="font-sample-item" style="font-family: 'Bahnschrift', sans-serif;"><span>20:55</span><small>Bahnschrift (Windows Variable)</small></div>
+            <div class="font-sample-item" style="font-family: 'Century Gothic', sans-serif;"><span>20:55</span><small>Century Gothic</small></div>
+            <div class="font-sample-item" style="font-family: 'Orbitron', monospace;"><span>20:55</span><small>Orbitron (Cyberpunk)</small></div>
+          </div>
+        </article>
+
+        <!-- TARJETA WIDGETS PERSONALIZABLES -->
+        <article class="showcase-card">
+          <div class="card-badge">Widgets Modulares</div>
+          <h3>Widgets de Escritorio con Acentos de Color</h3>
+          <p class="card-desc">Tarjetas de cristal flotantes con telemetría en tiempo real, reproductor y notas pendientes.</p>
+          <div class="materials-preview-grid">
+            <div class="mat-item mat-aero"><span>💎 Aero Acrílico</span><small>Blur 28px + Saturación</small></div>
+            <div class="mat-item mat-pure"><span>🪟 100% Transparente</span><small>Iconos flotando puros</small></div>
+            <div class="mat-item mat-dark"><span>🌑 Obsidiana Frosted</span><small>Ahumado oscuro elegante</small></div>
+            <div class="mat-item mat-neon"><span>⚡ Resplandor Neón</span><small>Borde reactivo brillante</small></div>
+          </div>
+        </article>
+
+        <!-- TARJETA MENÚ DE INICIO AERO GLASS -->
+        <article class="showcase-card">
+          <div class="card-badge">Menú de Inicio</div>
+          <h3>Menú de Inicio Aero Glass (DWM Global)</h3>
+          <p class="card-desc">Translúcido, con búsqueda asistida por IA Gemini, rejilla de apps ancladas y sección de documentos recientes:</p>
+          <div class="mini-stage" style="flex-direction: column; gap: 8px; padding: 12px;">
+            <div style="background: rgba(255,255,255,0.08); border-radius: 8px; padding: 6px 12px; font-size: 0.76rem; width: 100%; display: flex; justify-content: space-between;">
+              <span>🔍 Buscar apps...</span>
+              <span style="color: #a855f7; font-weight: 700;">✨ Gemini</span>
+            </div>
+            <div style="display: flex; gap: 6px; font-size: 1.1rem; justify-content: center;">
+              <span>🌐</span><span>💻</span><span>📁</span><span>🎵</span><span>⚡</span><span>⚙️</span>
+            </div>
+          </div>
+          <div class="card-specs">
+            <div><strong>Cobertura Global:</strong> Aplica a todas las ventanas, inicio y dock</div>
+            <div><strong>Composición:</strong> DWMWA_SYSTEMBACKDROP_TYPE + Acrylic blur</div>
+          </div>
+        </article>
+
+        <!-- TARJETA EFICIENCIA Y BENCHMARK DE CONSUMOS -->
+        <article class="showcase-card">
+          <div class="card-badge" style="background: #10b981;">Ultraligero</div>
+          <h3>Consumo en el Sistema vs Otras Herramientas</h3>
+          <p class="card-desc">Comparativa técnica de memoria RAM, uso de CPU y gestión de batería/gaming:</p>
+          <div class="benchmark-table-box">
+            <table class="benchmark-table">
+              <thead>
+                <tr>
+                  <th>Herramienta</th>
+                  <th>RAM</th>
+                  <th>CPU Reposo</th>
+                  <th>Modo Juegos</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="highlight-row">
+                  <td><strong>⚡ Nuestra Suite Nativa</strong></td>
+                  <td><span class="badge-good">~38 MB</span></td>
+                  <td><span class="badge-good">0.1%</span></td>
+                  <td><span class="badge-good">0% (Auto-pausa)</span></td>
+                </tr>
+                <tr>
+                  <td>Rainmeter (Varios skins)</td>
+                  <td>120-180 MB</td>
+                  <td>1.5% - 4%</td>
+                  <td>Activo</td>
+                </tr>
+                <tr>
+                  <td>Wallpaper Engine</td>
+                  <td>250-400 MB</td>
+                  <td>3% - 8%</td>
+                  <td>Configurable</td>
+                </tr>
+                <tr>
+                  <td>Apps basadas en Electron</td>
+                  <td>450-800 MB</td>
+                  <td>2% - 6%</td>
+                  <td>Sin optimizar</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-specs">
+            <div><strong>Motor Gráfico:</strong> DirectX 12 / DWM (Zero CPU overhead)</div>
+            <div><strong>Event-Driven:</strong> Sin bucles 'while' consumiendo ciclos de fondo</div>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       VISTA 3: CÓMO SE ESTÁ PROGRAMANDO (EXPLICACIÓN TÉCNICA)
+       ========================================================================= -->
+  <section class="view-section" id="viewCode">
+    <div class="code-container">
+      <div class="code-header">
+        <h2>💻 Cómo se está Programando</h2>
+        <p>Detalles del código para la división en 3 islas, animación de ventana y lectura de fuentes de Windows:</p>
+      </div>
+
+      <div class="code-modules-list">
+
+        <!-- CÓDIGO 3 ISLAS FLOTANTES -->
+        <div class="code-module-card">
+          <div class="cm-head">
+            <span class="cm-badge">Barra Flotante</span>
+            <h3>1. División en 3 Islas / Globos Flotantes</h3>
+          </div>
+          <p class="cm-desc">
+            En lugar de una sola caja rectangular, la barra se compone de 3 sub-contenedores (<code>.tb-island</code>) que en modo dividido se separan en 3 cápsulas flotantes independientes con cristal y sombra propia:
+          </p>
+          <pre class="code-block"><code>/* Modo 3 Islas Flotantes */
+.streeck-taskbar.taskbar-mode-split {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  gap: 14px;
+}
+
+/* Cada globo / isla individual */
+.streeck-taskbar.taskbar-mode-split .tb-island {
+  background: rgba(14, 18, 28, 0.76);
+  backdrop-filter: blur(28px) saturate(220%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  padding: 7px 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+}</code></pre>
+        </div>
+
+        <!-- CÓDIGO ANIMACIÓN DE MINIMIZAR -->
+        <div class="code-module-card">
+          <div class="cm-head">
+            <span class="cm-badge">Animaciones</span>
+            <h3>2. Animación de Minimizar / Restaurar hacia el Dock</h3>
+          </div>
+          <p class="cm-desc">
+            Cuando el usuario minimiza, calculamos la posición del icono en la barra de tareas y aplicamos una transformación que absorbe la ventana hacia él:
+          </p>
+          <pre class="code-block"><code>/* Animación de Minimizar hacia la barra */
+.active-app-window.minimized {
+  transform: translate(-36%, 130%) scale(0.06);
+  opacity: 0;
+  pointer-events: none;
+  filter: blur(10px);
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Restaurar ventana con rebote elástico */
+.active-app-window {
+  transition: all 0.42s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}</code></pre>
+        </div>
+
+        <!-- CÓDIGO LECTURA DE FUENTES DE WINDOWS -->
+        <div class="code-module-card">
+          <div class="cm-head">
+            <span class="cm-badge">Fuentes Windows</span>
+            <h3>3. Lector de Fuentes Instaladas en Windows (queryLocalFonts)</h3>
+          </div>
+          <p class="cm-desc">
+            Tanto en la web moderna (Chromium/Edge) como en la app nativa de Windows (C# <code>InstalledFontCollection</code>), podemos leer todas las fuentes del usuario:
+          </p>
+          <pre class="code-block"><code>// Lectura de fuentes instaladas en la PC del usuario
+async function loadInstalledWindowsFonts() {
+  if ('queryLocalFonts' in window) {
+    const availableFonts = await window.queryLocalFonts();
+    const uniqueFamilies = [...new Set(availableFonts.map(f => f.family))];
+    
+    // Rellenar selector automáticamente con las fuentes de Windows
+    populateFontDropdown(uniqueFamilies);
+  }
+}</code></pre>
+        </div>
+
+        <!-- CÓDIGO AERO GLASS GLOBAL DWM -->
+        <div class="code-module-card">
+          <div class="cm-head">
+            <span class="cm-badge">DWM Global</span>
+            <h3>4. Aplicación de Aero Glass Global a TODAS las Ventanas y Menú de Inicio</h3>
+          </div>
+          <p class="cm-desc">
+            En Windows 11 nativo, el DWM (Desktop Window Manager) controla el fondo de todas las ventanas mediante la API Win32 <code>DwmSetWindowAttribute</code>. Así es como el material elegido se aplica uniformemente a cualquier ventana, barra y menú:
+          </p>
+          <pre class="code-block"><code>// C# / Win32 API: Composición de Aero Glass en todas las ventanas
+[DllImport("dwmapi.dll")]
+public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+// DWMWA_SYSTEMBACKDROP_TYPE: 1 = Auto, 2 = None, 3 = Mica, 4 = Acrylic (Aero Glass)
+int backdropType = 4; // Acrylic / Aero Glass Frosted
+DwmSetWindowAttribute(windowHandle, 38, ref backdropType, sizeof(int));
+
+// Inyectar reflejos especulares y blur en Start Menu y Taskbar
+AccentPolicy policy = new AccentPolicy {
+    AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+    GradientColor = 0x99121828 // Color de tinte translúcido
+};</code></pre>
+        </div>
+
+        <!-- CÓDIGO EFICIENCIA Y MODO JUEGOS AUTO-PAUSA -->
+        <div class="code-module-card">
+          <div class="cm-head">
+            <span class="cm-badge" style="background: #10b981;">Rendimiento 0%</span>
+            <h3>5. Gestión de Batería y Auto-Suspensión en Juegos (Modo Zero-Impact)</h3>
+          </div>
+          <p class="cm-desc">
+            Para no restar ni un solo FPS en videojuegos o gastar batería en portátiles, el demonio en C# detecta cuando una aplicación ocupa la pantalla completa (DirectX / Vulkan / Media) y congela completamente el bucle de renderizado:
+          </p>
+          <pre class="code-block"><code>// C# / Win32: Detección inteligente de Pantalla Completa (Juegos o Películas)
+public void MonitorFullScreenApps() {
+    IntPtr foregroundHwnd = GetForegroundWindow();
+    GetWindowRect(foregroundHwnd, out RECT rect);
+    Screen screen = Screen.FromHandle(foregroundHwnd);
+
+    bool isFullScreen = (rect.Width == screen.Bounds.Width && rect.Height == screen.Bounds.Height);
+
+    if (isFullScreen && !isGameModeSuspended) {
+        // Pausar render loop, siluetas 3D, blur hooks y animaciones
+        CompositionTarget.Rendering -= RenderLoop;
+        EventBus.Publish("SYSTEM_IDLE_SUSPEND", true);
+        isGameModeSuspended = true; // Consumo CPU: 0.0% | VRAM liberada
+    } else if (!isFullScreen && isGameModeSuspended) {
+        // Reanudar inmediatamente al volver al escritorio
+        CompositionTarget.Rendering += RenderLoop;
+        EventBus.Publish("SYSTEM_IDLE_SUSPEND", false);
+        isGameModeSuspended = false;
+    }
+}</code></pre>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Configuración (generada por build.ps1 desde config/settings.json) -->
+  <script src="config/settings.js"></script>
+
+  <!-- Núcleo Modular del Sistema -->
+  <script src="core/event_bus.js"></script>
+  <script src="core/module_manager.js"></script>
+
+  <!-- Módulos Independientes -->
+  <script src="modules/dynamic_notch/index.js"></script>
+  <script src="modules/voice_ai/index.js"></script>
+  <script src="modules/depth_wallpaper/index.js"></script>
+  <script src="modules/aero_privacy/index.js"></script>
+
+  <!-- Inicializador y Simulador -->
+  <script src="app.js"></script>
+</body>
+</html>

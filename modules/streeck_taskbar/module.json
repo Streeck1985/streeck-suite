@@ -1,0 +1,12 @@
+{
+  "id": "streeck_taskbar",
+  "name": "Barra de Tareas Streeck Minimalista",
+  "version": "1.0.0",
+  "description": "Estilo dock flotante minimalista con integración de bandeja del sistema nativa",
+  "eventsEmitted": [
+    "taskbar:style_changed"
+  ],
+  "eventsSubscribed": [
+    "taskbar:toggle_style"
+  ]
+}
