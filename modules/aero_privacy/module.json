@@ -1,0 +1,13 @@
+{
+  "id": "aero_privacy",
+  "name": "Aero Glass & Enfoque de Privacidad",
+  "version": "1.0.0",
+  "description": "Filtro de cristal Aero estilo Windows Vista que desenfoca apps inactivas para concentración y privacidad",
+  "eventsEmitted": [
+    "privacy:state_changed"
+  ],
+  "eventsSubscribed": [
+    "privacy:toggle",
+    "window:active_changed"
+  ]
+}

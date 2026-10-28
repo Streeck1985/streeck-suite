@@ -1,0 +1,14 @@
+{
+  "id": "depth_wallpaper",
+  "name": "Reloj de Profundidad 3D",
+  "version": "1.0.0",
+  "description": "Renderizador multicapa de fondo de pantalla con reloj integrado detrás del sujeto",
+  "eventsEmitted": [
+    "wallpaper:preset_changed",
+    "wallpaper:depth_toggled"
+  ],
+  "eventsSubscribed": [
+    "wallpaper:cycle",
+    "wallpaper:toggle_depth"
+  ]
+}

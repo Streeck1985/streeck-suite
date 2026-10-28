@@ -1,0 +1,16 @@
+{
+  "id": "dynamic_notch",
+  "name": "Dynamic Island Notch",
+  "version": "1.0.0",
+  "author": "Antigravity",
+  "description": "Notch superior con estados de música, alertas del sistema y halo de IA",
+  "eventsEmitted": [
+    "notch:state_changed",
+    "notch:clicked"
+  ],
+  "eventsSubscribed": [
+    "media:update",
+    "voice:state",
+    "notification:push"
+  ]
+}

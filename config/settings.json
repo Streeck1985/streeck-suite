@@ -1,0 +1,69 @@
+{
+  "system": {
+    "version": "1.0.0",
+    "theme": "aero-streeck-dark",
+    "performanceMode": "balanced",
+    "hardwareAcceleration": true,
+    "fpsTarget": 60
+  },
+  "modules": {
+    "dynamic_notch": {
+      "enabled": true,
+      "priority": 1,
+      "settings": {
+        "autoHide": false,
+        "mediaSync": true,
+        "notificationTimeout": 4500,
+        "position": "top-center"
+      }
+    },
+    "voice_ai": {
+      "enabled": true,
+      "priority": 2,
+      "settings": {
+        "hotkey": "Win+Space",
+        "voiceWakeWord": "hola asistente",
+        "provider": "gemini",
+        "voiceFeedback": true
+      }
+    },
+    "depth_wallpaper": {
+      "enabled": true,
+      "priority": 3,
+      "settings": {
+        "clockFormat": "24h",
+        "depthEffectActive": true,
+        "clockYPosition": 150,
+        "currentPreset": "cyberpunk"
+      }
+    },
+    "aero_privacy": {
+      "enabled": true,
+      "priority": 4,
+      "settings": {
+        "blurStrength": "28px",
+        "saturation": "200%",
+        "aeroGlow": true,
+        "activeWindowOutline": true
+      }
+    },
+    "streeck_taskbar": {
+      "enabled": true,
+      "priority": 5,
+      "settings": {
+        "style": "floating-dock",
+        "centeredIcons": true,
+        "preserveSystemTray": true
+      }
+    },
+    "desktop_widgets": {
+      "enabled": true,
+      "priority": 6,
+      "settings": {
+        "showHardwareStats": true,
+        "showCalendar": true,
+        "telemetryRefreshMs": 2500
+      }
+    }
+  }
+}

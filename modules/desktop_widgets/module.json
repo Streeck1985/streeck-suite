@@ -1,0 +1,12 @@
+{
+  "id": "desktop_widgets",
+  "name": "Widgets de Escritorio",
+  "version": "1.0.0",
+  "description": "Widgets modulares de telemetría de hardware (CPU/RAM/GPU), tareas y clima",
+  "eventsEmitted": [
+    "telemetry:updated"
+  ],
+  "eventsSubscribed": [
+    "widgets:toggle_visibility"
+  ]
+}

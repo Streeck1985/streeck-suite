@@ -1,0 +1,16 @@
+# Binarios compilados
+bin/
+*.exe
+*.dll
+*.pdb
+
+# Configuraciones generadas
+config/settings.js
+
+# Cache y temporales
+*.tmp
+*.log
+.vs/
+.idea/
+thumbs.db
+desktop.ini
