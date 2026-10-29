@@ -52,7 +52,7 @@ namespace StreeckSuite.Modules
 
         private VoiceInput _voice;
         private bool _listening;
-        private string _partial;
+        private bool _transcribing;    // Ya dejó de hablar: Whisper está pasando la voz a texto
         private SpeechSynthesizer _speech;
 
         private readonly List<KeyValuePair<RectangleF, Action>> _hits = new List<KeyValuePair<RectangleF, Action>>();
@@ -255,18 +255,21 @@ namespace StreeckSuite.Modules
         {
             if (_listening) { StopListening(); return; }
             if (_speech != null) _speech.SpeakAsyncCancelAll();
-            _voice = new VoiceInput();
-            _voice.Partial += text => Ui(() => { _partial = text; RenderSurface(); });
-            _voice.Finished += text => Ui(() =>
+            if (_voice == null)
             {
-                _listening = false;
-                _waveTimer.Stop();
-                _partial = null;
-                if (text != null) Send(text, null); else Relayout();
-            });
-            _voice.Failed += message => Ui(() => { _listening = false; _waveTimer.Stop(); ShowError(message); });
+                // Un solo dictado por ventana: su cuadro de texto invisible vive dentro del asistente
+                _voice = new VoiceInput(this);
+                _voice.Transcribing += () => { _transcribing = true; RenderSurface(); };
+                _voice.Finished += text =>
+                {
+                    _listening = false;
+                    _transcribing = false;
+                    _waveTimer.Stop();
+                    if (text != null) Send(text, null); else Relayout();
+                };
+                _voice.Failed += message => { _listening = false; _transcribing = false; _waveTimer.Stop(); ShowError(message); };
+            }
             _listening = true;
-            _partial = null;
             _error = null;
             _waveTimer.Start();
             _voice.Start();
@@ -480,8 +483,7 @@ namespace StreeckSuite.Modules
             float textWidth = mic.X - Px(8) - textX;
             if (_listening)
             {
-                _painter.DrawText(g, string.IsNullOrEmpty(_partial) ? "Te escucho…" : "«" + _partial + "»", _inputFont,
-                    string.IsNullOrEmpty(_partial) ? Color.FromArgb(253, 186, 116) : Color.White, new RectangleF(textX, input.Y, textWidth - Px(40), input.Height), StringAlignment.Near);
+                _painter.DrawText(g, _transcribing ? "Entendiendo…" : "Te escucho…", _inputFont, Color.FromArgb(253, 186, 116), new RectangleF(textX, input.Y, textWidth - Px(40), input.Height), StringAlignment.Near);
                 DrawWaves(g, new RectangleF(mic.X - Px(40), input.Y + Px(10), Px(32), input.Height - Px(20)));
             }
             else if (_query.Length == 0)
@@ -509,7 +511,7 @@ namespace StreeckSuite.Modules
         // Cinco barras al ritmo del micrófono (la misma idea que el ecualizador de la música)
         private void DrawWaves(Graphics g, RectangleF area)
         {
-            float level = Math.Min(1f, VoiceInput.MicLevel * 2.5f);
+            float level = _voice != null ? _voice.Level : 0;
             double t = _painter.Seconds;
             float barWidth = area.Width / 8f;
             using (SolidBrush brush = new SolidBrush(Color.FromArgb(253, 186, 116)))
@@ -621,6 +623,7 @@ namespace StreeckSuite.Modules
                 _inputFont.Dispose();
                 _answerFont.Dispose();
                 if (_speech != null) _speech.Dispose();
+                if (_voice != null) _voice.Dispose();
             }
             base.Dispose(disposing);
         }

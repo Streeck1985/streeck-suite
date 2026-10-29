@@ -30,6 +30,7 @@ namespace StreeckSuite.Modules
         private static readonly object Gate = new object();
         private static readonly List<Turn> History = new List<Turn>();
         private static string _geminiModel;
+        private static List<string> _geminiModels;  // Flash estables, del más nuevo al más antiguo (cada uno con su cupo gratis)
         private static int _requestVersion;
         private static string _activeApp;  // App que se usaba al abrir el asistente
 
@@ -89,8 +90,26 @@ namespace StreeckSuite.Modules
                 };
                 try
                 {
-                    if (SuiteSettings.AssistantEngine == SuiteSettings.AssistantEngineKind.Gemini) AskGemini(history, prompt, chunk);
-                    else AskOllama(history, prompt, chunk);
+                    if (SuiteSettings.AssistantEngine == SuiteSettings.AssistantEngineKind.Gemini)
+                    {
+                        try
+                        {
+                            AskGemini(history, prompt, chunk);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Gemini saturado (503), sin cupo (429), sin internet o muy lento: contesta la IA local
+                            // si está lista, en vez de dejar al usuario esperando
+                            if (answer.Length > 0 || ex is OperationCanceledException || !CheckOllama().HasModel) throw;
+                            Log.Error("[AssistantService] Gemini falló ({0}); responde la IA local", ex.Message);
+                            chunk("(Gemini no respondió; contesta la IA local) ");
+                            AskOllama(history, prompt, chunk);
+                        }
+                    }
+                    else
+                    {
+                        AskOllama(history, prompt, chunk);
+                    }
 
                     lock (Gate)
                     {
@@ -113,15 +132,18 @@ namespace StreeckSuite.Modules
             });
         }
 
-        private static string SystemPrompt()
+        private static string SystemPrompt(bool local)
         {
             string app = _activeApp;
             return "Eres el asistente de Streeck Suite, integrado en la barra superior de Windows del usuario. " +
                    "Responde siempre en español, de forma breve y clara (normalmente 1 a 4 frases), sin rodeos. " +
                    "Usa texto plano: sin tablas ni encabezados. " +
                    "Hoy es " + DateTime.Now.ToString("dddd d 'de' MMMM 'de' yyyy, HH:mm", new System.Globalization.CultureInfo("es-MX")) + ". " +
+                   "El usuario vive en " + System.Globalization.RegionInfo.CurrentRegion.DisplayName + ": precios, monedas y unidades de ahí salvo que diga otra cosa. " +
                    (app != null ? "El usuario está usando la app «" + app + "». " : "") +
-                   "Si el usuario incluye un texto después de una línea ---, es lo que tiene copiado: úsalo para responder.";
+                   "Si el usuario incluye un texto después de una línea ---, es lo que tiene copiado: úsalo para responder." +
+                   (local ? " No tienes internet: si te piden datos actuales (precios, tipo de cambio, noticias, resultados, clima), " +
+                            "di claramente que no puedes saberlo sin conexión y sugiere usar Gemini; nunca inventes cifras." : "");
         }
 
         #region Ollama (local)
@@ -129,7 +151,7 @@ namespace StreeckSuite.Modules
         private static void AskOllama(List<Turn> history, string prompt, Action<string> chunk)
         {
             List<object> messages = new List<object>();
-            messages.Add(new Dictionary<string, object> { { "role", "system" }, { "content", SystemPrompt() } });
+            messages.Add(new Dictionary<string, object> { { "role", "system" }, { "content", SystemPrompt(true) } });
             foreach (Turn turn in history) messages.Add(new Dictionary<string, object> { { "role", turn.FromUser ? "user" : "assistant" }, { "content", turn.Text } });
             messages.Add(new Dictionary<string, object> { { "role", "user" }, { "content", prompt } });
             Dictionary<string, object> body = new Dictionary<string, object> { { "model", SuiteSettings.OllamaModel }, { "messages", messages }, { "stream", true } };
@@ -247,19 +269,86 @@ namespace StreeckSuite.Modules
         {
             string key = SuiteSettings.GeminiApiKey;
             if (string.IsNullOrEmpty(key)) throw new InvalidOperationException("Falta la clave de Gemini");
-            if (_geminiModel == null) _geminiModel = PickGeminiModel(key);
+            if (_geminiModels == null)
+            {
+                _geminiModels = GeminiModels(key);
+                string preferred = File.Exists(PreferredModelFile) ? File.ReadAllText(PreferredModelFile).Trim() : null;
+                _geminiModel = preferred != null && _geminiModels.Contains(preferred) ? preferred : _geminiModels[0];
+            }
+            else if (_geminiModels.IndexOf(_geminiModel) > 0 && (DateTime.Now - _bestCheckedAt).TotalMinutes > 30)
+            {
+                CheckBestModelInBackground(key);
+            }
+
+            // Si un modelo se quedó sin cupo gratis (429) o está saturado (503), se prueba el anterior
+            for (int start = _geminiModels.IndexOf(_geminiModel), i = Math.Max(0, start); ; i++)
+            {
+                try
+                {
+                    AskGeminiModel(history, prompt, chunk, key);
+                    if (i != start) RememberModel(_geminiModel);
+                    return;
+                }
+                catch (WebException ex)
+                {
+                    HttpWebResponse response = ex.Response as HttpWebResponse;
+                    int code = response != null ? (int)response.StatusCode : ex.Status == WebExceptionStatus.Timeout ? 503 : 0; // Muy lento = saturado
+                    // 429 con búsqueda de Google: el plan gratis puede no incluir búsquedas; se repite sin ella
+                    if (code == 429 && _geminiSearch)
+                    {
+                        Log.Error("[AssistantService] {0} rechazó la petición con búsqueda; se repite sin búsqueda", _geminiModel);
+                        _geminiSearch = false;
+                        i--;
+                        continue;
+                    }
+                    if ((code != 429 && code != 503) || i + 1 >= _geminiModels.Count) throw;
+                    Log.Error("[AssistantService] {0} respondió {1}; se prueba {2}", _geminiModel, code, _geminiModels[i + 1]);
+                    _geminiModel = _geminiModels[i + 1];
+                }
+            }
+        }
+
+        private static void AskGeminiModel(List<Turn> history, string prompt, Action<string> chunk, string key)
+        {
 
             List<object> contents = new List<object>();
             foreach (Turn turn in history) contents.Add(GeminiContent(turn.FromUser ? "user" : "model", turn.Text));
             contents.Add(GeminiContent("user", prompt));
             Dictionary<string, object> body = new Dictionary<string, object>
             {
-                { "systemInstruction", new Dictionary<string, object> { { "parts", new object[] { new Dictionary<string, object> { { "text", SystemPrompt() } } } } } },
+                { "systemInstruction", new Dictionary<string, object> { { "parts", new object[] { new Dictionary<string, object> { { "text", SystemPrompt(false) } } } } } },
                 { "contents", contents }
             };
+            // Búsqueda de Google (datos actuales: precios, noticias, clima...) y poco "pensamiento" para que conteste rápido.
+            // Si este modelo no acepta alguno de los dos, se repite la pregunta sin ellos.
+            if (_geminiSearch)
+            {
+                body["tools"] = new object[] { new Dictionary<string, object> { { "google_search", new Dictionary<string, object>() } } };
+            }
+            if (_geminiExtras)
+            {
+                body["generationConfig"] = new Dictionary<string, object> { { "thinkingConfig", new Dictionary<string, object> { { "thinkingLevel", "low" } } } };
+            }
 
             JavaScriptSerializer json = new JavaScriptSerializer();
-            foreach (string line in PostLines(GeminiUrl + "models/" + _geminiModel + ":streamGenerateContent?alt=sse", json.Serialize(body), key))
+            IEnumerable<string> lines;
+            try
+            {
+                lines = PostLines(GeminiUrl + "models/" + _geminiModel + ":streamGenerateContent?alt=sse", json.Serialize(body), key);
+                lines = BufferFirst(lines);
+            }
+            catch (WebException ex)
+            {
+                HttpWebResponse response = ex.Response as HttpWebResponse;
+                if ((!_geminiExtras && !_geminiSearch) || response == null || (int)response.StatusCode != 400) throw;
+                Log.Error("[AssistantService] {0} no acepta búsqueda o nivel de pensamiento; se pregunta sin ellos", _geminiModel);
+                _geminiExtras = false;
+                _geminiSearch = false;
+                body.Remove("tools");
+                body.Remove("generationConfig");
+                lines = PostLines(GeminiUrl + "models/" + _geminiModel + ":streamGenerateContent?alt=sse", json.Serialize(body), key);
+            }
+            foreach (string line in lines)
             {
                 if (!line.StartsWith("data:")) continue;
                 Dictionary<string, object> data = json.DeserializeObject(line.Substring(5).Trim()) as Dictionary<string, object>;
@@ -277,6 +366,66 @@ namespace StreeckSuite.Modules
             }
         }
 
+        // Medido con el plan gratis: la búsqueda de Google da 429 y "pensar poco" dejaba la respuesta colgada,
+        // así que se dejan apagados (el código se conserva por si cambia el plan)
+        private static bool _geminiExtras = false;
+        private static bool _geminiSearch = false;
+        private const int GeminiFirstByteMs = 8000;
+        private static DateTime _bestCheckedAt = DateTime.Now;
+
+        // Último modelo que respondió bien: se recuerda entre sesiones para no esperar a los saturados
+        private static string PreferredModelFile
+        {
+            get { return Path.Combine(Path.GetDirectoryName(Log.FilePath), "gemini_modelo.txt"); }
+        }  // Si un modelo no empieza a responder en este tiempo, se prueba otro
+
+
+        // Lee la primera línea ya (para que un error 400 salte aquí y no a mitad de la respuesta) y deja el resto en vivo
+        private static IEnumerable<string> BufferFirst(IEnumerable<string> lines)
+        {
+            IEnumerator<string> enumerator = lines.GetEnumerator();
+            bool hasFirst = enumerator.MoveNext();
+            return Continue(enumerator, hasFirst);
+        }
+
+        private static IEnumerable<string> Continue(IEnumerator<string> enumerator, bool hasFirst)
+        {
+            using (enumerator)
+            {
+                if (!hasFirst) yield break;
+                yield return enumerator.Current;
+                while (enumerator.MoveNext()) yield return enumerator.Current;
+            }
+        }
+
+        private static void RememberModel(string model)
+        {
+            try { File.WriteAllText(PreferredModelFile, model); }
+            catch (IOException ex) { Log.Error("[AssistantService] No se pudo guardar el modelo: {0}", ex.Message); }
+        }
+
+        // Pregunta mínima al modelo más nuevo sin que el usuario espere: si ya responde rápido, se vuelve a él
+        private static void CheckBestModelInBackground(string key)
+        {
+            _bestCheckedAt = DateTime.Now;
+            string best = _geminiModels[0];
+            ThreadPool.QueueUserWorkItem(state =>
+            {
+                try
+                {
+                    string body = new JavaScriptSerializer().Serialize(new Dictionary<string, object> { { "contents", new object[] { GeminiContent("user", "Responde solo: ok") } } });
+                    foreach (string line in PostLines(GeminiUrl + "models/" + best + ":streamGenerateContent?alt=sse", body, key)) { }
+                    _geminiModel = best;
+                    RememberModel(best);
+                    Log.Info("[AssistantService] {0} vuelve a responder; se usa de nuevo", best);
+                }
+                catch (Exception)
+                {
+                    // Sigue saturado: se queda el modelo actual
+                }
+            });
+        }
+
         private static object GeminiContent(string role, string text)
         {
             return new Dictionary<string, object> { { "role", role }, { "parts", new object[] { new Dictionary<string, object> { { "text", text } } } } };
@@ -288,12 +437,16 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static string PickGeminiModel(string key)
         {
+            return GeminiModels(key)[0];
+        }
+
+        private static List<string> GeminiModels(string key)
+        {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(GeminiUrl + "models?pageSize=200");
             request.Headers["x-goog-api-key"] = key;
             request.Timeout = 10000;
             ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
-            string best = null;
-            double bestVersion = -1;
+            List<KeyValuePair<double, string>> found = new List<KeyValuePair<double, string>>();
             using (WebResponse response = request.GetResponse())
             using (StreamReader reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
             {
@@ -309,10 +462,13 @@ namespace StreeckSuite.Modules
                     System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(name, @"^gemini-(\d+(\.\d+)?)-flash$");
                     if (!match.Success) continue;
                     double version = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-                    if (version > bestVersion) { bestVersion = version; best = name; }
+                    found.Add(new KeyValuePair<double, string>(version, name));
                 }
             }
-            return best ?? "gemini-2.5-flash";
+            found.Sort((a, b) => b.Key.CompareTo(a.Key));
+            List<string> names = found.ConvertAll(f => f.Value);
+            if (names.Count == 0) names.Add("gemini-2.5-flash");
+            return names;
         }
 
         #endregion
@@ -326,8 +482,9 @@ namespace StreeckSuite.Modules
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = "POST";
             request.ContentType = "application/json; charset=utf-8";
-            request.Timeout = 120000;
-            request.ReadWriteTimeout = 120000;
+            // Gemini: si no empieza a responder pronto, otro modelo; Ollama: la primera vez carga el modelo y tarda
+            request.Timeout = geminiKey != null ? GeminiFirstByteMs : 120000;
+            request.ReadWriteTimeout = geminiKey != null ? GeminiFirstByteMs : 120000;
             if (geminiKey != null) request.Headers["x-goog-api-key"] = geminiKey;
             byte[] bytes = Encoding.UTF8.GetBytes(body);
             using (Stream stream = request.GetRequestStream()) stream.Write(bytes, 0, bytes.Length);
