@@ -600,7 +600,7 @@ namespace StreeckSuite.Modules
                 _hits.Add(new KeyValuePair<RectangleF, Action>(newButton, NewConversation));
                 right = newButton.X - Px(14);
             }
-            if (!string.IsNullOrEmpty(_answer) && !_streaming)
+            if (!string.IsNullOrEmpty(_answer) && !_streaming && _error == null)
             {
                 SizeF copySize = g.MeasureString("Copiar", _painter.Bold12);
                 RectangleF copy = new RectangleF(right - copySize.Width, y, copySize.Width, Px(18));
