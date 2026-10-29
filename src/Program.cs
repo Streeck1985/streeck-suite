@@ -57,6 +57,21 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --preview-assistant <carpeta> <pregunta> [<pregunta>...]
+            if (args != null && args.Length >= 3 && args[0] == "--preview-assistant")
+            {
+                NativeMethods.SetProcessDPIAware();
+                SuiteSettings.Load();
+                for (int i = 2; i < args.Length; i++)
+                {
+                    using (AssistantWindow assistant = new AssistantWindow())
+                    {
+                        assistant.RenderPreview(args[i], System.IO.Path.Combine(args[1], "asistente-" + i + ".png"));
+                    }
+                }
+                return;
+            }
+
             // Una sola instancia: dos copias pintarían dos notch y dos iconos en la bandeja
             bool isFirstInstance;
             using (Mutex singleInstance = new Mutex(true, @"Local\StreeckSuite.SingleInstance", out isFirstInstance))

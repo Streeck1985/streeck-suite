@@ -191,6 +191,15 @@ namespace StreeckSuite.Core
             [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
         }
 
+        // Nivel de pico de un dispositivo (las ondas del asistente mientras se habla)
+        public static readonly Guid IID_IAudioMeterInformation = new Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064");
+
+        [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        public interface IAudioMeterInformation
+        {
+            [PreserveSig] int GetPeakValue(out float peak);
+        }
+
         // Captura en modo "loopback": se escucha lo que suena por un dispositivo de salida (para el ecualizador)
         public static readonly Guid IID_IAudioClient = new Guid("1CB9AD4C-DBFA-4C32-B178-C2F568A703B2");
         public static readonly Guid IID_IAudioCaptureClient = new Guid("C8ADBD64-E71E-48A0-A4DE-185C395CD317");

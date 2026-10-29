@@ -11,7 +11,7 @@ namespace StreeckSuite.Modules
 {
     internal class SearchResult
     {
-        public enum Kind { App, File, Calculator, Web }
+        public enum Kind { App, File, Calculator, Assistant, Web }
 
         public Kind Type;
         public string Title;
@@ -36,6 +36,11 @@ namespace StreeckSuite.Modules
         private static DateTime _appsLoadedAt = DateTime.MinValue;
         private static bool _loadingApps;
         private static readonly CultureInfo Spanish = new CultureInfo("es-ES");
+
+        /// <summary>
+        /// La isla abre el asistente con esta pregunta (resultado «Preguntar a la IA»).
+        /// </summary>
+        public static event Action<string> AssistantRequested;
 
         /// <summary>
         /// Carga (o refresca) la lista de apps en segundo plano; se llama al abrir la búsqueda.
@@ -87,6 +92,12 @@ namespace StreeckSuite.Modules
                 // Dos decimales como en el mockup; con números muy pequeños, los que hagan falta para no mostrar 0
                 string text = value.ToString(Math.Abs(value) >= 0.01 || value == 0 ? "#,##0.##" : "0.##########", Spanish);
                 results.Add(new SearchResult { Type = SearchResult.Kind.Calculator, Title = "= " + text, Subtitle = "Calculadora · Enter copia el resultado", Target = text });
+            }
+
+            // Preguntar al asistente de IA (fase G), justo después de la calculadora
+            if (query.Length >= 3)
+            {
+                results.Add(new SearchResult { Type = SearchResult.Kind.Assistant, Title = "Preguntar a la IA: «" + query + "»", Subtitle = AssistantService.EngineLabel, Target = query });
             }
 
             foreach (ShellImage.App app in MatchApps(query))
@@ -183,6 +194,7 @@ namespace StreeckSuite.Modules
                     case SearchResult.Kind.File: System.Diagnostics.Process.Start(result.Target); break;
                     case SearchResult.Kind.Web: System.Diagnostics.Process.Start(result.Target); break;
                     case SearchResult.Kind.Calculator: System.Windows.Forms.Clipboard.SetText(result.Target); break;
+                    case SearchResult.Kind.Assistant: if (AssistantRequested != null) AssistantRequested(result.Target); break;
                 }
             }
             catch (Exception ex)

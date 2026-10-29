@@ -25,6 +25,9 @@ namespace StreeckSuite.Modules
         private SearchWindow _search;
         private SearchHotkey _searchHotkey;
         private SuiteSettings.SearchShortcut _registeredShortcut;
+        private AssistantWindow _assistant;
+        private AssistantHotkey _assistantHotkey;
+        private bool _registeredAssistantHotkey;
 
         public DynamicNotchModule()
         {
@@ -62,6 +65,18 @@ namespace StreeckSuite.Modules
             });
             _registeredShortcut = SuiteSettings.SearchHotkey;
             if (!_searchHotkey.Register()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ El atajo de la búsqueda está ocupado; elige otro en Ajustes");
+            // Asistente de IA (fase G): Ctrl + Alt + A y el resultado «Preguntar a la IA» de la búsqueda
+            _assistantHotkey = new AssistantHotkey(() => Assistant.Toggle());
+            _registeredAssistantHotkey = SuiteSettings.AssistantHotkey;
+            if (!_assistantHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + A ya lo usa otro programa");
+            SearchService.AssistantRequested += question => Assistant.ShowAssistant(question);
+            SuiteSettings.Changed += () =>
+            {
+                if (_assistantHotkey == null || SuiteSettings.AssistantHotkey == _registeredAssistantHotkey) return;
+                _registeredAssistantHotkey = SuiteSettings.AssistantHotkey;
+                _assistantHotkey.Apply();
+            };
+
             SuiteSettings.Changed += () =>
             {
                 if (_searchHotkey == null || SuiteSettings.SearchHotkey == _registeredShortcut) return;
@@ -70,9 +85,20 @@ namespace StreeckSuite.Modules
             };
         }
 
+        private AssistantWindow Assistant
+        {
+            get
+            {
+                if (_assistant == null || _assistant.IsDisposed) _assistant = new AssistantWindow();
+                return _assistant;
+            }
+        }
+
         public void Stop()
         {
             _isRunning = false;
+            if (_assistantHotkey != null) { _assistantHotkey.Dispose(); _assistantHotkey = null; }
+            if (_assistant != null && !_assistant.IsDisposed) _assistant.Hide();
             if (_searchHotkey != null) { _searchHotkey.Dispose(); _searchHotkey = null; }
             if (_search != null && !_search.IsDisposed) _search.Hide();
             if (_overlayForm != null && !_overlayForm.IsDisposed)

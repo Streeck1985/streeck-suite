@@ -196,14 +196,16 @@ namespace StreeckSuite.Modules
 
         #region Resultados
 
-        // Orden: calculadora, apps, archivos y por último la web
+        // Orden: calculadora, apps, archivos, preguntar a la IA y por último la web
         private List<SearchResult> Results
         {
             get
             {
                 List<SearchResult> all = new List<SearchResult>();
-                all.AddRange(_quick.FindAll(r => r.Type != SearchResult.Kind.Web));
+                all.AddRange(_quick.FindAll(r => r.Type == SearchResult.Kind.Calculator || r.Type == SearchResult.Kind.App));
                 all.AddRange(_files);
+                // Preguntar a la IA y buscar en la web al final: Enter abre antes una app o archivo que coincida
+                all.AddRange(_quick.FindAll(r => r.Type == SearchResult.Kind.Assistant));
                 all.AddRange(_quick.FindAll(r => r.Type == SearchResult.Kind.Web));
                 return all;
             }
@@ -380,6 +382,7 @@ namespace StreeckSuite.Modules
             switch (r.Type)
             {
                 case SearchResult.Kind.Calculator: glyph = ""; color = Color.FromArgb(74, 222, 128); break;
+                case SearchResult.Kind.Assistant: glyph = ""; color = Color.FromArgb(167, 139, 250); break;
                 case SearchResult.Kind.Web: glyph = ""; color = Color.FromArgb(195, 201, 212); break;
                 case SearchResult.Kind.File: glyph = ""; color = IslandPainter.Sky; break;
                 default: glyph = ""; color = IslandPainter.Sky; break;

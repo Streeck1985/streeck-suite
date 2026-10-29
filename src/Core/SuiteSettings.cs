@@ -16,6 +16,7 @@ namespace StreeckSuite.Core
         public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly }
         public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
+        public enum AssistantEngineKind { Local, Gemini }
 
         // Privacidad
         public static int PrivacyBlurPx = 25;           // 0..40
@@ -60,6 +61,13 @@ namespace StreeckSuite.Core
         public static SearchShortcut SearchHotkey = SearchShortcut.CtrlAltS;
         public static bool SearchFiles = true;
         public static WebSearchEngine SearchEngine = WebSearchEngine.Google;
+
+        // Asistente IA (fase G)
+        public static AssistantEngineKind AssistantEngine = AssistantEngineKind.Local;
+        public static string OllamaModel = "llama3.1:8b";
+        public static string GeminiApiKey = "";          // En el archivo va cifrada con DPAPI (solo este usuario de Windows la lee)
+        public static bool AssistantSpeak = false;       // Leer las respuestas en voz alta
+        public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la búsqueda
 
         // Widgets
         public static Color WidgetAccent = Color.FromArgb(0, 210, 255);
@@ -130,6 +138,12 @@ namespace StreeckSuite.Core
                 SearchFiles = ReadBool(values, "busqueda.archivos", SearchFiles);
                 WebSearchEngine engine;
                 if (values.TryGetValue("busqueda.web", out raw) && Enum.TryParse(raw, out engine)) SearchEngine = engine;
+                AssistantEngineKind assistant;
+                if (values.TryGetValue("asistente.motor", out raw) && Enum.TryParse(raw, out assistant)) AssistantEngine = assistant;
+                if (values.TryGetValue("asistente.modeloLocal", out raw) && raw.Length > 0) OllamaModel = raw;
+                if (values.TryGetValue("asistente.claveGemini", out raw)) GeminiApiKey = Unprotect(raw);
+                AssistantSpeak = ReadBool(values, "asistente.leerEnVozAlta", AssistantSpeak);
+                AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
 
                 WidgetAccent = ReadColor(values, "widgets.acento", WidgetAccent);
                 WidgetGlassPercent = ReadInt(values, "widgets.cristal", WidgetGlassPercent, 0, 100);
@@ -179,6 +193,11 @@ namespace StreeckSuite.Core
                     "busqueda.atajo=" + SearchHotkey,
                     "busqueda.archivos=" + (SearchFiles ? 1 : 0),
                     "busqueda.web=" + SearchEngine,
+                    "asistente.motor=" + AssistantEngine,
+                    "asistente.modeloLocal=" + OllamaModel,
+                    "asistente.claveGemini=" + Protect(GeminiApiKey),
+                    "asistente.leerEnVozAlta=" + (AssistantSpeak ? 1 : 0),
+                    "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
                     "widgets.acento=" + ToHex(WidgetAccent),
                     "widgets.cristal=" + WidgetGlassPercent
                 });
@@ -219,6 +238,30 @@ namespace StreeckSuite.Core
             int rgb;
             if (!values.TryGetValue(key, out raw) || !int.TryParse(raw.TrimStart('#'), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out rgb)) return fallback;
             return Color.FromArgb(255, Color.FromArgb(rgb));
+        }
+
+        // Claves de API: cifradas con DPAPI para el usuario actual de Windows (Base64 en el archivo)
+        private static string Protect(string secret)
+        {
+            if (string.IsNullOrEmpty(secret)) return "";
+            byte[] data = System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(secret), null,
+                System.Security.Cryptography.DataProtectionScope.CurrentUser);
+            return Convert.ToBase64String(data);
+        }
+
+        private static string Unprotect(string stored)
+        {
+            if (string.IsNullOrEmpty(stored)) return "";
+            try
+            {
+                byte[] data = System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(stored), null,
+                    System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                return System.Text.Encoding.UTF8.GetString(data);
+            }
+            catch (Exception)
+            {
+                return ""; // Otro usuario u otro equipo: hay que volver a pegar la clave
+            }
         }
 
         private static string ToHex(Color color)

@@ -55,6 +55,7 @@ Los modelos de IA no están en el proyecto: la suite los descarga sola a `%LOCAL
 | **Bandeja de archivos** | ✅ Arrastrar archivos sobre la píldora los guarda (solo la ruta); pestaña Bandeja con miniaturas; arrastrarlos fuera los copia (Mayús mueve) | `FileTrayService.cs`, `IslandTrayViews.cs`, `ShellImage.cs` |
 | **Búsqueda rápida** | ✅ **Ctrl + Alt + S** (Ctrl+Alt+Espacio y Alt+Espacio los usa PowerToys). Apps del menú Inicio, archivos del índice de Windows (OLE DB `Search.CollatorDSO`, usando `System.ItemUrl`: `ItemPathDisplay` viene traducida y no sirve para abrir), calculadora y búsqueda web | `SearchService.cs`, `SearchWindow.cs` |
 | **Batería Bluetooth** | ✅ Propiedades de dispositivo de Windows (SetupAPI) cada 10 s: aviso al conectar y de batería baja (20 %), fila de dispositivos en la pestaña Sistema | `BluetoothService.cs`, `IslandDeviceViews.cs` |
+| **Asistente IA** | ✅ `AssistantWindow` (tarjeta como la isla, respuesta en vivo, botones sobre lo copiado, 🎙 con el dictado de Windows, leer en voz alta con SAPI). Motores: Ollama local o Gemini (clave cifrada con DPAPI en config.ini). Las órdenes de la suite se cumplen sin IA (`AssistantActions`) | `AssistantService.cs`, `AssistantWindow.cs`, `AssistantActions.cs`, `VoiceInput.cs` |
 | **Panel de ajustes** | ✅ Ventana negra dibujada a mano (mockups P1–P5, C3, D3, E3). Páginas: **Privacidad, Isla, Avisos, Tiempo y agenda, Bandeja y búsqueda, Widgets, Reloj 3D**. Cambios en vivo | `SettingsWindow.cs`, `SuiteSettings.cs` |
 | **Modo privacidad** | ✅ Desenfoca todo menos la ventana activa con **desenfoque propio** (0–40 px), oscurecimiento y tinte elegibles. Atajo **Ctrl+Alt+P**. ⚠️ La capa se excluye de las capturas para poder calcular el desenfoque: al **compartir la pantalla completa** los demás ven el fondo sin desenfocar | `AeroDwmModule.cs` |
 | **Modo juego** | ✅ Oculta notch y widgets y pausa el reloj cuando una app ocupa toda la pantalla | `SystemMonitor.cs` |
@@ -150,7 +151,7 @@ src/
 4. ~~Temporizador / Pomodoro y Agenda~~ ✅ Hecho (Fase D).
 5. ~~Bandeja de archivos y búsqueda rápida~~ ✅ Hecho (Fase E).
 6. ~~Batería de dispositivos Bluetooth~~ ✅ Hecho (Fase F).
-7. **Fase G: Asistente IA** (evaluar si panel web incrustado, API externa o modelo local). **Siguiente.**
+7. ~~Asistente IA con voz~~ ✅ Hecho (Fase G): Ollama local (llama3.1:8b en la GPU, ~60 tokens/s) o Gemini con clave gratuita; Ctrl+Alt+A o «Preguntar a la IA» en la búsqueda; dictado de Windows; órdenes directas (temporizadores, música, volumen, abrir apps, buscar, privacidad). Pendiente opcional: Whisper local.
 8. **Menú de inicio Aero propio** y **Barra de tareas en 3 islas**.
 
 Pendientes sueltos: detectar la cámara en Windows 11 reciente sin el registro; probar Google Calendar con un enlace real;
