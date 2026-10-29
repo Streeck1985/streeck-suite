@@ -85,6 +85,16 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --preview-start <carpeta>
+            if (args != null && args.Length >= 2 && args[0] == "--preview-start")
+            {
+                NativeMethods.SetProcessDPIAware();
+                SuiteSettings.Load();
+                System.IO.Directory.CreateDirectory(args[1]);
+                using (StartMenuWindow menu = new StartMenuWindow()) menu.RenderPreviews(args[1]);
+                return;
+            }
+
             // Una sola instancia: dos copias pintarían dos notch y dos iconos en la bandeja
             bool isFirstInstance;
             using (Mutex singleInstance = new Mutex(true, @"Local\StreeckSuite.SingleInstance", out isFirstInstance))
@@ -122,6 +132,7 @@ namespace StreeckSuite
             manager.Register(new TaskbarIslandModule());
             manager.Register(new DepthClockModule());
             manager.Register(new DesktopWidgetsModule());
+            manager.Register(new StartMenuModule());
             manager.Register(new TrayIconModule());
 
             // 3. Iniciar Monitor de Rendimiento y Modo Juegos (0% impacto)

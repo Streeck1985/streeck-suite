@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Widgets, Clock }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 632, SideW = 210, ContentX = 238, ContentW = 534;
@@ -311,6 +311,7 @@ namespace StreeckSuite.Modules
                 case Page.Time: DrawTime(g); break;
                 case Page.Tray: DrawTray(g); break;
                 case Page.Assistant: DrawAssistant(g); break;
+                case Page.Start: DrawStart(g); break;
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
             }
@@ -342,7 +343,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Widgets", "Reloj 3D" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Widgets", "Reloj 3D" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -438,6 +439,12 @@ namespace StreeckSuite.Modules
                             new PointF(12, 17.5f), new PointF(10.1f, 11.9f), new PointF(4.5f, 10), new PointF(10.1f, 8.6f) });
                         g.DrawPolygon(pen, new[] { new PointF(19, 15), new PointF(19.8f, 17.2f), new PointF(22, 18), new PointF(19.8f, 18.8f),
                             new PointF(19, 21), new PointF(18.2f, 18.8f), new PointF(16, 18), new PointF(18.2f, 17.2f) });
+                        break;
+                    case Page.Start:
+                        g.DrawRectangle(pen, 3, 3, 8, 8);
+                        g.DrawRectangle(pen, 13, 3, 8, 8);
+                        g.DrawRectangle(pen, 3, 13, 8, 8);
+                        g.DrawRectangle(pen, 13, 13, 8, 8);
                         break;
                     case Page.Clock:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
@@ -1015,6 +1022,35 @@ namespace StreeckSuite.Modules
         {
             try { System.Diagnostics.Process.Start(url); }
             catch (Exception ex) { Log.Error("[SettingsWindow] No se pudo abrir {0}: {1}", url, ex.Message); }
+        }
+
+        #endregion
+
+        #region Página Menú de inicio (H2)
+
+        private void DrawStart(Graphics g)
+        {
+            DrawTitle(g, "Menú de inicio");
+
+            float y = 66;
+            DrawCard(g, y, 124);
+            DrawToggleRow(g, y + 4, "Abrir con la tecla Windows", "Sustituye al menú de Windows · Win + E, Win + D… siguen igual", SuiteSettings.StartMenuWinKey,
+                () => { SuiteSettings.StartMenuWinKey = !SuiteSettings.StartMenuWinKey; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 62);
+            DrawToggleRow(g, y + 62, "Mostrar archivos recientes", "Tus últimos archivos abiertos en Windows", SuiteSettings.StartMenuShowRecent,
+                () => { SuiteSettings.StartMenuShowRecent = !SuiteSettings.StartMenuShowRecent; SuiteSettings.Save(); });
+
+            y = 204;
+            DrawCard(g, y, 70);
+            DrawText(g, "Apps ancladas", _semi14, TextColor, new RectangleF(InnerX, y + 14, 330, 18), StringAlignment.Near);
+            DrawText(g, "Clic derecho en el menú para anclar o quitar · Restablecer pone tus 12 más usadas", _reg12, Gray, new RectangleF(InnerX, y + 36, InnerW - 130, 16), StringAlignment.Near);
+            const string resetText = "Restablecer";
+            float buttonW = g.MeasureString(resetText, _reg13).Width + 24;
+            RectangleF reset = new RectangleF(ContentRight - 16 - buttonW, y + 20, buttonW, 30);
+            FillRound(g, reset, 8, Hover(reset) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, reset, 8, SoftBorder, 1, false);
+            DrawText(g, resetText, _reg13, TextColor, reset, StringAlignment.Center);
+            AddHit(reset, StartMenuService.ResetPinned);
         }
 
         #endregion
