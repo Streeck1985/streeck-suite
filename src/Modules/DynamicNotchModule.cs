@@ -63,6 +63,12 @@ namespace StreeckSuite.Modules
                 if (_search == null || _search.IsDisposed) _search = new SearchWindow();
                 _search.Toggle();
             });
+            // Búsqueda de la barra de Streeck
+            _eventBus.Subscribe(Events.SearchOpen, payload => _overlayForm.BeginInvoke((Action)(() =>
+            {
+                if (_search == null || _search.IsDisposed) _search = new SearchWindow();
+                if (!_search.Visible) _search.Toggle();
+            })));
             _registeredShortcut = SuiteSettings.SearchHotkey;
             if (!_searchHotkey.Register()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ El atajo de la búsqueda está ocupado; elige otro en Ajustes");
             // Asistente de IA (fase G): Ctrl + Alt + A y el resultado «Preguntar a la IA» de la búsqueda
@@ -942,8 +948,8 @@ namespace StreeckSuite.Modules
 
             Color? viewBorder = _mode == Mode.Tucked ? null : ActiveView.BorderColor;
             using (GraphicsPath path = IslandPainter.RoundedRect(bounds, radius))
-            using (SolidBrush fill = new SolidBrush(IslandPainter.Background))
-            using (Pen pen = new Pen(viewBorder ?? IslandPainter.Border, 1))
+            using (SolidBrush fill = new SolidBrush(Glass.FillAtLeast(IslandPainter.Background.A)))
+            using (Pen pen = new Pen(viewBorder ?? Glass.Border, 1))
             {
                 g.FillPath(fill, path);
                 g.DrawPath(pen, path);

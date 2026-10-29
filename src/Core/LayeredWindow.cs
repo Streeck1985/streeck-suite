@@ -122,7 +122,7 @@ namespace StreeckSuite.Core
         /// <summary>
         /// Sombra difusa alrededor de una forma redondeada: varias capas crecientes muy transparentes.
         /// </summary>
-        protected static void DrawSoftShadow(Graphics g, RectangleF shape, float radius, float spread, float offsetY, int strength)
+        public static void DrawSoftShadow(Graphics g, RectangleF shape, float radius, float spread, float offsetY, int strength)
         {
             const int layers = 8;
             for (int i = layers; i >= 1; i--)

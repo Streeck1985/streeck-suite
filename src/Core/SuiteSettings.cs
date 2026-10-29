@@ -18,6 +18,9 @@ namespace StreeckSuite.Core
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
         public enum AssistantEngineKind { Local, Gemini }
         public enum AssistantVoiceKind { GeminiCharon, PiperAld, PiperClaude, Windows }
+        public enum TaskbarFormatKind { Islands, Capsule, Full }      // Como el simulador: 3 islas, cápsula, completa
+        public enum TaskbarSearchKind { Full, Icon, Hidden }
+        public enum GlassStyleKind { Aero, Transparent, Obsidian, Neon }
 
         // Privacidad
         public static int PrivacyBlurPx = 25;           // 0..40
@@ -74,6 +77,14 @@ namespace StreeckSuite.Core
         // Menú de inicio (fase H)
         public static bool StartMenuWinKey = true;       // La tecla Windows abre el menú de la suite
         public static bool StartMenuShowRecent = true;
+
+        // Barra de tareas (fase I) y estilo de cristal global
+        public static bool TaskbarEnabled = true;
+        public static TaskbarFormatKind TaskbarFormat = TaskbarFormatKind.Islands;
+        public static int TaskbarGap = 14;               // 0..80 px entre globos
+        public static bool TaskbarEdges = false;         // Globos a los extremos
+        public static TaskbarSearchKind TaskbarSearch = TaskbarSearchKind.Full;
+        public static GlassStyleKind GlassStyle = GlassStyleKind.Aero;
 
         // Widgets
         public static Color WidgetAccent = Color.FromArgb(0, 210, 255);
@@ -154,6 +165,15 @@ namespace StreeckSuite.Core
                 AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
                 StartMenuWinKey = ReadBool(values, "inicio.teclaWindows", StartMenuWinKey);
                 StartMenuShowRecent = ReadBool(values, "inicio.recientes", StartMenuShowRecent);
+                TaskbarEnabled = ReadBool(values, "barra.activa", TaskbarEnabled);
+                TaskbarFormatKind format;
+                if (values.TryGetValue("barra.formato", out raw) && Enum.TryParse(raw, out format)) TaskbarFormat = format;
+                TaskbarGap = ReadInt(values, "barra.separacion", TaskbarGap, 0, 80);
+                TaskbarEdges = ReadBool(values, "barra.extremos", TaskbarEdges);
+                TaskbarSearchKind search;
+                if (values.TryGetValue("barra.busqueda", out raw) && Enum.TryParse(raw, out search)) TaskbarSearch = search;
+                GlassStyleKind glass;
+                if (values.TryGetValue("cristal.estilo", out raw) && Enum.TryParse(raw, out glass)) GlassStyle = glass;
 
                 WidgetAccent = ReadColor(values, "widgets.acento", WidgetAccent);
                 WidgetGlassPercent = ReadInt(values, "widgets.cristal", WidgetGlassPercent, 0, 100);
@@ -211,6 +231,12 @@ namespace StreeckSuite.Core
                     "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
                     "inicio.teclaWindows=" + (StartMenuWinKey ? 1 : 0),
                     "inicio.recientes=" + (StartMenuShowRecent ? 1 : 0),
+                    "barra.activa=" + (TaskbarEnabled ? 1 : 0),
+                    "barra.formato=" + TaskbarFormat,
+                    "barra.separacion=" + TaskbarGap,
+                    "barra.extremos=" + (TaskbarEdges ? 1 : 0),
+                    "barra.busqueda=" + TaskbarSearch,
+                    "cristal.estilo=" + GlassStyle,
                     "widgets.acento=" + ToHex(WidgetAccent),
                     "widgets.cristal=" + WidgetGlassPercent
                 });

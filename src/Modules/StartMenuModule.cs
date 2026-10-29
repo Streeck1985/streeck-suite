@@ -24,6 +24,11 @@ namespace StreeckSuite.Modules
 
         public void Initialize(EventBus eventBus)
         {
+            // Botón de inicio de la barra de Streeck
+            eventBus.Subscribe(Events.StartMenuToggle, payload =>
+            {
+                if (_menu != null && !_menu.IsDisposed && _menu.IsHandleCreated) _menu.BeginInvoke((Action)_menu.Toggle);
+            });
         }
 
         public void Start()

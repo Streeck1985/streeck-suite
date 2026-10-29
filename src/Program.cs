@@ -9,6 +9,8 @@ namespace StreeckSuite
 {
     public static class Program
     {
+        private const string ExitEventName = @"Local\StreeckSuite.Exit";
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -85,6 +87,16 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --preview-taskbar <carpeta>
+            if (args != null && args.Length >= 2 && args[0] == "--preview-taskbar")
+            {
+                NativeMethods.SetProcessDPIAware();
+                SuiteSettings.Load();
+                System.IO.Directory.CreateDirectory(args[1]);
+                using (TaskbarWindow bar = new TaskbarWindow(EventBus.Instance)) bar.RenderPreviews(args[1]);
+                return;
+            }
+
             // Herramienta de desarrollo: StreeckSuite.exe --preview-start <carpeta>
             if (args != null && args.Length >= 2 && args[0] == "--preview-start")
             {
@@ -101,9 +113,16 @@ namespace StreeckSuite
             {
                 if (!isFirstInstance)
                 {
+                    // StreeckSuite.exe --salir: pide a la instancia abierta que se cierre bien (devuelve la barra de Windows)
+                    if (args != null && args.Length >= 1 && args[0] == "--salir")
+                    {
+                        using (EventWaitHandle exit = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName)) exit.Set();
+                        return;
+                    }
                     Log.Info("[Program] Ya hay una instancia en ejecución; se cierra esta");
                     return;
                 }
+                if (args != null && args.Length >= 1 && args[0] == "--salir") return;
 
                 Run();
             }
@@ -142,8 +161,18 @@ namespace StreeckSuite
             // 4. Iniciar todos los módulos registrados
             manager.StartAll();
 
-            // 5. Ciclo de vida nativo de Windows (Bandeja y overlays)
-            Application.Run();
+            // Cierre ordenado pedido desde fuera (--salir), en el hilo de la interfaz
+            using (Control exitTarget = new Control())
+            using (EventWaitHandle exitRequested = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName))
+            {
+                IntPtr exitHandle = exitTarget.Handle;
+                RegisteredWaitHandle exitWait = ThreadPool.RegisterWaitForSingleObject(exitRequested,
+                    (state, timedOut) => exitTarget.BeginInvoke((Action)Application.Exit), null, Timeout.Infinite, true);
+
+                // 5. Ciclo de vida nativo de Windows (Bandeja y overlays)
+                Application.Run();
+                exitWait.Unregister(null);
+            }
 
             // 6. Limpieza al salir
             monitor.Stop();
