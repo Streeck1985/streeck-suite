@@ -22,6 +22,9 @@ namespace StreeckSuite.Modules
         private EventBus _eventBus;
         private NotchOverlayForm _overlayForm;
         private bool _isRunning;
+        private SearchWindow _search;
+        private SearchHotkey _searchHotkey;
+        private SuiteSettings.SearchShortcut _registeredShortcut;
 
         public DynamicNotchModule()
         {
@@ -43,11 +46,35 @@ namespace StreeckSuite.Modules
             }
             _overlayForm.Show();
             _isRunning = true;
+            StartSearch();
+        }
+
+        /// <summary>
+        /// Búsqueda rápida (fase E): ventana propia y atajo global, que se vuelve a registrar si cambia en el panel.
+        /// </summary>
+        private void StartSearch()
+        {
+            if (_searchHotkey != null) return;
+            _searchHotkey = new SearchHotkey(() =>
+            {
+                if (_search == null || _search.IsDisposed) _search = new SearchWindow();
+                _search.Toggle();
+            });
+            _registeredShortcut = SuiteSettings.SearchHotkey;
+            if (!_searchHotkey.Register()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ El atajo de la búsqueda está ocupado; elige otro en Ajustes");
+            SuiteSettings.Changed += () =>
+            {
+                if (_searchHotkey == null || SuiteSettings.SearchHotkey == _registeredShortcut) return;
+                _registeredShortcut = SuiteSettings.SearchHotkey;
+                if (!_searchHotkey.Register()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ese atajo ya lo usa otro programa");
+            };
         }
 
         public void Stop()
         {
             _isRunning = false;
+            if (_searchHotkey != null) { _searchHotkey.Dispose(); _searchHotkey = null; }
+            if (_search != null && !_search.IsDisposed) _search.Hide();
             if (_overlayForm != null && !_overlayForm.IsDisposed)
             {
                 _overlayForm.Hide();
@@ -134,7 +161,15 @@ namespace StreeckSuite.Modules
         private readonly EventAlertView _eventAlert = new EventAlertView();
         private readonly HashSet<string> _alertedEvents = new HashSet<string>();
         private readonly Action _agendaUpdated;
+        private readonly BluetoothAlertView _bluetoothAlert = new BluetoothAlertView();
+        private readonly Action<BluetoothDevice> _bluetoothConnected, _bluetoothLow;
+        private const int BluetoothAlertMs = 3000;
+        private const int LowBatteryAlertMs = 5000;
         private bool _timerAlertPending;   // Terminó un tiempo y aún no se ha hecho clic en su aviso
+        private readonly TrayView _tray = new TrayView();
+        private readonly DropZoneView _dropZone = new DropZoneView();
+        private Point? _dragStart;         // Donde se pulsó, para arrastrar un archivo fuera de la bandeja
+        private bool _draggingOut;         // La isla es el origen del arrastre: no debe mostrar su propia zona de soltar
         private int _hoveredTab = -1;      // Pestaña bajo el ratón (se muestra su nombre)
         private readonly AudioService _audio;
         private IslandView _alertView;
@@ -179,7 +214,22 @@ namespace StreeckSuite.Modules
             _views.Add(new SystemView());
             _views.Add(new TimerView());
             _views.Add(new AgendaView());
+            _views.Add(_tray);
             _views.Add(new NotificationsView());
+
+            // Bandeja: soltar archivos sobre la isla y arrastrarlos fuera
+            AllowDrop = true;
+            DragEnter += OnFilesDragEnter;
+            DragOver += (s, e) => { if (_alertView == _dropZone && _mode == Mode.Alert) e.Effect = DragDropEffects.Copy; };
+            DragLeave += (s, e) => EndDropZone();
+            DragDrop += OnFilesDropped;
+            MouseDown += (s, e) => { if (e.Button == MouseButtons.Left) _dragStart = e.Location; };
+            MouseMove += OnMouseMoveDragOut;
+            _bluetoothConnected = device => BeginInvokeSafe(() => ShowBluetoothAlert(device, false));
+            _bluetoothLow = device => BeginInvokeSafe(() => ShowBluetoothAlert(device, true));
+            BluetoothService.Connected += _bluetoothConnected;
+            BluetoothService.LowBattery += _bluetoothLow;
+            BluetoothService.EnsureStarted();
             _agendaUpdated = () => BeginInvokeSafe(RenderSurface);
             AgendaService.Updated += _agendaUpdated;
             AgendaService.EnsureStarted();
@@ -331,6 +381,72 @@ namespace StreeckSuite.Modules
             UpdateMode();
         }
 
+        #region Bandeja de archivos
+
+        private void OnFilesDragEnter(object sender, DragEventArgs e)
+        {
+            string[] files = e.Data.GetDataPresent(DataFormats.FileDrop) ? e.Data.GetData(DataFormats.FileDrop) as string[] : null;
+            if (_draggingOut || !SuiteSettings.FileTrayEnabled || files == null || files.Length == 0)
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+            e.Effect = DragDropEffects.Copy;
+            _dropZone.Count = files.Length;
+            _alertView = _dropZone;
+            _alertUntil = DateTime.MaxValue; // Abierta mientras dure el arrastre
+            UpdateMode();
+        }
+
+        private void EndDropZone()
+        {
+            if (_alertView != _dropZone) return;
+            _alertUntil = DateTime.MinValue;
+            UpdateMode();
+        }
+
+        private void OnFilesDropped(object sender, DragEventArgs e)
+        {
+            string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
+            EndDropZone();
+            if (files == null || _draggingOut) return;
+            FileTrayService.Add(files);
+            // Enseñar la bandeja con lo recién guardado
+            _viewIndex = _views.IndexOf(_tray);
+            _peekUntil = DateTime.Now.AddMilliseconds(Math.Max(2500, SuiteSettings.IslandCloseDelayMs));
+            UpdateMode();
+        }
+
+        /// <summary>
+        /// Arrastrar un archivo de la bandeja a otra ventana: se copia (con Mayús se mueve), como desde el Explorador.
+        /// </summary>
+        private void OnMouseMoveDragOut(object sender, MouseEventArgs e)
+        {
+            if (_dragStart == null || (e.Button & MouseButtons.Left) == 0 || _mode != Mode.Expanded || ActiveView != _tray) return;
+            if (Math.Abs(e.X - _dragStart.Value.X) < 6 && Math.Abs(e.Y - _dragStart.Value.Y) < 6) return;
+
+            PointF content = new PointF(_dragStart.Value.X - ShadowPad, _dragStart.Value.Y - ShadowPad - Px(ContentTop));
+            _dragStart = null;
+            TrayFile file = _tray.FileAt(content);
+            if (file == null) return;
+
+            DataObject data = new DataObject(DataFormats.FileDrop, new[] { file.Path });
+            // Sin esto el Explorador mueve por defecto dentro del mismo disco
+            data.SetData("Preferred DropEffect", new System.IO.MemoryStream(BitConverter.GetBytes((int)DragDropEffects.Copy)));
+            _draggingOut = true;
+            try
+            {
+                DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Move);
+            }
+            finally
+            {
+                _draggingOut = false;
+            }
+            RenderSurface(); // Si se movió, desaparece de la bandeja
+        }
+
+        #endregion
+
         /// <summary>
         /// Aviso unos minutos antes de cada evento de la agenda (una sola vez por evento).
         /// </summary>
@@ -350,6 +466,20 @@ namespace StreeckSuite.Modules
                 UpdateMode();
                 return;
             }
+        }
+
+        /// <summary>
+        /// Dispositivo Bluetooth conectado o con batería baja (fase F); sustituye al aviso que se esté viendo.
+        /// </summary>
+        private void ShowBluetoothAlert(BluetoothDevice device, bool lowBattery)
+        {
+            if (!Visible || (!lowBattery && !SuiteSettings.BluetoothConnectAlerts)) return;
+            _bluetoothAlert.Device = device;
+            _bluetoothAlert.LowBattery = lowBattery;
+            _alertView = _bluetoothAlert;
+            _alertUntil = DateTime.Now.AddMilliseconds(lowBattery ? LowBatteryAlertMs : BluetoothAlertMs);
+            _contentOpacity = 0f;
+            UpdateMode();
         }
 
         private void ShowCaptureAlert(CaptureMonitor.Device device, string app)
@@ -842,6 +972,20 @@ namespace StreeckSuite.Modules
             }));
             states.Add(new KeyValuePair<string, Action>("panel-tiempo-pomodoro", () => { _mode = Mode.Expanded; _viewIndex = _views.FindIndex(v => v is TimerView); }));
             states.Add(new KeyValuePair<string, Action>("aviso-tiempo", () => { _mode = Mode.Alert; _alertView = _timerAlert; }));
+            states.Add(new KeyValuePair<string, Action>("aviso-bluetooth", () =>
+            {
+                _mode = Mode.Alert;
+                _bluetoothAlert.Device = new BluetoothDevice { Name = "Galaxy Buds Pro", Battery = 92, Kind = BluetoothDevice.DeviceKind.Headphones, Connected = true };
+                _bluetoothAlert.LowBattery = false;
+                _alertView = _bluetoothAlert;
+            }));
+            states.Add(new KeyValuePair<string, Action>("aviso-bateria-baja", () =>
+            {
+                _mode = Mode.Alert;
+                _bluetoothAlert.Device = new BluetoothDevice { Name = "MX Keys", Battery = 20, Kind = BluetoothDevice.DeviceKind.Keyboard, Connected = true };
+                _bluetoothAlert.LowBattery = true;
+                _alertView = _bluetoothAlert;
+            }));
             states.Add(new KeyValuePair<string, Action>("aviso-evento", () =>
             {
                 _mode = Mode.Alert;
@@ -978,6 +1122,8 @@ namespace StreeckSuite.Modules
                 CaptureMonitor.Started -= _captureStarted;
                 CaptureMonitor.Changed -= _captureChanged;
                 AgendaService.Updated -= _agendaUpdated;
+                BluetoothService.Connected -= _bluetoothConnected;
+                BluetoothService.LowBattery -= _bluetoothLow;
                 if (_audio != null) _audio.Dispose();
             }
             base.Dispose(disposing);

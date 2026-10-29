@@ -170,6 +170,10 @@ namespace StreeckSuite.Core
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
         public const uint MOD_ALT = 0x0001;
         public const uint MOD_CONTROL = 0x0002;
         public const uint MOD_SHIFT = 0x0004;

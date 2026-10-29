@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Win32;
 using StreeckSuite.Core;
@@ -59,7 +60,11 @@ namespace StreeckSuite.Modules
         {
             try
             {
-                List<string> microphone = InUse("microphone");
+                // Micrófono: sesiones de grabación activas en el audio de Windows (fiable en todas las versiones);
+                // el registro se mantiene por si alguna app solo aparece ahí. En Windows 11 recientes el registro
+                // dejó de actualizarse, así que para la cámara puede no haber datos.
+                List<string> microphone = RecordingApps();
+                foreach (string app in InUse("microphone")) AddUnique(microphone, app);
                 List<string> camera = InUse("webcam");
 
                 List<string> oldMicrophone, oldCamera;
@@ -70,6 +75,9 @@ namespace StreeckSuite.Modules
                     _microphone = microphone;
                     _camera = camera;
                 }
+
+                foreach (string app in microphone) if (!oldMicrophone.Contains(app)) Log.Info("[CaptureMonitor] Micrófono en uso: {0}", app);
+                foreach (string app in camera) if (!oldCamera.Contains(app)) Log.Info("[CaptureMonitor] Cámara en uso: {0}", app);
 
                 Action<Device, string> started = Started;
                 if (started != null)
@@ -118,6 +126,92 @@ namespace StreeckSuite.Modules
                 }
             }
             return apps;
+        }
+
+        private const int AudioSessionStateActive = 1;
+
+        /// <summary>
+        /// Apps con una sesión de grabación activa en cualquier micrófono conectado.
+        /// </summary>
+        private static List<string> RecordingApps()
+        {
+            List<string> apps = new List<string>();
+            CoreAudio.IMMDeviceEnumerator enumerator = (CoreAudio.IMMDeviceEnumerator)new CoreAudio.MMDeviceEnumeratorComObject();
+            CoreAudio.IMMDeviceCollection devices = null;
+            try
+            {
+                if (enumerator.EnumAudioEndpoints(CoreAudio.EDataFlow.Capture, CoreAudio.DEVICE_STATE_ACTIVE, out devices) != 0 || devices == null) return apps;
+                uint count;
+                devices.GetCount(out count);
+                for (uint i = 0; i < count; i++)
+                {
+                    CoreAudio.IMMDevice device;
+                    if (devices.Item(i, out device) != 0 || device == null) continue;
+                    try
+                    {
+                        Guid iid = CoreAudio.IID_IAudioSessionManager2;
+                        object instance;
+                        if (device.Activate(ref iid, CoreAudio.CLSCTX_ALL, IntPtr.Zero, out instance) != 0) continue;
+                        CoreAudio.IAudioSessionManager2 manager = (CoreAudio.IAudioSessionManager2)instance;
+                        CoreAudio.IAudioSessionEnumerator sessions;
+                        if (manager.GetSessionEnumerator(out sessions) == 0 && sessions != null)
+                        {
+                            int sessionCount;
+                            sessions.GetCount(out sessionCount);
+                            for (int s = 0; s < sessionCount; s++)
+                            {
+                                CoreAudio.IAudioSessionControl2 session;
+                                if (sessions.GetSession(s, out session) != 0 || session == null) continue;
+                                int state;
+                                uint processId;
+                                if (session.GetState(out state) == 0 && state == AudioSessionStateActive
+                                    && session.IsSystemSoundsSession() != 0 && session.GetProcessId(out processId) == 0 && processId != 0)
+                                {
+                                    AddUnique(apps, ProcessName(processId));
+                                }
+                                Marshal.ReleaseComObject(session);
+                            }
+                            Marshal.ReleaseComObject(sessions);
+                        }
+                        Marshal.ReleaseComObject(manager);
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(device);
+                    }
+                }
+            }
+            finally
+            {
+                if (devices != null) Marshal.ReleaseComObject(devices);
+                Marshal.ReleaseComObject(enumerator);
+            }
+            return apps;
+        }
+
+        // Descripción del ejecutable ("Grabadora de sonido", "Discord"); si no se puede leer, el nombre del proceso
+        private static string ProcessName(uint processId)
+        {
+            try
+            {
+                using (Process process = Process.GetProcessById((int)processId))
+                {
+                    try
+                    {
+                        string description = process.MainModule.FileVersionInfo.FileDescription;
+                        if (!string.IsNullOrEmpty(description)) return description.Trim();
+                    }
+                    catch (Exception)
+                    {
+                        // Proceso con más privilegios: no se puede leer su módulo
+                    }
+                    return process.ProcessName;
+                }
+            }
+            catch (ArgumentException)
+            {
+                return "Una app"; // Ya terminó
+            }
         }
 
         private static bool IsActive(RegistryKey key)

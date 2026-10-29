@@ -471,10 +471,11 @@ namespace StreeckSuite.Modules
             get { return ""; }
         }
 
-        // Anillo 76 + 8 + nombre 18 + 4 + detalle 14 (+ 28 con la línea de micrófono y cámara)
+        // Anillo 76 + 8 + nombre 18 + 4 + detalle 14; + 58 con dispositivos Bluetooth conectados (fase F)
+        // y + 28 con la línea de micrófono y cámara
         public override SizeF BaseSize
         {
-            get { return new SizeF(440, HasCaptureLine ? 148 : 120); }
+            get { return new SizeF(440, 120 + (BluetoothService.ConnectedDevices.Count > 0 ? 58 : 0) + (HasCaptureLine ? 28 : 0)); }
         }
 
         private static bool HasCaptureLine
@@ -527,10 +528,18 @@ namespace StreeckSuite.Modules
                 s != null ? string.Format("{0:0.0} / {1:0} GB", s.RamUsedGb, s.RamTotalGb) : "", s != null ? s.RamPercent : 0, Color.FromArgb(167, 139, 250));
             DrawGauge(g, p, alpha, x + 2 * column, column, "GPU", _gpuName, s != null ? s.GpuPercent : 0, Color.FromArgb(74, 222, 128));
 
+            // Dispositivos Bluetooth conectados con su batería (mockup F1), hasta 3 en una fila
+            float lineY = p.Px(126);
+            List<BluetoothDevice> devices = BluetoothService.ConnectedDevices;
+            if (devices.Count > 0)
+            {
+                DrawDevices(g, p, alpha, devices, x, lineY + p.Px(4), width);
+                lineY += p.Px(58);
+            }
+
             // Qué apps usan el micrófono o la cámara (los puntos de la isla cerrada)
             if (!HasCaptureLine) return;
             List<string> microphone = CaptureMonitor.MicrophoneApps, camera = CaptureMonitor.CameraApps;
-            float lineY = p.Px(126);
             float cursor = x;
             foreach (KeyValuePair<Color, string> entry in new[]
             {
@@ -548,6 +557,30 @@ namespace StreeckSuite.Modules
                 p.DrawText(g, entry.Value, p.Text12, IslandPainter.Fade(IslandPainter.Gray, alpha),
                     new RectangleF(cursor + dot + p.Px(6), lineY, textWidth, p.Px(18)), StringAlignment.Near);
                 cursor += dot + p.Px(6) + textWidth + p.Px(16);
+            }
+        }
+
+        private static void DrawDevices(Graphics g, IslandPainter p, int alpha, List<BluetoothDevice> devices, float x, float y, float width)
+        {
+            int count = Math.Min(3, devices.Count);
+            float gap = p.Px(8);
+            float chipWidth = (width - gap * (count - 1)) / count;
+            for (int i = 0; i < count; i++)
+            {
+                BluetoothDevice device = devices[i];
+                RectangleF chip = new RectangleF(x + i * (chipWidth + gap), y, chipWidth, p.Px(46));
+                IslandPainter.FillRounded(g, chip, p.Px(12), Color.FromArgb(alpha * 13 / 255, Color.White));
+                RectangleF icon = new RectangleF(chip.X + p.Px(8), chip.Y, p.Px(22), chip.Height);
+                p.DrawText(g, BluetoothService.Glyph(device.Kind), p.Glyph16, IslandPainter.Fade(Color.FromArgb(195, 201, 212), alpha), icon, StringAlignment.Center);
+
+                float textX = icon.Right + p.Px(8);
+                float textWidth = chip.Right - p.Px(8) - textX;
+                p.DrawText(g, device.Name, p.Bold12, Color.FromArgb(alpha, Color.White), new RectangleF(textX, chip.Y + p.Px(5), textWidth, p.Px(18)), StringAlignment.Near);
+                Color color = BatteryDrawing.ColorFor(device.Battery);
+                string percent = device.Battery + " %";
+                float percentWidth = g.MeasureString(percent, p.Bold12).Width;
+                p.DrawText(g, percent, p.Bold12, IslandPainter.Fade(color, alpha), new RectangleF(textX, chip.Y + p.Px(23), percentWidth + p.Px(2), p.Px(18)), StringAlignment.Near);
+                BatteryDrawing.Draw(g, p, new PointF(textX + percentWidth + p.Px(4), chip.Y + p.Px(26)), device.Battery, color, alpha);
             }
         }
 

@@ -35,6 +35,21 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --preview-search <carpeta> <texto> [<texto>...] guarda la búsqueda en PNG
+            if (args != null && args.Length >= 3 && args[0] == "--preview-search")
+            {
+                NativeMethods.SetProcessDPIAware();
+                SuiteSettings.Load();
+                using (SearchWindow search = new SearchWindow())
+                {
+                    for (int i = 2; i < args.Length; i++)
+                    {
+                        search.RenderPreview(args[i], System.IO.Path.Combine(args[1], "busqueda-" + i + ".png"));
+                    }
+                }
+                return;
+            }
+
             // Una sola instancia: dos copias pintarían dos notch y dos iconos en la bandeja
             bool isFirstInstance;
             using (Mutex singleInstance = new Mutex(true, @"Local\StreeckSuite.SingleInstance", out isFirstInstance))

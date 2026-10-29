@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Widgets, Clock }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 592, SideW = 210, ContentX = 238, ContentW = 534;
@@ -309,6 +309,7 @@ namespace StreeckSuite.Modules
                 case Page.Island: DrawIsland(g); break;
                 case Page.Notifications: DrawNotifications(g); break;
                 case Page.Time: DrawTime(g); break;
+                case Page.Tray: DrawTray(g); break;
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
             }
@@ -340,7 +341,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Widgets", "Reloj 3D" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Widgets", "Reloj 3D" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -421,6 +422,15 @@ namespace StreeckSuite.Modules
                         g.DrawEllipse(pen, 4, 5, 16, 16);
                         g.DrawLines(pen, new[] { new PointF(12, 9), new PointF(12, 13), new PointF(14, 15) });
                         g.DrawLine(pen, 9, 2, 15, 2);
+                        break;
+                    case Page.Tray:
+                        using (GraphicsPath tray = new GraphicsPath())
+                        {
+                            tray.AddLines(new[] { new PointF(2, 12), new PointF(5.5f, 5), new PointF(18.5f, 5), new PointF(22, 12), new PointF(22, 20), new PointF(2, 20) });
+                            tray.CloseFigure();
+                            g.DrawPath(pen, tray);
+                        }
+                        g.DrawLines(pen, new[] { new PointF(2, 12), new PointF(8, 12), new PointF(10, 15), new PointF(14, 15), new PointF(16, 12), new PointF(22, 12) });
                         break;
                     case Page.Clock:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
@@ -594,7 +604,7 @@ namespace StreeckSuite.Modules
 
         #region Página Avisos (C3)
 
-        private const int AppRowsVisible = 3; // Filas de dos apps; la rueda pasa al resto
+        private const int AppRowsVisible = 2; // Filas de dos apps; la rueda pasa al resto
         private int _appsOffset;
 
         private void DrawNotifications(Graphics g)
@@ -657,6 +667,15 @@ namespace StreeckSuite.Modules
             DrawRowDivider(g, y + 62);
             DrawToggleRow(g, y + 62, "Avisar cuando una app empiece a usarlos", null, SuiteSettings.CaptureAlerts,
                 () => { SuiteSettings.CaptureAlerts = !SuiteSettings.CaptureAlerts; SuiteSettings.Save(); });
+            // Dispositivos Bluetooth (fase F)
+            y += 110 + 14;
+            DrawCard(g, y, 100);
+            DrawToggleRow(g, y + 4, "Avisar al conectar un dispositivo Bluetooth", null, SuiteSettings.BluetoothConnectAlerts,
+                () => { SuiteSettings.BluetoothConnectAlerts = !SuiteSettings.BluetoothConnectAlerts; SuiteSettings.Save(); });
+            DrawLabelValue(g, y + 54, "Avisar de batería baja al",
+                SuiteSettings.BluetoothLowBatteryPercent == 0 ? "Sin aviso" : SuiteSettings.BluetoothLowBatteryPercent + " %", _reg13, _bold13);
+            DrawSlider(g, new RectangleF(InnerX, y + 82, InnerW, 6), SuiteSettings.BluetoothLowBatteryPercent / 50f,
+                f => { SuiteSettings.BluetoothLowBatteryPercent = (int)Math.Round(f * 10) * 5; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -747,6 +766,39 @@ namespace StreeckSuite.Modules
             SuiteSettings.CalendarGoogleUrl = url;
             SuiteSettings.Save();
             AgendaService.RefreshNow();
+        }
+
+        #endregion
+
+        #region Página Bandeja y búsqueda (E3)
+
+        private void DrawTray(Graphics g)
+        {
+            DrawTitle(g, "Bandeja y búsqueda");
+
+            float y = 66;
+            DrawCard(g, y, 124);
+            DrawToggleRow(g, y + 4, "Bandeja de archivos", "Arrastra archivos a la isla para tenerlos a mano", SuiteSettings.FileTrayEnabled,
+                () => { SuiteSettings.FileTrayEnabled = !SuiteSettings.FileTrayEnabled; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 62);
+            DrawToggleRow(g, y + 62, "Conservar al reiniciar", "Si no, la bandeja se vacía al cerrar la suite", SuiteSettings.FileTrayPersist,
+                () => { SuiteSettings.FileTrayPersist = !SuiteSettings.FileTrayPersist; SuiteSettings.Save(); });
+
+            y = 204;
+            DrawCard(g, y, 124);
+            DrawText(g, "Atajo de la búsqueda", _semi14, TextColor, new RectangleF(InnerX, y + 14, 300, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Ctrl + Alt + S", "Ctrl + Shift + Espacio", "Ctrl + Espacio" },
+                (int)SuiteSettings.SearchHotkey, i => { SuiteSettings.SearchHotkey = (SuiteSettings.SearchShortcut)i; SuiteSettings.Save(); });
+            DrawText(g, "Los atajos con Espacio desactivan ese mismo atajo en otros programas (p. ej. VS Code).", _reg12, Gray, new RectangleF(InnerX, y + 94, InnerW, 16), StringAlignment.Near);
+
+            y = 342;
+            DrawCard(g, y, 122);
+            DrawToggleRow(g, y + 4, "Buscar también archivos", "Usa el índice de búsqueda de Windows", SuiteSettings.SearchFiles,
+                () => { SuiteSettings.SearchFiles = !SuiteSettings.SearchFiles; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 62);
+            DrawText(g, "Buscar en la web con", _semi14, TextColor, new RectangleF(InnerX, y + 62, 220, 56), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 270, y + 70, 270, 40), new[] { "Google", "Bing", "DuckDuckGo" },
+                (int)SuiteSettings.SearchEngine, i => { SuiteSettings.SearchEngine = (SuiteSettings.WebSearchEngine)i; SuiteSettings.Save(); });
         }
 
         #endregion
