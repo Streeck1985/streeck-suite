@@ -85,6 +85,7 @@ namespace StreeckSuite.Modules
         public void Toggle()
         {
             if (Visible) { HideMenu(); return; }
+            Log.Info("[StartMenu] Abriendo el menú");
             _view = View.Home;
             _query = "";
             _powerOpen = false;
@@ -95,9 +96,12 @@ namespace StreeckSuite.Modules
             _recent = SuiteSettings.StartMenuShowRecent ? StartMenuService.Recent(RecentCount) : new List<RecentFile>();
             Relayout();
             Show();
+            _shownAt = DateTime.Now;
             Activate();
             NativeMethods.SetForegroundWindow(Handle);
         }
+
+        private DateTime _shownAt;
 
         private void HideMenu()
         {
@@ -108,6 +112,8 @@ namespace StreeckSuite.Modules
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
+            // Justo al abrirse, Windows puede quitarle el foco un instante: eso no cuenta como clic fuera
+            if ((DateTime.Now - _shownAt).TotalMilliseconds < 400) { BeginInvoke((Action)(() => { Activate(); NativeMethods.SetForegroundWindow(Handle); })); return; }
             if (!_contextOpen) HideMenu();
         }
 
