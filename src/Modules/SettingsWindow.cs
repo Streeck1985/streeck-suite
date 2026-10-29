@@ -888,7 +888,7 @@ namespace StreeckSuite.Modules
             y = 296;
             DrawCard(g, y, 110);
             DrawText(g, "Dictado con el botón del micrófono", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 18), StringAlignment.Near);
-            DrawText(g, "Dictado de Windows en español · necesita «Reconocimiento de voz en línea» activado", _reg12, Gray,
+            DrawText(g, VoiceInput.IsInstalled ? "Whisper en tu PC · sin internet · detecta solo cuando terminas de hablar" : "Falta Whisper (whisper.cpp y su modelo, ~190 MB)", _reg12, Gray,
                 new RectangleF(InnerX, y + 34, InnerW, 16), StringAlignment.Near);
             DrawRowDivider(g, y + 62);
             DrawToggleRow(g, y + 62, "Leer las respuestas en voz alta", null, SuiteSettings.AssistantSpeak,
