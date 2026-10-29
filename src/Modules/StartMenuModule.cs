@@ -31,7 +31,7 @@ namespace StreeckSuite.Modules
             if (_menu == null || _menu.IsDisposed)
             {
                 _menu = new StartMenuWindow();
-                _menu.CreateControl(); // Manejador listo para recibir avisos del gancho de teclado
+                IntPtr handle = _menu.Handle; // Fuerza el manejador aunque esté oculta (CreateControl no lo crea si no es visible)
             }
             if (_hook == null)
             {
@@ -39,6 +39,7 @@ namespace StreeckSuite.Modules
                 _hook = new WinKeyHook(() =>
                 {
                     if (_menu != null && !_menu.IsDisposed && _menu.IsHandleCreated) _menu.BeginInvoke((Action)_menu.Toggle);
+                    else Log.Error("[StartMenuModule] Tecla Windows pulsada pero el menú no está listo");
                 });
             }
             _hook.Apply();
