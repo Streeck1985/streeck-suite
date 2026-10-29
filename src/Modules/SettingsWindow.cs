@@ -886,15 +886,23 @@ namespace StreeckSuite.Modules
             if (!hasKey) AddHit(new RectangleF(InnerX, y + 178, 330, 18), () => OpenUrl("https://aistudio.google.com/apikey"));
 
             y = 296;
-            DrawCard(g, y, 110);
+            DrawCard(g, y, 166);
             DrawText(g, "Dictado con el botón del micrófono", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 18), StringAlignment.Near);
             DrawText(g, VoiceInput.IsInstalled ? "Whisper en tu PC · sin internet · detecta solo cuando terminas de hablar" : "Falta Whisper (whisper.cpp y su modelo, ~190 MB)", _reg12, Gray,
                 new RectangleF(InnerX, y + 34, InnerW, 16), StringAlignment.Near);
             DrawRowDivider(g, y + 62);
             DrawToggleRow(g, y + 62, "Leer las respuestas en voz alta", null, SuiteSettings.AssistantSpeak,
                 () => { SuiteSettings.AssistantSpeak = !SuiteSettings.AssistantSpeak; SuiteSettings.Save(); });
+            // Charon (Gemini) con Piper Ald de respaldo si no hay cupo o internet; las demás, locales
+            DrawSegmented(g, new RectangleF(InnerX, y + 112, InnerW, 40), new[] { "Charon (Gemini)", "Ald (local)", "Claude (local)", "Windows" },
+                (int)SuiteSettings.AssistantVoice, i =>
+                {
+                    SuiteSettings.AssistantVoice = (SuiteSettings.AssistantVoiceKind)i;
+                    SuiteSettings.Save();
+                    VoiceOutput.Speak("Hola, así sueno yo."); // Muestra al elegir
+                });
 
-            y = 420;
+            y = 476;
             DrawCard(g, y, 98);
             DrawText(g, "Atajo del asistente", _semi14, TextColor, new RectangleF(InnerX, y + 14, 300, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Ctrl + Alt + A", "Solo desde la búsqueda (Ctrl + Alt + S)" },

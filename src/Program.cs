@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows.Forms;
 using StreeckSuite.Core;
@@ -69,6 +70,18 @@ namespace StreeckSuite
                         assistant.RenderPreview(args[i], System.IO.Path.Combine(args[1], "asistente-" + i + ".png"));
                     }
                 }
+                return;
+            }
+
+            // Herramienta de desarrollo: StreeckSuite.exe --test-voice <archivo.wav> <Voz> <texto>: guarda la voz y anota cuál habló
+            if (args != null && args.Length >= 4 && args[0] == "--test-voice")
+            {
+                SuiteSettings.Load();
+                string engine;
+                Stopwatch watch = Stopwatch.StartNew();
+                byte[] wav = VoiceOutput.Synthesize(args[3], (SuiteSettings.AssistantVoiceKind)Enum.Parse(typeof(SuiteSettings.AssistantVoiceKind), args[2]), out engine);
+                if (wav != null) System.IO.File.WriteAllBytes(args[1], wav);
+                Log.Info("[VoiceOutput] Prueba: habló {0} en {1:0.0} s", engine, watch.Elapsed.TotalSeconds);
                 return;
             }
 
