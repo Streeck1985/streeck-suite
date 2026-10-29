@@ -50,6 +50,13 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --test-agenda <enlace .ics> anota en el registro los eventos leídos
+            if (args != null && args.Length >= 2 && args[0] == "--test-agenda")
+            {
+                AgendaService.TestFeed(args[1]);
+                return;
+            }
+
             // Una sola instancia: dos copias pintarían dos notch y dos iconos en la bandeja
             bool isFirstInstance;
             using (Mutex singleInstance = new Mutex(true, @"Local\StreeckSuite.SingleInstance", out isFirstInstance))

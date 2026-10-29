@@ -21,17 +21,35 @@ namespace StreeckSuite.Modules
         public bool AllDay;
         public Color Color;
         public string JoinUrl;    // Enlace de Teams/Meet/Zoom, o null
-        public bool FromGoogle;
+        public string WebUrl;     // Dónde abrir el calendario al hacer clic (web del proveedor u Outlook)
     }
 
     /// <summary>
-    /// Eventos de hoy y mañana para la pestaña Agenda (mockup D2): del calendario de Windows (cuenta Microsoft) y del
-    /// enlace privado iCal de Google Calendar, juntos y ordenados. Se recargan cada 5 minutos en segundo plano.
+    /// Estado de cada enlace iCal para el panel de ajustes.
+    /// </summary>
+    internal class CalendarFeed
+    {
+        public string Url;
+        public string Name;       // X-WR-CALNAME del calendario, o el proveedor si no lo trae
+        public Color Color;
+        public int Count = -1;    // Eventos hoy y mañana; -1 mientras se lee
+        public string Error;      // null si se leyó bien
+    }
+
+    /// <summary>
+    /// Eventos de hoy y mañana para la pestaña Agenda (mockup D2): del calendario de Windows (cuenta Microsoft) y de
+    /// los enlaces iCal privados que pegue el usuario (Google, Outlook publicado, iCloud...), juntos y ordenados.
+    /// Cada enlace tiene su color. Se recargan cada 5 minutos en segundo plano.
     /// </summary>
     internal static class AgendaService
     {
         private const int RefreshMs = 5 * 60 * 1000;
-        private static readonly Color GoogleColor = Color.FromArgb(66, 133, 244);
+        // Un color por enlace, en el orden en que se añadieron
+        private static readonly Color[] FeedColors =
+        {
+            Color.FromArgb(66, 133, 244), Color.FromArgb(167, 139, 250), Color.FromArgb(74, 222, 128),
+            Color.FromArgb(244, 114, 182), Color.FromArgb(251, 146, 60), Color.FromArgb(45, 212, 191)
+        };
         private static readonly Regex JoinLink = new Regex(@"https?://(meet\.google\.com|teams\.microsoft\.com|teams\.live\.com|[\w.-]*zoom\.us)/[^\s""<>\\]+",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -39,7 +57,7 @@ namespace StreeckSuite.Modules
         private static readonly AutoResetEvent Wake = new AutoResetEvent(false);
         private static Thread _thread;
         private static List<AgendaEvent> _events = new List<AgendaEvent>();
-        private static string _googleStatus = "";
+        private static List<CalendarFeed> _feeds = new List<CalendarFeed>();
         private static int _windowsCount = -1;
 
         /// <summary>
@@ -53,11 +71,30 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
-        /// Estado de la conexión con Google para el panel de ajustes ("12 eventos esta semana", error...).
+        /// Estado de cada enlace iCal (nombre, color, eventos o error) para el panel de ajustes.
         /// </summary>
-        public static string GoogleStatus
+        public static List<CalendarFeed> Feeds
         {
-            get { lock (Gate) return _googleStatus; }
+            get
+            {
+                lock (Gate)
+                {
+                    // Los enlaces recién pegados aparecen al momento como "Leyendo…"
+                    List<CalendarFeed> feeds = new List<CalendarFeed>();
+                    for (int i = 0; i < SuiteSettings.CalendarIcalUrls.Count; i++)
+                    {
+                        string url = SuiteSettings.CalendarIcalUrls[i];
+                        CalendarFeed known = _feeds.Find(f => f.Url == url);
+                        feeds.Add(known ?? new CalendarFeed { Url = url, Name = ProviderName(url), Color = ColorFor(i) });
+                    }
+                    return feeds;
+                }
+            }
+        }
+
+        public static Color ColorFor(int index)
+        {
+            return FeedColors[index % FeedColors.Length];
         }
 
         /// <summary>
@@ -70,7 +107,7 @@ namespace StreeckSuite.Modules
 
         public static bool HasSource
         {
-            get { return SuiteSettings.CalendarWindows || !string.IsNullOrEmpty(SuiteSettings.CalendarGoogleUrl); }
+            get { return SuiteSettings.CalendarWindows || SuiteSettings.CalendarIcalUrls.Count > 0; }
         }
 
         public static void EnsureStarted()
@@ -100,8 +137,15 @@ namespace StreeckSuite.Modules
                 List<AgendaEvent> events = new List<AgendaEvent>();
                 if (SuiteSettings.CalendarWindows) events.AddRange(ReadWindows(from, to));
                 else lock (Gate) _windowsCount = -1;
-                if (!string.IsNullOrEmpty(SuiteSettings.CalendarGoogleUrl)) events.AddRange(ReadGoogle(SuiteSettings.CalendarGoogleUrl, from, to));
-                else lock (Gate) _googleStatus = "";
+                List<CalendarFeed> feeds = new List<CalendarFeed>();
+                List<string> urls = new List<string>(SuiteSettings.CalendarIcalUrls);
+                for (int i = 0; i < urls.Count; i++)
+                {
+                    CalendarFeed feed = new CalendarFeed { Url = urls[i], Name = ProviderName(urls[i]), Color = ColorFor(i) };
+                    events.AddRange(ReadIcal(feed, from, to));
+                    feeds.Add(feed);
+                }
+                lock (Gate) _feeds = feeds;
 
                 events.Sort((a, b) => a.AllDay != b.AllDay && a.Start.Date == b.Start.Date ? (a.AllDay ? -1 : 1) : a.Start.CompareTo(b.Start));
                 lock (Gate) _events = events;
@@ -114,8 +158,8 @@ namespace StreeckSuite.Modules
 
         public static void Open(AgendaEvent agendaEvent, bool join)
         {
-            string target = join && agendaEvent.JoinUrl != null ? agendaEvent.JoinUrl
-                : agendaEvent.FromGoogle ? "https://calendar.google.com/calendar/r/day" : "outlookcal:";
+            string target = join && agendaEvent.JoinUrl != null ? agendaEvent.JoinUrl : agendaEvent.WebUrl;
+            if (string.IsNullOrEmpty(target)) return;
             try
             {
                 System.Diagnostics.Process.Start(target);
@@ -159,6 +203,7 @@ namespace StreeckSuite.Modules
                     e.Color = colors.TryGetValue(a.CalendarId ?? "", out color) ? color : Color.FromArgb(56, 189, 248);
                     e.JoinUrl = !string.IsNullOrEmpty(a.OnlineMeetingLink) ? a.OnlineMeetingLink : FindJoinLink(a.Location + " " + a.Details);
                     e.Key = "w|" + a.LocalId + "|" + e.Start.Ticks;
+                    e.WebUrl = "outlookcal:";
                     events.Add(e);
                 }
                 lock (Gate) _windowsCount = events.Count;
@@ -173,9 +218,9 @@ namespace StreeckSuite.Modules
 
         #endregion
 
-        #region Google Calendar (iCal)
+        #region Enlaces iCal (Google, Outlook publicado, iCloud...)
 
-        private static List<AgendaEvent> ReadGoogle(string url, DateTime from, DateTime to)
+        private static List<AgendaEvent> ReadIcal(CalendarFeed feed, DateTime from, DateTime to)
         {
             List<AgendaEvent> events = new List<AgendaEvent>();
             try
@@ -185,18 +230,60 @@ namespace StreeckSuite.Modules
                 using (WebClient client = new WebClient())
                 {
                     client.Encoding = Encoding.UTF8;
-                    ics = client.DownloadString(url.Replace("webcal://", "https://"));
+                    ics = client.DownloadString(feed.Url.Replace("webcal://", "https://"));
                 }
                 if (!ics.Contains("BEGIN:VCALENDAR")) throw new FormatException("el enlace no es un calendario iCal");
+                Match name = Regex.Match(ics, @"^X-WR-CALNAME:(.+)$", RegexOptions.Multiline);
+                if (name.Success && name.Groups[1].Value.Trim().Length > 0) feed.Name = Unescape(name.Groups[1].Value.Trim());
                 events = ParseIcs(ics, from, to);
-                lock (Gate) _googleStatus = string.Format("Conectado · {0} eventos hoy y mañana", events.Count);
+                string web = WebUrlFor(feed.Url);
+                foreach (AgendaEvent e in events)
+                {
+                    e.Color = feed.Color;
+                    e.WebUrl = web;
+                }
+                feed.Count = events.Count;
             }
             catch (Exception ex)
             {
-                Log.Error("[AgendaService] No se pudo leer Google Calendar: {0}", ex.Message);
-                lock (Gate) _googleStatus = "No se pudo leer el enlace: " + ex.Message;
+                Log.Error("[AgendaService] No se pudo leer el calendario {0}: {1}", ProviderName(feed.Url), ex.Message);
+                feed.Error = ex.Message;
             }
             return events;
+        }
+
+        // Nombre provisional mientras no se lee X-WR-CALNAME
+        /// <summary>
+        /// Herramienta de desarrollo (--test-agenda <enlace>): lee un enlace iCal y anota en el registro lo encontrado.
+        /// </summary>
+        internal static void TestFeed(string url)
+        {
+            CalendarFeed feed = new CalendarFeed { Url = url, Name = ProviderName(url), Color = ColorFor(0) };
+            DateTime from = DateTime.Today, to = DateTime.Today.AddDays(30);
+            List<AgendaEvent> events = ReadIcal(feed, from, to);
+            Log.Info("[AgendaService] Prueba: {0} · {1} eventos en 30 días · error: {2}", feed.Name, events.Count, feed.Error ?? "ninguno");
+            events.Sort((a, b) => a.Start.CompareTo(b.Start));
+            foreach (AgendaEvent e in events) Log.Info("[AgendaService]   {0:dd/MM HH:mm}{1} {2}", e.Start, e.AllDay ? " (todo el día)" : "", e.Title);
+        }
+
+        // Nombre provisional mientras no se lee X-WR-CALNAME
+        private static string ProviderName(string url)
+        {
+            string u = url.ToLowerInvariant();
+            if (u.Contains("google.com")) return "Google Calendar";
+            if (u.Contains("outlook") || u.Contains("office365") || u.Contains("live.com")) return "Outlook";
+            if (u.Contains("icloud.com")) return "iCloud";
+            try { return new Uri(url.Replace("webcal://", "https://")).Host; }
+            catch (UriFormatException) { return "Calendario"; }
+        }
+
+        private static string WebUrlFor(string url)
+        {
+            string u = url.ToLowerInvariant();
+            if (u.Contains("google.com")) return "https://calendar.google.com/calendar/r/day";
+            if (u.Contains("outlook") || u.Contains("office365") || u.Contains("live.com")) return "https://outlook.live.com/calendar/";
+            if (u.Contains("icloud.com")) return "https://www.icloud.com/calendar/";
+            return null;
         }
 
         private class IcsEvent
@@ -263,9 +350,9 @@ namespace StreeckSuite.Modules
                         Start = occurrence,
                         End = occurrence + length,
                         AllDay = allDay,
-                        Color = GoogleColor,
+
                         JoinUrl = FindJoinLink(location + " " + description),
-                        FromGoogle = true,
+
                         Key = "g|" + uid + "|" + occurrence.Ticks
                     });
                 }
