@@ -71,6 +71,10 @@ namespace StreeckSuite.Core
         public static AssistantVoiceKind AssistantVoice = AssistantVoiceKind.GeminiCharon; // Charon con Piper Ald de respaldo
         public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la búsqueda
 
+        // Menú de inicio (fase H)
+        public static bool StartMenuWinKey = true;       // La tecla Windows abre el menú de la suite
+        public static bool StartMenuShowRecent = true;
+
         // Widgets
         public static Color WidgetAccent = Color.FromArgb(0, 210, 255);
         public static int WidgetGlassPercent = 60;      // 0..100
@@ -148,6 +152,8 @@ namespace StreeckSuite.Core
                 AssistantVoiceKind voiceKind;
                 if (values.TryGetValue("asistente.voz", out raw) && Enum.TryParse(raw, out voiceKind)) AssistantVoice = voiceKind;
                 AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
+                StartMenuWinKey = ReadBool(values, "inicio.teclaWindows", StartMenuWinKey);
+                StartMenuShowRecent = ReadBool(values, "inicio.recientes", StartMenuShowRecent);
 
                 WidgetAccent = ReadColor(values, "widgets.acento", WidgetAccent);
                 WidgetGlassPercent = ReadInt(values, "widgets.cristal", WidgetGlassPercent, 0, 100);
@@ -203,6 +209,8 @@ namespace StreeckSuite.Core
                     "asistente.leerEnVozAlta=" + (AssistantSpeak ? 1 : 0),
                     "asistente.voz=" + AssistantVoice,
                     "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
+                    "inicio.teclaWindows=" + (StartMenuWinKey ? 1 : 0),
+                    "inicio.recientes=" + (StartMenuShowRecent ? 1 : 0),
                     "widgets.acento=" + ToHex(WidgetAccent),
                     "widgets.cristal=" + WidgetGlassPercent
                 });
