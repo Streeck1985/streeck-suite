@@ -20,7 +20,7 @@ $SourceFiles = Get-ChildItem -Path "$PSScriptRoot\src" -Filter "*.cs" -Recurse |
 Write-Host "Compilando Windows 11 Custom Suite (C#)..." -ForegroundColor Cyan
 Write-Host "Fuentes: $($SourceFiles.Count) archivos"
 
-$RefArg = "/reference:System.dll,System.Core.dll,System.Drawing.dll,System.Windows.Forms.dll"
+$RefArg = "/reference:System.dll,System.Core.dll,System.Data.dll,System.Drawing.dll,System.Windows.Forms.dll"
 
 # Windows ML (reloj 3D): metadatos WinRT que trae Windows y las fachadas de .NET para usarlos desde C#
 $FrameworkDir = Split-Path $Compiler

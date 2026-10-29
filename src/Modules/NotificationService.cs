@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Threading;
 using StreeckSuite.Core;
 using Windows.UI.Notifications;
@@ -216,18 +214,6 @@ namespace StreeckSuite.Modules
 
         #region Icono real de la app
 
-        [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-        private interface IShellItemImageFactory
-        {
-            [PreserveSig] int GetImage(NativeMethods.SIZE size, int flags, out IntPtr hbitmap);
-        }
-
-        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
-        private static extern void SHCreateItemFromParsingName(string path, IntPtr bindContext,
-            [MarshalAs(UnmanagedType.LPStruct)] Guid riid, [MarshalAs(UnmanagedType.Interface)] out IShellItemImageFactory item);
-
-        private const int SIIGBF_ICONONLY = 0x4;
-
         /// <summary>
         /// Icono de la app tal como sale en el menú Inicio (funciona con apps de la tienda y de escritorio).
         /// </summary>
@@ -239,54 +225,9 @@ namespace StreeckSuite.Modules
                 Bitmap cached;
                 if (Icons.TryGetValue(appId, out cached)) return cached;
             }
-
-            Bitmap icon = null;
-            IShellItemImageFactory factory = null;
-            try
-            {
-                SHCreateItemFromParsingName("shell:AppsFolder\\" + appId, IntPtr.Zero, typeof(IShellItemImageFactory).GUID, out factory);
-                IntPtr hbitmap;
-                if (factory.GetImage(new NativeMethods.SIZE(IconPx, IconPx), SIIGBF_ICONONLY, out hbitmap) == 0)
-                {
-                    icon = CopyWithAlpha(hbitmap);
-                    NativeMethods.DeleteObject(hbitmap);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error("[NotificationService] Sin icono para {0}: {1}", appId, ex.Message);
-            }
-            finally
-            {
-                if (factory != null) Marshal.ReleaseComObject(factory);
-            }
-
+            Bitmap icon = ShellImage.Get("shell:AppsFolder\\" + appId, IconPx, ShellImage.IconOnly);
             lock (Gate) Icons[appId] = icon;
             return icon;
-        }
-
-        // Image.FromHbitmap descarta el canal alfa: se copian los bits tal cual a un mapa ARGB
-        private static Bitmap CopyWithAlpha(IntPtr hbitmap)
-        {
-            using (Bitmap raw = Image.FromHbitmap(hbitmap))
-            {
-                BitmapData data = raw.LockBits(new Rectangle(0, 0, raw.Width, raw.Height), ImageLockMode.ReadOnly, raw.PixelFormat);
-                try
-                {
-                    using (Bitmap view = new Bitmap(raw.Width, raw.Height, data.Stride, PixelFormat.Format32bppArgb, data.Scan0))
-                    {
-                        Bitmap copy = new Bitmap(raw.Width, raw.Height, PixelFormat.Format32bppArgb);
-                        using (Graphics g = Graphics.FromImage(copy)) g.DrawImageUnscaled(view, 0, 0);
-                        // Si el icono vino como mapa de bits de abajo arriba, darle la vuelta
-                        if (data.Stride < 0) copy.RotateFlip(RotateFlipType.RotateNoneFlipY);
-                        return copy;
-                    }
-                }
-                finally
-                {
-                    raw.UnlockBits(data);
-                }
-            }
         }
 
         #endregion

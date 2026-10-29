@@ -1,6 +1,6 @@
 # Streeck Suite — Estado del proyecto
 
-> Última actualización: 27 de octubre de 2026 (Noche).
+> Última actualización: 28 de octubre de 2026 (fases A a F).
 > Documento de traspaso: sirve para retomar el desarrollo en otra PC o con cualquier asistente (Antigravity, Claude, etc.).
 > Léelo completo antes de tocar el código: la sección **Reglas para quien siga programando** evita los errores que ya ocurrieron.
 
@@ -46,23 +46,28 @@ Los modelos de IA no están en el proyecto: la suite los descarga sola a `%LOCAL
 
 | Función del mockup / Suite | Estado | Dónde está |
 | :--- | :--- | :--- |
-| **Dynamic Island / notch** | ✅ Isla flotante con animación elástica. Píldora cerrada (hora, punto pulsante o mini-anillo de temporizador, barras de audio, indicadores de mic/cámara, red y batería). Pestañas de panel expandido: **Música** (reproductor con carátula, progreso, botón de reproducción con anillo exterior en contorno), **Sonido** (volumen general + espectro FFT en tiempo real + volumen por app), **Clima** (pronóstico e iconos vectoriales), **Sistema** (CPU, RAM, GPU, uso de micro/cámara), **Tiempo** (Pomodoro / temporizadores rápidos), **Agenda** (próximos eventos), **Avisos** (historial de notificaciones) | `DynamicNotchModule.cs`, `IslandViews.cs`, `IslandAudioViews.cs`, `IslandNotificationViews.cs`, `IslandTimeViews.cs`, `IslandPainter.cs` |
-| **Notificaciones reales de Windows** | ✅ Integración con Windows Toast (`UserNotificationListener`). Salen en la isla 4 s con icono real de la app (extraído de accesos directos), título y cuerpo. Historial en la pestaña Avisos | `NotificationService.cs`, `IslandNotificationViews.cs` |
-| **Monitoreo de privacidad (Mic/Cámara)** | ✅ Puntos naranja (micrófono) y verde (cámara) en la píldora cerrada cuando una app los está utilizando, con alerta temporal | `CaptureMonitor.cs` |
-| **Temporizador y Pomodoro** | ✅ Temporizadores configurables (5, 10, 15, 25 min...) y Pomodoro. Muestra el tiempo restante y mini anillo en la píldora cerrada | `TimerService.cs`, `IslandTimeViews.cs` |
-| **Panel de Ajustes General** | ✅ Ventana nativa con diseño moderno de cristal oscuro: navegación lateral (General, Isla dinámica, Reloj 3D, Widgets, Avisos, Tiempo y agenda). Controles fluidos en tiempo real | `SettingsWindow.cs`, `SuiteSettings.cs` |
-| **Modo privacidad Aero** | ✅ Desenfoca todo menos la ventana activa. Atajo **Ctrl+Alt+P** (o Ctrl+Alt+Shift+P / Ctrl+Alt+Q) o desde la bandeja | `AeroDwmModule.cs` |
+| **Dynamic Island / notch** | ✅ Isla flotante con animación elástica. **Píldora cerrada**: hora, punto de reposo azul (o ecualizador de 5 barras con la música, o mini anillo con un temporizador), puntos de micrófono/cámara, red y batería. **Pestañas con iconos** (solo la activa lleva nombre; al pasar el ratón sale el nombre): **Música** (carátula, ecualizador real de 5 bandas, progreso, ⏮ ⏯ ⏭; el ⏯ es un círculo de contorno), **Sonido** (salidas, volumen general y por app), **Clima** (próximas 4 horas), **Sistema** (CPU, RAM, GPU, dispositivos Bluetooth con batería y qué app usa el micro/cámara), **Tiempo**, **Agenda**, **Bandeja** y **Avisos**. Tamaño (70–120 %) y opacidad ajustables | `DynamicNotchModule.cs`, `IslandViews.cs`, `IslandAudioViews.cs`, `IslandNotificationViews.cs`, `IslandTimeViews.cs`, `IslandTrayViews.cs`, `IslandDeviceViews.cs`, `IslandPainter.cs` |
+| **Ecualizador real** | ✅ Captura en loopback de la salida de audio (sin micrófono), FFT de 1024 muestras y 5 bandas de graves a agudos. Solo trabaja mientras se dibujan las barras | `AudioSpectrum.cs` |
+| **Notificaciones reales de Windows** | ✅ `UserNotificationListener` leído cada 1,5 s. Avisos en la isla con el **icono real de la app** (sacado de `shell:AppsFolder`, funciona con apps de la tienda y de escritorio), título y cuerpo; altura según el texto; cola con «+N». Historial en la pestaña Avisos. Apps silenciables en el panel | `NotificationService.cs`, `IslandNotificationViews.cs` |
+| **Micrófono y cámara** | ✅ Micrófono: sesiones de grabación activas del audio de Windows (Core Audio). ⚠️ Cámara: solo por el registro `CapabilityAccessManager`, que en Windows 11 recientes (build 26340) **ya no se actualiza**: el punto verde no funciona ahí | `CaptureMonitor.cs` |
+| **Temporizador y Pomodoro** | ✅ Atajos de 5/10/15/25 min, rueda ±1 min sobre el anillo, Pomodoro 25/5/15 (configurable). Aviso con sonido que se queda hasta hacer clic | `TimerService.cs`, `IslandTimeViews.cs` |
+| **Agenda** | ✅ Hoy y mañana: calendario de Windows (cuenta Microsoft) + **Google Calendar por enlace iCal privado** (se pega desde el portapapeles en el panel). Botón «Unirse» si hay enlace de Teams/Meet/Zoom y aviso X min antes. Limitaciones: reglas de repetición poco comunes y eventos en otra zona horaria | `AgendaService.cs`, `IslandTimeViews.cs` |
+| **Bandeja de archivos** | ✅ Arrastrar archivos sobre la píldora los guarda (solo la ruta); pestaña Bandeja con miniaturas; arrastrarlos fuera los copia (Mayús mueve) | `FileTrayService.cs`, `IslandTrayViews.cs`, `ShellImage.cs` |
+| **Búsqueda rápida** | ✅ **Ctrl + Alt + S** (Ctrl+Alt+Espacio y Alt+Espacio los usa PowerToys). Apps del menú Inicio, archivos del índice de Windows (OLE DB `Search.CollatorDSO`, usando `System.ItemUrl`: `ItemPathDisplay` viene traducida y no sirve para abrir), calculadora y búsqueda web | `SearchService.cs`, `SearchWindow.cs` |
+| **Batería Bluetooth** | ✅ Propiedades de dispositivo de Windows (SetupAPI) cada 10 s: aviso al conectar y de batería baja (20 %), fila de dispositivos en la pestaña Sistema | `BluetoothService.cs`, `IslandDeviceViews.cs` |
+| **Panel de ajustes** | ✅ Ventana negra dibujada a mano (mockups P1–P5, C3, D3, E3). Páginas: **Privacidad, Isla, Avisos, Tiempo y agenda, Bandeja y búsqueda, Widgets, Reloj 3D**. Cambios en vivo | `SettingsWindow.cs`, `SuiteSettings.cs` |
+| **Modo privacidad** | ✅ Desenfoca todo menos la ventana activa con **desenfoque propio** (0–40 px), oscurecimiento y tinte elegibles. Atajo **Ctrl+Alt+P**. ⚠️ La capa se excluye de las capturas para poder calcular el desenfoque: al **compartir la pantalla completa** los demás ven el fondo sin desenfocar | `AeroDwmModule.cs` |
 | **Modo juego** | ✅ Oculta notch y widgets y pausa el reloj cuando una app ocupa toda la pantalla | `SystemMonitor.cs` |
-| **Widgets de escritorio** | ✅ Tres ventanas independientes: Telemetría (CPU/RAM/GPU reales + consumo de la suite), Reproductor (cualquier app, con carátula) y Tareas (`notas.txt`). Cristal con fondo desenfocado | `DesktopWidgetsModule.cs`, `DesktopBackdrop.cs` |
-| **Reloj 3D con profundidad** | ✅ Con **cualquier fondo**: la hora se dibuja detrás del sujeto principal o de objetos cercanos. Fecha encima, clima debajo. Ajustes integrados | `DepthClock*.cs`, `ClockSettingsForm.cs`, `Weather*.cs` |
-| **Icono en la bandeja** | ✅ Menú estilizado con renderer propio: Privacidad, Ajustes, Simulador interactivo y Salir | `TrayIconModule.cs`, `TrayMenuRenderer.cs` |
+| **Widgets de escritorio** | ✅ Tres ventanas independientes: Telemetría, Reproductor y Tareas (`notas.txt`). Cristal con fondo desenfocado; color de acento y opacidad desde el panel | `DesktopWidgetsModule.cs`, `DesktopBackdrop.cs` |
+| **Reloj 3D con profundidad** | ✅ Con **cualquier fondo**: la hora detrás del sujeto principal o de lo cercano. Fecha encima, clima debajo, **segundero** opcional. Se configura en Ajustes → Reloj 3D | `DepthClock*.cs`, `DesktopClockForm.cs`, `Weather*.cs` |
+| **Icono en la bandeja** | ✅ Icono «S» del usuario (`assets\streeck_512.png`). Menú: Modo privacidad, Ajustes…, Simulador interactivo y Salir | `TrayIconModule.cs`, `TrayMenuRenderer.cs` |
 | Barra de tareas en 3 islas | ❌ Solo existe en el simulador; el módulo nativo es un esqueleto | `TaskbarIslandModule.cs` |
 | Menú de inicio Aero | ❌ Pendiente | — |
 | Asistente de IA por voz/texto | ❌ Pendiente (planificado para Fase G) | — |
 | Animaciones de minimizar | ❌ No viable para ventanas de otras apps sin inyectar código en Windows | — |
 
 ### Consumo medido (Ryzen 5 5600X, 1080p)
-~0,25 % - 0,40 % de CPU total en reposo y ~150 MB de RAM con todos los servicios activos (incluyendo espectro de audio, listener de notificaciones y monitor de cámara/micrófono).
+~0,2 % - 0,5 % de CPU total y ~160 MB de RAM con todos los servicios activos (ecualizador con música, notificaciones, micrófono, Bluetooth). Pendiente de medir: el desenfoque propio del modo privacidad (el registro anota los ms por fotograma mientras está activo).
 
 ---
 
@@ -80,7 +85,8 @@ src/
 │   ├── Log.cs                  Registro en %LOCALAPPDATA%\StreeckSuite\streecksuite.log
 │   ├── ModuleManager.cs        Ciclo de vida de los módulos
 │   ├── NativeMethods.cs        P/Invoke de Win32, DWM y GDI
-│   ├── SuiteSettings.cs        Ajustes unificados de la suite (JSON en LocalAppData)
+│   ├── SuiteSettings.cs        Ajustes del panel: %LOCALAPPDATA%\StreeckSuite\config.ini (el reloj usa reloj.ini;
+│   │                           apps de avisos: avisos_apps.txt; bandeja: bandeja.txt; widgets: widgets.ini)
 │   ├── SystemMonitor.cs        Detección de pantalla completa (modo juego)
 │   ├── TelemetrySampler.cs     CPU, RAM, GPU y consumo propio
 │   ├── VisionModel.cs          Modelos ONNX ejecutados con Windows ML (descarga incluida)
@@ -90,23 +96,29 @@ src/
     ├── AgendaService.cs        Servicio de eventos y citas de agenda
     ├── AudioService.cs         Control de volumen por aplicación y dispositivos
     ├── AudioSpectrum.cs        Captura de audio en loopback con análisis de frecuencias (FFT)
-    ├── CaptureMonitor.cs       Detección de acceso al micrófono y cámara web
-    ├── ClockSettingsForm.cs    Ventana de ajustes del reloj 3D
+    ├── BluetoothService.cs     Dispositivos Bluetooth y su batería (SetupAPI)
+    ├── CaptureMonitor.cs       Micrófono (sesiones de Core Audio) y cámara (registro)
     ├── DepthClockLayers.cs     Ajustes del reloj, geometría y recorte con IA + filtro guiado
     ├── DepthClockModule.cs     Reloj 3D: detecta cambios de fondo y coordina el análisis
     ├── DesktopBackdrop.cs      Fondo de escritorio desenfocado para el cristal de los widgets
     ├── DesktopClockForm.cs     Ventana incrustada entre el fondo de Windows y los iconos
     ├── DesktopWidgetsModule.cs Widgets, posiciones y visibilidad
-    ├── DynamicNotchModule.cs   Dynamic Island (gestión de capas, animaciones y estados)
+    ├── DynamicNotchModule.cs   Dynamic Island (estados, animaciones, avisos, arrastrar archivos) + atajo de la búsqueda
+    ├── FileTrayService.cs      Bandeja de archivos (rutas guardadas, miniaturas)
     ├── IslandAudioViews.cs     Vistas de audio y mezclador dentro de la isla
+    ├── IslandDeviceViews.cs    Aviso Bluetooth y dibujo de la batería
     ├── IslandNotificationViews.cs Vistas de avisos y notificaciones en la isla
     ├── IslandPainter.cs        Utilidades de dibujo vectorial y tipografías para la isla
     ├── IslandTimeViews.cs      Vistas de temporizadores, Pomodoro y agenda
+    ├── IslandTrayViews.cs      Pestaña Bandeja y zona para soltar archivos
     ├── IslandViews.cs          Vistas principales (música, sistema, reposo, cabecera de pestañas)
     ├── MediaInfo.cs            Instantánea multimedia (título, artista, carátula, progreso)
     ├── MediaService.cs         Control multimedia global de Windows (SMTC)
     ├── NotificationService.cs  Servicio de escucha de notificaciones nativas de Windows
+    ├── SearchService.cs        Motor de la búsqueda: apps, archivos (índice de Windows), calculadora, web
+    ├── SearchWindow.cs         Ventana de la búsqueda rápida y su atajo global
     ├── SettingsWindow.cs       Ventana general de ajustes de Streeck Suite
+    ├── ShellImage.cs           Miniaturas e iconos del shell y lista de apps del menú Inicio
     ├── TaskbarIslandModule.cs  Esqueleto, sin funcionalidad real
     ├── TimerService.cs         Lógica de temporizador de cuenta atrás y Pomodoro
     ├── TrayIconModule.cs       Menú de la bandeja del sistema
@@ -136,9 +148,14 @@ src/
 2. ~~Panel de ajustes general~~ ✅ Hecho (Fase B).
 3. ~~Notificaciones de Windows e indicadores de privacidad (Mic/Cam)~~ ✅ Hecho (Fase C).
 4. ~~Temporizador / Pomodoro y Agenda~~ ✅ Hecho (Fase D).
-5. **Fase E: Bandeja de archivos y Búsqueda rápida**:
-   - Bandeja (File Drop Tray): arrastrar archivos a la isla para dejarlos retenidos temporalmente y soltarlos en otra ventana.
-   - Búsqueda rápida: atajo para desplegar una barra de búsqueda en la isla para apps y archivos.
-6. **Fase F: Batería de auriculares y dispositivos Bluetooth**.
-7. **Fase G: Asistente IA** (evaluar si panel web incrustado, API externa o modelo local).
+5. ~~Bandeja de archivos y búsqueda rápida~~ ✅ Hecho (Fase E).
+6. ~~Batería de dispositivos Bluetooth~~ ✅ Hecho (Fase F).
+7. **Fase G: Asistente IA** (evaluar si panel web incrustado, API externa o modelo local). **Siguiente.**
 8. **Menú de inicio Aero propio** y **Barra de tareas en 3 islas**.
+
+Pendientes sueltos: detectar la cámara en Windows 11 reciente sin el registro; probar Google Calendar con un enlace real;
+medir el desenfoque del modo privacidad; opción "modo presentación" para que se vea desenfocado al compartir pantalla.
+
+### Herramientas de desarrollo
+`bin\StreeckSuite.exe --preview-island <carpeta>`, `--preview-settings <carpeta>` y `--preview-search <carpeta> <texto>...`
+guardan en PNG la isla, el panel de ajustes y la búsqueda, sin mostrar ventanas.

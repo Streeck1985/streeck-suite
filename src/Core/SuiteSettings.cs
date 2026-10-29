@@ -14,6 +14,8 @@ namespace StreeckSuite.Core
     public static class SuiteSettings
     {
         public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly }
+        public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
+        public enum WebSearchEngine { Google, Bing, DuckDuckGo }
 
         // Privacidad
         public static int PrivacyBlurPx = 25;           // 0..40
@@ -39,6 +41,8 @@ namespace StreeckSuite.Core
         public static int NotificationDurationMs = 4000; // 1000..10000
         public static bool CaptureDots = true;           // Puntos de micrófono y cámara en la isla
         public static bool CaptureAlerts = true;         // Aviso cuando una app empieza a usarlos
+        public static bool BluetoothConnectAlerts = true; // Aviso al conectar un dispositivo Bluetooth
+        public static int BluetoothLowBatteryPercent = 20; // 0 = sin aviso; 0..50
 
         // Tiempo y agenda
         public static int PomodoroFocusMin = 25;         // 5..60
@@ -48,6 +52,13 @@ namespace StreeckSuite.Core
         public static bool CalendarWindows = true;       // Calendario de Windows (cuenta Microsoft)
         public static string CalendarGoogleUrl = "";     // Enlace privado iCal de Google Calendar
         public static int EventAlertMinutes = 10;        // 0 = sin aviso; 0..30
+
+        // Bandeja y búsqueda
+        public static bool FileTrayEnabled = true;
+        public static bool FileTrayPersist = true;        // Conservar la bandeja al reiniciar la suite
+        public static SearchShortcut SearchHotkey = SearchShortcut.CtrlAltS;
+        public static bool SearchFiles = true;
+        public static WebSearchEngine SearchEngine = WebSearchEngine.Google;
 
         // Widgets
         public static Color WidgetAccent = Color.FromArgb(0, 210, 255);
@@ -97,6 +108,8 @@ namespace StreeckSuite.Core
                 NotificationDurationMs = ReadInt(values, "avisos.duracionMs", NotificationDurationMs, 1000, 10000);
                 CaptureDots = ReadBool(values, "avisos.puntosMicroCamara", CaptureDots);
                 CaptureAlerts = ReadBool(values, "avisos.avisoMicroCamara", CaptureAlerts);
+                BluetoothConnectAlerts = ReadBool(values, "avisos.bluetoothConectar", BluetoothConnectAlerts);
+                BluetoothLowBatteryPercent = ReadInt(values, "avisos.bluetoothBateriaBaja", BluetoothLowBatteryPercent, 0, 50);
                 PomodoroFocusMin = ReadInt(values, "tiempo.enfoqueMin", PomodoroFocusMin, 5, 60);
                 PomodoroShortBreakMin = ReadInt(values, "tiempo.descansoMin", PomodoroShortBreakMin, 1, 15);
                 PomodoroLongBreakMin = ReadInt(values, "tiempo.descansoLargoMin", PomodoroLongBreakMin, 5, 30);
@@ -104,6 +117,13 @@ namespace StreeckSuite.Core
                 CalendarWindows = ReadBool(values, "agenda.windows", CalendarWindows);
                 if (values.TryGetValue("agenda.google", out raw)) CalendarGoogleUrl = raw;
                 EventAlertMinutes = ReadInt(values, "agenda.avisoMin", EventAlertMinutes, 0, 30);
+                FileTrayEnabled = ReadBool(values, "bandeja.activa", FileTrayEnabled);
+                FileTrayPersist = ReadBool(values, "bandeja.conservar", FileTrayPersist);
+                SearchShortcut shortcut;
+                if (values.TryGetValue("busqueda.atajo", out raw) && Enum.TryParse(raw, out shortcut)) SearchHotkey = shortcut;
+                SearchFiles = ReadBool(values, "busqueda.archivos", SearchFiles);
+                WebSearchEngine engine;
+                if (values.TryGetValue("busqueda.web", out raw) && Enum.TryParse(raw, out engine)) SearchEngine = engine;
 
                 WidgetAccent = ReadColor(values, "widgets.acento", WidgetAccent);
                 WidgetGlassPercent = ReadInt(values, "widgets.cristal", WidgetGlassPercent, 0, 100);
@@ -139,6 +159,8 @@ namespace StreeckSuite.Core
                     "avisos.duracionMs=" + NotificationDurationMs,
                     "avisos.puntosMicroCamara=" + (CaptureDots ? 1 : 0),
                     "avisos.avisoMicroCamara=" + (CaptureAlerts ? 1 : 0),
+                    "avisos.bluetoothConectar=" + (BluetoothConnectAlerts ? 1 : 0),
+                    "avisos.bluetoothBateriaBaja=" + BluetoothLowBatteryPercent,
                     "tiempo.enfoqueMin=" + PomodoroFocusMin,
                     "tiempo.descansoMin=" + PomodoroShortBreakMin,
                     "tiempo.descansoLargoMin=" + PomodoroLongBreakMin,
@@ -146,6 +168,11 @@ namespace StreeckSuite.Core
                     "agenda.windows=" + (CalendarWindows ? 1 : 0),
                     "agenda.google=" + CalendarGoogleUrl,
                     "agenda.avisoMin=" + EventAlertMinutes,
+                    "bandeja.activa=" + (FileTrayEnabled ? 1 : 0),
+                    "bandeja.conservar=" + (FileTrayPersist ? 1 : 0),
+                    "busqueda.atajo=" + SearchHotkey,
+                    "busqueda.archivos=" + (SearchFiles ? 1 : 0),
+                    "busqueda.web=" + SearchEngine,
                     "widgets.acento=" + ToHex(WidgetAccent),
                     "widgets.cristal=" + WidgetGlassPercent
                 });
