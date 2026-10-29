@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Widgets, Clock }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 632, SideW = 210, ContentX = 238, ContentW = 534;
@@ -312,6 +312,7 @@ namespace StreeckSuite.Modules
                 case Page.Tray: DrawTray(g); break;
                 case Page.Assistant: DrawAssistant(g); break;
                 case Page.Start: DrawStart(g); break;
+                case Page.Taskbar: DrawTaskbar(g); break;
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
             }
@@ -343,7 +344,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Widgets", "Reloj 3D" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -445,6 +446,10 @@ namespace StreeckSuite.Modules
                         g.DrawRectangle(pen, 13, 3, 8, 8);
                         g.DrawRectangle(pen, 3, 13, 8, 8);
                         g.DrawRectangle(pen, 13, 13, 8, 8);
+                        break;
+                    case Page.Taskbar:
+                        using (GraphicsPath screen = LayeredWindow.RoundedRect(new RectangleF(2, 4, 20, 16), 3)) g.DrawPath(pen, screen);
+                        g.DrawLine(pen, 6, 16, 18, 16);
                         break;
                     case Page.Clock:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
@@ -1051,6 +1056,65 @@ namespace StreeckSuite.Modules
             StrokeRound(g, reset, 8, SoftBorder, 1, false);
             DrawText(g, resetText, _reg13, TextColor, reset, StringAlignment.Center);
             AddHit(reset, StartMenuService.ResetPinned);
+        }
+
+        #endregion
+
+        #region Página Barra de tareas (I2)
+
+        private void DrawTaskbar(Graphics g)
+        {
+            DrawTitle(g, "Barra de tareas");
+
+            float y = 66;
+            DrawCard(g, y, 66);
+            DrawToggleRow(g, y + 4, "Usar la barra de Streeck", "Esconde la de Windows; al apagarlo o cerrar la suite vuelve la normal", SuiteSettings.TaskbarEnabled,
+                () => { SuiteSettings.TaskbarEnabled = !SuiteSettings.TaskbarEnabled; SuiteSettings.Save(); });
+
+            y = 146;
+            DrawCard(g, y, 96);
+            DrawText(g, "Formato", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "3 islas", "Cápsula", "Completa" }, (int)SuiteSettings.TaskbarFormat,
+                i => { SuiteSettings.TaskbarFormat = (SuiteSettings.TaskbarFormatKind)i; SuiteSettings.Save(); });
+
+            // Separación: deslizador de 0 a 80 px y atajos (a los extremos pega cada isla a su borde)
+            y = 256;
+            DrawCard(g, y, 112);
+            DrawLabelValue(g, y + 12, "Separación entre globos", SuiteSettings.TaskbarEdges ? "A los extremos" : SuiteSettings.TaskbarGap + " px", _semi14, _bold13);
+            DrawSlider(g, new RectangleF(InnerX, y + 44, InnerW, 6), SuiteSettings.TaskbarGap / 80f,
+                f => { SuiteSettings.TaskbarGap = (int)Math.Round(f * 80); SuiteSettings.TaskbarEdges = false; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
+            string[] presets = { "Juntas (0 px)", "Flotantes (14 px)", "A los extremos" };
+            float chipX = InnerX;
+            for (int i = 0; i < presets.Length; i++)
+            {
+                int index = i;
+                float chipW = g.MeasureString(presets[i], _reg12).Width + 22;
+                RectangleF chip = new RectangleF(chipX, y + 66, chipW, 30);
+                bool selected = index == 2 ? SuiteSettings.TaskbarEdges : !SuiteSettings.TaskbarEdges && SuiteSettings.TaskbarGap == (index == 0 ? 0 : 14);
+                FillRound(g, chip, 15, selected ? Color.FromArgb(46, Accent) : Hover(chip) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, chip, 15, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                DrawText(g, presets[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
+                AddHit(chip, () =>
+                {
+                    if (index == 2) SuiteSettings.TaskbarEdges = true;
+                    else { SuiteSettings.TaskbarEdges = false; SuiteSettings.TaskbarGap = index == 0 ? 0 : 14; }
+                    SuiteSettings.Save();
+                });
+                chipX = chip.Right + 8;
+            }
+
+            y = 382;
+            DrawCard(g, y, 96);
+            DrawText(g, "Búsqueda en la barra", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Completa", "Solo icono", "Oculta" }, (int)SuiteSettings.TaskbarSearch,
+                i => { SuiteSettings.TaskbarSearch = (SuiteSettings.TaskbarSearchKind)i; SuiteSettings.Save(); });
+
+            y = 492;
+            DrawCard(g, y, 118);
+            DrawText(g, "Estilo de cristal", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Aero acrílico", "100 % transparente", "Obsidiana", "Neón" }, (int)SuiteSettings.GlassStyle,
+                i => { SuiteSettings.GlassStyle = (SuiteSettings.GlassStyleKind)i; SuiteSettings.Save(); });
+            DrawText(g, "Se aplica a la barra, el menú de inicio y la isla", _reg12, Gray, new RectangleF(InnerX, y + 92, InnerW, 16), StringAlignment.Near);
         }
 
         #endregion

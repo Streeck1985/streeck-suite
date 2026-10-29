@@ -339,14 +339,7 @@ namespace StreeckSuite.Modules
         {
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             RectangleF card = new RectangleF(ShadowPad, ShadowPad, Width - 2 * ShadowPad - 1, Height - 2 * ShadowPad - 1);
-            DrawSoftShadow(g, card, Px(20), ShadowPad * 0.8f, Px(8), 210);
-            using (GraphicsPath path = RoundedRect(card, Px(20)))
-            using (SolidBrush fill = new SolidBrush(Color.FromArgb(240, 11, 15, 23)))
-            using (Pen border = new Pen(Color.FromArgb(36, 255, 255, 255), 1))
-            {
-                g.FillPath(fill, path);
-                g.DrawPath(border, path);
-            }
+            Glass.DrawCard(g, card, Px(20), ShadowPad * 0.8f, Px(8), 225); // Estilo de cristal global (I2)
             g.TranslateTransform(ShadowPad, ShadowPad);
             _hits.Clear();
             _appHits.Clear();
