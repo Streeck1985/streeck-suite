@@ -17,6 +17,7 @@ namespace StreeckSuite.Core
         public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
         public enum AssistantEngineKind { Local, Gemini }
+        public enum AssistantVoiceKind { GeminiCharon, PiperAld, PiperClaude, Windows }
 
         // Privacidad
         public static int PrivacyBlurPx = 25;           // 0..40
@@ -67,6 +68,7 @@ namespace StreeckSuite.Core
         public static string OllamaModel = "llama3.1:8b";
         public static string GeminiApiKey = "";          // En el archivo va cifrada con DPAPI (solo este usuario de Windows la lee)
         public static bool AssistantSpeak = false;       // Leer las respuestas en voz alta
+        public static AssistantVoiceKind AssistantVoice = AssistantVoiceKind.GeminiCharon; // Charon con Piper Ald de respaldo
         public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la búsqueda
 
         // Widgets
@@ -143,6 +145,8 @@ namespace StreeckSuite.Core
                 if (values.TryGetValue("asistente.modeloLocal", out raw) && raw.Length > 0) OllamaModel = raw;
                 if (values.TryGetValue("asistente.claveGemini", out raw)) GeminiApiKey = Unprotect(raw);
                 AssistantSpeak = ReadBool(values, "asistente.leerEnVozAlta", AssistantSpeak);
+                AssistantVoiceKind voiceKind;
+                if (values.TryGetValue("asistente.voz", out raw) && Enum.TryParse(raw, out voiceKind)) AssistantVoice = voiceKind;
                 AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
 
                 WidgetAccent = ReadColor(values, "widgets.acento", WidgetAccent);
@@ -197,6 +201,7 @@ namespace StreeckSuite.Core
                     "asistente.modeloLocal=" + OllamaModel,
                     "asistente.claveGemini=" + Protect(GeminiApiKey),
                     "asistente.leerEnVozAlta=" + (AssistantSpeak ? 1 : 0),
+                    "asistente.voz=" + AssistantVoice,
                     "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
                     "widgets.acento=" + ToHex(WidgetAccent),
                     "widgets.cristal=" + WidgetGlassPercent

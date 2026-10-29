@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
-using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using StreeckSuite.Core;
@@ -53,7 +52,6 @@ namespace StreeckSuite.Modules
         private VoiceInput _voice;
         private bool _listening;
         private bool _transcribing;    // Ya dejó de hablar: Whisper está pasando la voz a texto
-        private SpeechSynthesizer _speech;
 
         private readonly List<KeyValuePair<RectangleF, Action>> _hits = new List<KeyValuePair<RectangleF, Action>>();
         private RectangleF _answerArea;
@@ -128,7 +126,7 @@ namespace StreeckSuite.Modules
         private void HideAssistant()
         {
             StopListening();
-            if (_speech != null) _speech.SpeakAsyncCancelAll();
+            VoiceOutput.Stop();
             _caretTimer.Stop();
             Hide();
         }
@@ -147,7 +145,7 @@ namespace StreeckSuite.Modules
         {
             question = (question ?? "").Trim();
             if (question.Length == 0 && chipPrompt == null) return;
-            if (_speech != null) _speech.SpeakAsyncCancelAll();
+            VoiceOutput.Stop();
 
             // Órdenes de la suite: se cumplen al momento, sin IA
             if (chipPrompt == null && !_useClipboard)
@@ -204,7 +202,7 @@ namespace StreeckSuite.Modules
         private void NewConversation()
         {
             AssistantService.NewConversation();
-            if (_speech != null) _speech.SpeakAsyncCancelAll();
+            VoiceOutput.Stop();
             _question = _answer = _error = null;
             _action = null;
             _streaming = false;
@@ -213,24 +211,7 @@ namespace StreeckSuite.Modules
 
         private void Speak(string text)
         {
-            if (!SuiteSettings.AssistantSpeak || string.IsNullOrEmpty(text)) return;
-            try
-            {
-                if (_speech == null)
-                {
-                    _speech = new SpeechSynthesizer();
-                    _speech.SetOutputToDefaultAudioDevice();
-                    foreach (InstalledVoice voice in _speech.GetInstalledVoices())
-                    {
-                        if (voice.Enabled && voice.VoiceInfo.Culture.TwoLetterISOLanguageName == "es") { _speech.SelectVoice(voice.VoiceInfo.Name); break; }
-                    }
-                }
-                _speech.SpeakAsync(CleanMarkdown(text));
-            }
-            catch (Exception ex)
-            {
-                Log.Error("[AssistantWindow] No se pudo leer en voz alta: {0}", ex.Message);
-            }
+            if (SuiteSettings.AssistantSpeak) VoiceOutput.Speak(CleanMarkdown(text));
         }
 
         // La IA a veces responde con **negritas** o listas en Markdown: en la isla se ve como texto normal
@@ -254,7 +235,7 @@ namespace StreeckSuite.Modules
         private void ToggleListening()
         {
             if (_listening) { StopListening(); return; }
-            if (_speech != null) _speech.SpeakAsyncCancelAll();
+            VoiceOutput.Stop();
             if (_voice == null)
             {
                 // Un solo dictado por ventana: su cuadro de texto invisible vive dentro del asistente
@@ -622,7 +603,6 @@ namespace StreeckSuite.Modules
                 _painter.Dispose();
                 _inputFont.Dispose();
                 _answerFont.Dispose();
-                if (_speech != null) _speech.Dispose();
                 if (_voice != null) _voice.Dispose();
             }
             base.Dispose(disposing);
