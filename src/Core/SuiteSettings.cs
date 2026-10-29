@@ -50,7 +50,8 @@ namespace StreeckSuite.Core
         public static int PomodoroLongBreakMin = 15;     // 5..30
         public static bool TimerSound = true;
         public static bool CalendarWindows = true;       // Calendario de Windows (cuenta Microsoft)
-        public static string CalendarGoogleUrl = "";     // Enlace privado iCal de Google Calendar
+        // Enlaces iCal privados (Google, Outlook publicado, iCloud...); se guardan separados por espacios
+        public static List<string> CalendarIcalUrls = new List<string>();
         public static int EventAlertMinutes = 10;        // 0 = sin aviso; 0..30
 
         // Bandeja y búsqueda
@@ -115,7 +116,12 @@ namespace StreeckSuite.Core
                 PomodoroLongBreakMin = ReadInt(values, "tiempo.descansoLargoMin", PomodoroLongBreakMin, 5, 30);
                 TimerSound = ReadBool(values, "tiempo.sonido", TimerSound);
                 CalendarWindows = ReadBool(values, "agenda.windows", CalendarWindows);
-                if (values.TryGetValue("agenda.google", out raw)) CalendarGoogleUrl = raw;
+                CalendarIcalUrls = new List<string>();
+                if (values.TryGetValue("agenda.ical", out raw))
+                {
+                    foreach (string url in raw.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)) CalendarIcalUrls.Add(url);
+                }
+                if (values.TryGetValue("agenda.google", out raw) && raw.Length > 0 && !CalendarIcalUrls.Contains(raw)) CalendarIcalUrls.Add(raw); // Versión anterior: un solo enlace
                 EventAlertMinutes = ReadInt(values, "agenda.avisoMin", EventAlertMinutes, 0, 30);
                 FileTrayEnabled = ReadBool(values, "bandeja.activa", FileTrayEnabled);
                 FileTrayPersist = ReadBool(values, "bandeja.conservar", FileTrayPersist);
@@ -166,7 +172,7 @@ namespace StreeckSuite.Core
                     "tiempo.descansoLargoMin=" + PomodoroLongBreakMin,
                     "tiempo.sonido=" + (TimerSound ? 1 : 0),
                     "agenda.windows=" + (CalendarWindows ? 1 : 0),
-                    "agenda.google=" + CalendarGoogleUrl,
+                    "agenda.ical=" + string.Join(" ", CalendarIcalUrls.ToArray()),
                     "agenda.avisoMin=" + EventAlertMinutes,
                     "bandeja.activa=" + (FileTrayEnabled ? 1 : 0),
                     "bandeja.conservar=" + (FileTrayPersist ? 1 : 0),

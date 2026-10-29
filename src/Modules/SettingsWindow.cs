@@ -19,7 +19,7 @@ namespace StreeckSuite.Modules
         public enum Page { Privacy, Island, Notifications, Time, Tray, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
-        private const float W = 800, H = 592, SideW = 210, ContentX = 238, ContentW = 534;
+        private const float W = 800, H = 632, SideW = 210, ContentX = 238, ContentW = 534;
         private const float ContentRight = ContentX + ContentW;
         private const float InnerX = ContentX + 16, InnerW = ContentW - 32;
 
@@ -691,14 +691,14 @@ namespace StreeckSuite.Modules
 
         #region Página Tiempo y agenda (D3)
 
-        private string _googleMessage; // Error al pegar un enlace que no es de calendario
+        private string _icalMessage; // Error al pegar un enlace que no es de calendario
 
         private void DrawTime(Graphics g)
         {
             DrawTitle(g, "Tiempo y agenda");
 
             float y = 66;
-            DrawCard(g, y, 162);
+            DrawCard(g, y, 206);
             DrawText(g, "Pomodoro", _semi14, TextColor, new RectangleF(InnerX, y + 12, 300, 20), StringAlignment.Near);
             DrawLabelValue(g, y + 40, "Enfoque", SuiteSettings.PomodoroFocusMin + " min", _reg13, _bold13);
             DrawSlider(g, new RectangleF(InnerX, y + 64, InnerW, 6), (SuiteSettings.PomodoroFocusMin - 5) / 55f,
@@ -710,13 +710,14 @@ namespace StreeckSuite.Modules
             DrawSlider(g, new RectangleF(InnerX, y + 144, InnerW, 6), (SuiteSettings.PomodoroLongBreakMin - 5) / 25f,
                 f => { SuiteSettings.PomodoroLongBreakMin = 5 + (int)Math.Round(f * 5) * 5; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
 
-            y = 242;
-            DrawCard(g, y, 66);
-            DrawToggleRow(g, y + 4, "Sonido al terminar", "Usa el sonido de alarma de Windows", SuiteSettings.TimerSound,
+            // Sonido al terminar, dentro de la misma tarjeta para dejar sitio a varios calendarios
+            DrawRowDivider(g, y + 160);
+            DrawToggleRow(g, y + 160, "Sonido al terminar (alarma de Windows)", null, SuiteSettings.TimerSound,
                 () => { SuiteSettings.TimerSound = !SuiteSettings.TimerSound; SuiteSettings.Save(); });
 
-            y = 322;
-            DrawCard(g, y, 210);
+            List<CalendarFeed> feeds = AgendaService.Feeds;
+            y = 286;
+            DrawCard(g, y, 196 + 32 * feeds.Count);
             DrawText(g, "Calendario", _semi14, TextColor, new RectangleF(InnerX, y + 12, 300, 20), StringAlignment.Near);
 
             int windowsCount = AgendaService.WindowsCount;
@@ -726,48 +727,79 @@ namespace StreeckSuite.Modules
                 () => { SuiteSettings.CalendarWindows = !SuiteSettings.CalendarWindows; SuiteSettings.Save(); AgendaService.RefreshNow(); });
             DrawRowDivider(g, y + 98);
 
-            bool hasGoogle = !string.IsNullOrEmpty(SuiteSettings.CalendarGoogleUrl);
-            string googleStatus = _googleMessage ?? (hasGoogle ? (AgendaService.GoogleStatus.Length > 0 ? AgendaService.GoogleStatus : "Leyendo…")
-                : "Copia el «enlace secreto en formato iCal» de tu Google Calendar");
-            DrawText(g, "Google Calendar", _semi14, TextColor, new RectangleF(InnerX, y + 108, 360, 18), StringAlignment.Near);
-            DrawText(g, googleStatus, _reg12, _googleMessage != null ? Color.FromArgb(253, 186, 116) : Gray, new RectangleF(InnerX, y + 128, InnerW - 130, 16), StringAlignment.Near);
-            string buttonText = hasGoogle ? "Quitar" : "Pegar enlace";
-            float buttonW = g.MeasureString(buttonText, _reg13).Width + 24;
-            RectangleF button = new RectangleF(ContentRight - 16 - buttonW, y + 111, buttonW, 30);
-            FillRound(g, button, 8, Hover(button) ? Color.FromArgb(40, 47, 62) : Field);
-            StrokeRound(g, button, 8, SoftBorder, 1, false);
-            DrawText(g, buttonText, _reg13, TextColor, button, StringAlignment.Center);
-            AddHit(button, hasGoogle ? (Action)(() => SetGoogleUrl("")) : PasteGoogleUrl);
-            DrawRowDivider(g, y + 156);
+            // Una fila por enlace iCal: color con el que sale en la isla, nombre, eventos (o error) y ✕ para quitarlo
+            float row = y + 104;
+            foreach (CalendarFeed feed in feeds)
+            {
+                using (SolidBrush dot = new SolidBrush(feed.Color)) g.FillEllipse(dot, InnerX, row + 11, 10, 10);
+                DrawText(g, feed.Name, _semi13, TextColor, new RectangleF(InnerX + 18, row, 230, 32), StringAlignment.Near);
+                string status = feed.Error != null ? "No se pudo leer" : feed.Count < 0 ? "Leyendo…" : feed.Count == 1 ? "1 evento" : feed.Count + " eventos";
+                DrawText(g, status, _reg12, feed.Error != null ? Color.FromArgb(253, 186, 116) : Gray, new RectangleF(InnerX + 256, row, 150, 32), StringAlignment.Near);
+                RectangleF remove = new RectangleF(ContentRight - 16 - 26, row + 3, 26, 26);
+                if (Hover(remove)) FillRound(g, remove, 8, ActiveFill);
+                using (Pen cross = new Pen(Hover(remove) ? Color.White : Gray, 1.4f))
+                {
+                    float cx = remove.X + 13, cy = remove.Y + 13;
+                    g.DrawLine(cross, cx - 4, cy - 4, cx + 4, cy + 4);
+                    g.DrawLine(cross, cx + 4, cy - 4, cx - 4, cy + 4);
+                }
+                string url = feed.Url;
+                AddHit(remove, () => RemoveIcalUrl(url));
+                row += 32;
+            }
 
-            DrawLabelValue(g, y + 166, "Avisar antes de cada evento",
+            // Añadir: pega el enlace que haya en el portapapeles
+            string hint = _icalMessage ?? (feeds.Count == 0 ? "Google, Outlook publicado, iCloud… (enlace .ics)" : "");
+            DrawText(g, hint, _reg12, _icalMessage != null ? Color.FromArgb(253, 186, 116) : Gray, new RectangleF(InnerX, row + 2, InnerW - 190, 30), StringAlignment.Near);
+            if (feeds.Count < MaxIcalFeeds)
+            {
+                const string addText = "+ Añadir enlace iCal";
+                float buttonW = g.MeasureString(addText, _reg13).Width + 24;
+                RectangleF button = new RectangleF(ContentRight - 16 - buttonW, row + 2, buttonW, 30);
+                FillRound(g, button, 8, Hover(button) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, button, 8, SoftBorder, 1, false);
+                DrawText(g, addText, _reg13, TextColor, button, StringAlignment.Center);
+                AddHit(button, PasteIcalUrl);
+            }
+            DrawRowDivider(g, row + 40);
+
+            DrawLabelValue(g, row + 50, "Avisar antes de cada evento",
                 SuiteSettings.EventAlertMinutes == 0 ? "Sin aviso" : SuiteSettings.EventAlertMinutes + " min", _reg13, _bold13);
-            DrawSlider(g, new RectangleF(InnerX, y + 192, InnerW, 6), SuiteSettings.EventAlertMinutes / 30f,
+            DrawSlider(g, new RectangleF(InnerX, row + 76, InnerW, 6), SuiteSettings.EventAlertMinutes / 30f,
                 f => { SuiteSettings.EventAlertMinutes = (int)Math.Round(f * 6) * 5; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
         }
 
+        private const int MaxIcalFeeds = 4; // Los que caben en la página
+
         // El enlace iCal se pega desde el portapapeles (la ventana no tiene cuadros de texto)
-        private void PasteGoogleUrl()
+        private void PasteIcalUrl()
         {
             string text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
             bool looksLikeIcal = (text.StartsWith("https://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("webcal://", StringComparison.OrdinalIgnoreCase))
-                                 && (text.Contains(".ics") || text.Contains("/ical/"));
+                                 && (text.Contains(".ics") || text.Contains("/ical/")) && text.IndexOf(' ') < 0;
             if (!looksLikeIcal)
             {
-                _googleMessage = "El portapapeles no tiene un enlace iCal (termina en .ics)";
+                _icalMessage = "El portapapeles no tiene un enlace iCal (termina en .ics)";
                 return;
             }
-            SetGoogleUrl(text);
-        }
-
-        private void SetGoogleUrl(string url)
-        {
-            _googleMessage = null;
-            SuiteSettings.CalendarGoogleUrl = url;
+            if (SuiteSettings.CalendarIcalUrls.Contains(text))
+            {
+                _icalMessage = "Ese calendario ya está añadido";
+                return;
+            }
+            _icalMessage = null;
+            SuiteSettings.CalendarIcalUrls.Add(text);
             SuiteSettings.Save();
             AgendaService.RefreshNow();
         }
 
+        private void RemoveIcalUrl(string url)
+        {
+            _icalMessage = null;
+            SuiteSettings.CalendarIcalUrls.Remove(url);
+            SuiteSettings.Save();
+            AgendaService.RefreshNow();
+        }
         #endregion
 
         #region Página Bandeja y búsqueda (E3)
