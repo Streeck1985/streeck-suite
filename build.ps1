@@ -20,7 +20,11 @@ $SourceFiles = Get-ChildItem -Path "$PSScriptRoot\src" -Filter "*.cs" -Recurse |
 Write-Host "Compilando Windows 11 Custom Suite (C#)..." -ForegroundColor Cyan
 Write-Host "Fuentes: $($SourceFiles.Count) archivos"
 
-$RefArg = "/reference:System.dll,System.Core.dll,System.Data.dll,System.Drawing.dll,System.Windows.Forms.dll"
+$RefArg = "/reference:System.dll,System.Core.dll,System.Data.dll,System.Drawing.dll,System.Security.dll,System.Web.Extensions.dll,System.Windows.Forms.dll"
+
+# System.Speech (voz del asistente) no está junto al compilador: se toma de la caché global de ensamblados
+$SpeechDll = Get-ChildItem "$env:windir\Microsoft.NET\assembly\GAC_MSIL\System.Speech" -Recurse -Filter "System.Speech.dll" | Where-Object { $_.FullName -match "v4\.0" } | Select-Object -First 1 -ExpandProperty FullName
+$RefArg += ",$SpeechDll"
 
 # Windows ML (reloj 3D): metadatos WinRT que trae Windows y las fachadas de .NET para usarlos desde C#
 $FrameworkDir = Split-Path $Compiler
@@ -32,6 +36,7 @@ $WinRtRefs = @(
     "$WinMetadata\Windows.AI.winmd",
     "$WinMetadata\Windows.ApplicationModel.winmd",
     "$WinMetadata\Windows.Foundation.winmd",
+    "$WinMetadata\Windows.Globalization.winmd",
     "$WinMetadata\Windows.Graphics.winmd",
     "$WinMetadata\Windows.Media.winmd",
     "$WinMetadata\Windows.Storage.winmd",

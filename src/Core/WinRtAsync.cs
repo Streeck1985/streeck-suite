@@ -15,11 +15,19 @@ namespace StreeckSuite.Core
 
         public static T Wait<T>(IAsyncOperation<T> operation)
         {
+            return Wait(operation, Timeout);
+        }
+
+        /// <summary>
+        /// Igual, con un tiempo máximo propio (el dictado de voz dura lo que hable el usuario).
+        /// </summary>
+        public static T Wait<T>(IAsyncOperation<T> operation, TimeSpan timeout)
+        {
             using (ManualResetEvent done = new ManualResetEvent(false))
             {
                 // Si la operación ya terminó, WinRT invoca el manejador en cuanto se asigna
                 operation.Completed = (op, status) => done.Set();
-                if (!done.WaitOne(Timeout)) throw new TimeoutException("La operación de Windows no respondió a tiempo");
+                if (!done.WaitOne(timeout)) throw new TimeoutException("La operación de Windows no respondió a tiempo");
             }
 
             if (operation.Status == AsyncStatus.Error) throw operation.ErrorCode;

@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Widgets, Clock }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 632, SideW = 210, ContentX = 238, ContentW = 534;
@@ -310,6 +310,7 @@ namespace StreeckSuite.Modules
                 case Page.Notifications: DrawNotifications(g); break;
                 case Page.Time: DrawTime(g); break;
                 case Page.Tray: DrawTray(g); break;
+                case Page.Assistant: DrawAssistant(g); break;
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
             }
@@ -341,7 +342,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Widgets", "Reloj 3D" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Widgets", "Reloj 3D" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -431,6 +432,12 @@ namespace StreeckSuite.Modules
                             g.DrawPath(pen, tray);
                         }
                         g.DrawLines(pen, new[] { new PointF(2, 12), new PointF(8, 12), new PointF(10, 15), new PointF(14, 15), new PointF(16, 12), new PointF(22, 12) });
+                        break;
+                    case Page.Assistant:
+                        g.DrawPolygon(pen, new[] { new PointF(12, 3), new PointF(13.9f, 8.6f), new PointF(19.5f, 10), new PointF(13.9f, 11.9f),
+                            new PointF(12, 17.5f), new PointF(10.1f, 11.9f), new PointF(4.5f, 10), new PointF(10.1f, 8.6f) });
+                        g.DrawPolygon(pen, new[] { new PointF(19, 15), new PointF(19.8f, 17.2f), new PointF(22, 18), new PointF(19.8f, 18.8f),
+                            new PointF(19, 21), new PointF(18.2f, 18.8f), new PointF(16, 18), new PointF(18.2f, 17.2f) });
                         break;
                     case Page.Clock:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
@@ -831,6 +838,175 @@ namespace StreeckSuite.Modules
             DrawText(g, "Buscar en la web con", _semi14, TextColor, new RectangleF(InnerX, y + 62, 220, 56), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 270, y + 70, 270, 40), new[] { "Google", "Bing", "DuckDuckGo" },
                 (int)SuiteSettings.SearchEngine, i => { SuiteSettings.SearchEngine = (SuiteSettings.WebSearchEngine)i; SuiteSettings.Save(); });
+        }
+
+        #endregion
+
+        #region Página Asistente IA (G2)
+
+        private AssistantService.OllamaStatus _ollama;
+        private DateTime _ollamaCheckedAt = DateTime.MinValue;
+        private bool _ollamaChecking;
+        private string _ollamaWork;      // "Instalando Ollama…", "Descargando modelo… 45 %" (null si no hay nada en marcha)
+        private string _geminiMessage;   // Resultado de comprobar la clave
+        private string _geminiModel;
+
+        private void DrawAssistant(Graphics g)
+        {
+            DrawTitle(g, "Asistente IA");
+            RefreshOllamaStatus();
+
+            float y = 66;
+            DrawCard(g, y, 216);
+            DrawText(g, "Motor", _semi14, TextColor, new RectangleF(InnerX, y + 12, 300, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 40, InnerW, 40), new[] { "Local · gratis y privado", "Gemini · gratis con límite" },
+                (int)SuiteSettings.AssistantEngine, i => { SuiteSettings.AssistantEngine = (SuiteSettings.AssistantEngineKind)i; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 90);
+
+            // IA local: estado de Ollama y del modelo
+            string localStatus;
+            Color localColor = Color.FromArgb(253, 186, 116);
+            string localButton = null;
+            Action localAction = null;
+            if (_ollamaWork != null) { localStatus = _ollamaWork; localColor = Gray; }
+            else if (_ollama == null) { localStatus = "Comprobando…"; localColor = Gray; }
+            else if (!_ollama.Installed) { localStatus = "Ollama no está instalado · necesita ~5 GB"; localButton = "Instalar y descargar"; localAction = InstallOllama; }
+            else if (!_ollama.Running) { localStatus = "Ollama está apagado"; localButton = "Encender"; localAction = () => { AssistantService.StartOllama(); _ollamaCheckedAt = DateTime.MinValue; }; }
+            else if (!_ollama.HasModel) { localStatus = "Falta descargar el modelo (~5 GB)"; localButton = "Descargar"; localAction = DownloadModel; }
+            else { localStatus = "Listo · responde en tu tarjeta gráfica"; localColor = Color.FromArgb(74, 222, 128); }
+            DrawAssistantRow(g, y + 96, SuiteSettings.OllamaModel + " (IA local)", localStatus, localColor, localButton, localAction);
+            DrawRowDivider(g, y + 150);
+
+            // Gemini: clave gratuita de Google AI Studio
+            bool hasKey = !string.IsNullOrEmpty(SuiteSettings.GeminiApiKey);
+            string keyStatus = _geminiMessage ?? (hasKey ? "Configurada" + (_geminiModel != null ? " · " + _geminiModel : "") : "Sin configurar · clic aquí para conseguir una gratis");
+            Color keyColor = _geminiMessage != null && !hasKey ? Color.FromArgb(253, 186, 116) : hasKey ? Color.FromArgb(74, 222, 128) : ValueColor;
+            DrawAssistantRow(g, y + 156, "Clave de Gemini", keyStatus, keyColor, hasKey ? "Quitar" : "Pegar clave",
+                hasKey ? (Action)(() => { SuiteSettings.GeminiApiKey = ""; _geminiModel = null; _geminiMessage = null; SuiteSettings.Save(); }) : PasteGeminiKey);
+            if (!hasKey) AddHit(new RectangleF(InnerX, y + 178, 330, 18), () => OpenUrl("https://aistudio.google.com/apikey"));
+
+            y = 296;
+            DrawCard(g, y, 110);
+            DrawText(g, "Dictado con el botón del micrófono", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 18), StringAlignment.Near);
+            DrawText(g, "Dictado de Windows en español · necesita «Reconocimiento de voz en línea» activado", _reg12, Gray,
+                new RectangleF(InnerX, y + 34, InnerW, 16), StringAlignment.Near);
+            DrawRowDivider(g, y + 62);
+            DrawToggleRow(g, y + 62, "Leer las respuestas en voz alta", null, SuiteSettings.AssistantSpeak,
+                () => { SuiteSettings.AssistantSpeak = !SuiteSettings.AssistantSpeak; SuiteSettings.Save(); });
+
+            y = 420;
+            DrawCard(g, y, 98);
+            DrawText(g, "Atajo del asistente", _semi14, TextColor, new RectangleF(InnerX, y + 14, 300, 20), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Ctrl + Alt + A", "Solo desde la búsqueda (Ctrl + Alt + S)" },
+                SuiteSettings.AssistantHotkey ? 0 : 1, i => { SuiteSettings.AssistantHotkey = i == 0; SuiteSettings.Save(); });
+        }
+
+        // Fila con título, estado de color y un botón opcional a la derecha
+        private void DrawAssistantRow(Graphics g, float y, string title, string status, Color statusColor, string button, Action action)
+        {
+            float buttonW = button != null ? g.MeasureString(button, _reg13).Width + 24 : 0;
+            DrawText(g, title, _semi13, TextColor, new RectangleF(InnerX, y + 6, InnerW - buttonW - 16, 18), StringAlignment.Near);
+            DrawText(g, status, _reg12, statusColor, new RectangleF(InnerX, y + 26, InnerW - buttonW - 16, 16), StringAlignment.Near);
+            if (button == null) return;
+            RectangleF rect = new RectangleF(ContentRight - 16 - buttonW, y + 10, buttonW, 30);
+            FillRound(g, rect, 8, Hover(rect) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, rect, 8, SoftBorder, 1, false);
+            DrawText(g, button, _reg13, TextColor, rect, StringAlignment.Center);
+            AddHit(rect, action);
+        }
+
+        private void RefreshOllamaStatus()
+        {
+            if (_ollamaChecking || _ollamaWork != null || (DateTime.Now - _ollamaCheckedAt).TotalSeconds < 5) return;
+            _ollamaChecking = true;
+            System.Threading.ThreadPool.QueueUserWorkItem(state =>
+            {
+                AssistantService.OllamaStatus status = AssistantService.CheckOllama();
+                _ollama = status;
+                _ollamaCheckedAt = DateTime.Now;
+                _ollamaChecking = false;
+                InvalidateSafe();
+            });
+        }
+
+        // Instala Ollama con winget (el instalador oficial de Windows) y después descarga el modelo
+        private void InstallOllama()
+        {
+            _ollamaWork = "Instalando Ollama… (puede tardar un par de minutos)";
+            System.Threading.ThreadPool.QueueUserWorkItem(state =>
+            {
+                try
+                {
+                    System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo("winget",
+                        "install --id Ollama.Ollama --exact --silent --accept-package-agreements --accept-source-agreements")
+                    { CreateNoWindow = true, UseShellExecute = false };
+                    using (System.Diagnostics.Process process = System.Diagnostics.Process.Start(info)) process.WaitForExit();
+                    AssistantService.StartOllama();
+                    for (int i = 0; i < 30 && !AssistantService.CheckOllama().Running; i++) System.Threading.Thread.Sleep(1000);
+                    _ollamaWork = null;
+                    BeginInvoke((Action)DownloadModel);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("[SettingsWindow] No se pudo instalar Ollama: {0}", ex.Message);
+                    _ollamaWork = null;
+                    _ollamaCheckedAt = DateTime.MinValue;
+                    InvalidateSafe();
+                }
+            });
+        }
+
+        private void DownloadModel()
+        {
+            _ollamaWork = "Descargando el modelo…";
+            AssistantService.PullModel(
+                (progress, status) =>
+                {
+                    _ollamaWork = progress >= 0 ? string.Format("Descargando el modelo… {0:0} %", progress * 100) : "Preparando el modelo…";
+                    InvalidateSafe();
+                },
+                error =>
+                {
+                    _ollamaWork = null;
+                    _ollamaCheckedAt = DateTime.MinValue;
+                    if (error != null) Log.Error("[SettingsWindow] {0}", error);
+                    InvalidateSafe();
+                });
+        }
+
+        // La clave se pega del portapapeles y se comprueba con Google antes de guardarla
+        private void PasteGeminiKey()
+        {
+            string key = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
+            if (key.Length < 20 || key.IndexOf(' ') >= 0)
+            {
+                _geminiMessage = "El portapapeles no tiene una clave (copia la de aistudio.google.com/apikey)";
+                return;
+            }
+            _geminiMessage = "Comprobando la clave…";
+            System.Threading.ThreadPool.QueueUserWorkItem(state =>
+            {
+                try
+                {
+                    string model = AssistantService.PickGeminiModel(key);
+                    SuiteSettings.GeminiApiKey = key;
+                    _geminiModel = model;
+                    _geminiMessage = null;
+                    BeginInvoke((Action)SuiteSettings.Save);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("[SettingsWindow] Clave de Gemini rechazada: {0}", ex.Message);
+                    _geminiMessage = "Google no aceptó esa clave";
+                }
+                InvalidateSafe();
+            });
+        }
+
+        private static void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { Log.Error("[SettingsWindow] No se pudo abrir {0}: {1}", url, ex.Message); }
         }
 
         #endregion
