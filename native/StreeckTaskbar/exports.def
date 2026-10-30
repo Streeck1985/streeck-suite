@@ -1,4 +1,3 @@
-LIBRARY streeck_taskbar
 EXPORTS
     DllGetClassObject PRIVATE
     DllCanUnloadNow PRIVATE
