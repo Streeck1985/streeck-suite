@@ -15,6 +15,7 @@
 #include <unknwn.h>
 #include <ocidl.h>
 #include <xamlom.h>
+#undef GetCurrentTime // Choca con Storyboard.GetCurrentTime de C++/WinRT
 #include <winrt/base.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.UI.Core.h>
