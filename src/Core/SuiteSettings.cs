@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -7,9 +7,9 @@ using System.IO;
 namespace StreeckSuite.Core
 {
     /// <summary>
-    /// Ajustes generales de la suite (pÃ¡gina Privacidad, Isla y Widgets del panel de configuraciÃ³n), guardados en
+    /// Ajustes generales de la suite (página Privacidad, Isla y Widgets del panel de configuración), guardados en
     /// %LOCALAPPDATA%\StreeckSuite\config.ini. Los del reloj 3D siguen en reloj.ini y los widgets ocultos en su archivo.
-    /// Se leen y cambian desde el hilo de la interfaz; Changed avisa a los mÃ³dulos para aplicarlos al momento.
+    /// Se leen y cambian desde el hilo de la interfaz; Changed avisa a los módulos para aplicarlos al momento.
     /// </summary>
     public static class SuiteSettings
     {
@@ -18,7 +18,7 @@ namespace StreeckSuite.Core
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
         public enum AssistantEngineKind { Local, Gemini }
         public enum AssistantVoiceKind { GeminiCharon, PiperAld, PiperClaude, Windows }
-        public enum TaskbarFormatKind { Islands, Capsule, Full }      // Como el simulador: 3 islas, cÃ¡psula, completa
+        public enum TaskbarFormatKind { Islands, Capsule, Full }      // Como el simulador: 3 islas, cápsula, completa
         public enum TaskbarSearchKind { Full, Icon, Hidden }
         public enum GlassStyleKind { Aero, Transparent, Obsidian, Neon }
 
@@ -39,12 +39,12 @@ namespace StreeckSuite.Core
         public static int IslandCloseDelayMs = 500;     // 0..3000
         public static int IslandSongPeekMs = 4000;      // 0..10000
         public static int IslandOpacityPercent = 100;   // 50..100
-        public static int IslandScalePercent = 100;     // 70..120: tamaÃ±o de toda la isla (letras incluidas)
+        public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
 
         // Avisos (las apps silenciadas se guardan aparte: NotificationApps)
         public static bool NotificationsEnabled = true;
         public static int NotificationDurationMs = 4000; // 1000..10000
-        public static bool CaptureDots = true;           // Puntos de micrÃ³fono y cÃ¡mara en la isla
+        public static bool CaptureDots = true;           // Puntos de micrófono y cámara en la isla
         public static bool CaptureAlerts = true;         // Aviso cuando una app empieza a usarlos
         public static bool BluetoothConnectAlerts = true; // Aviso al conectar un dispositivo Bluetooth
         public static int BluetoothLowBatteryPercent = 20; // 0 = sin aviso; 0..50
@@ -59,7 +59,7 @@ namespace StreeckSuite.Core
         public static List<string> CalendarIcalUrls = new List<string>();
         public static int EventAlertMinutes = 10;        // 0 = sin aviso; 0..30
 
-        // Bandeja y bÃºsqueda
+        // Bandeja y búsqueda
         public static bool FileTrayEnabled = true;
         public static bool FileTrayPersist = true;        // Conservar la bandeja al reiniciar la suite
         public static SearchShortcut SearchHotkey = SearchShortcut.CtrlAltS;
@@ -72,17 +72,17 @@ namespace StreeckSuite.Core
         public static string GeminiApiKey = "";          // En el archivo va cifrada con DPAPI (solo este usuario de Windows la lee)
         public static bool AssistantSpeak = false;       // Leer las respuestas en voz alta
         public static AssistantVoiceKind AssistantVoice = AssistantVoiceKind.GeminiCharon; // Charon con Piper Ald de respaldo
-        public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la bÃºsqueda
+        public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la búsqueda
 
-        // MenÃº de inicio (fase H)
-        public static bool StartMenuWinKey = true;       // La tecla Windows abre el menÃº de la suite
+        // Menú de inicio (fase H)
+        public static bool StartMenuWinKey = true;       // La tecla Windows abre el menú de la suite
         public static bool StartMenuShowRecent = true;
 
         // Barra de tareas (fase I) y estilo de cristal global
-        public static bool TaskbarEnabled = false;   // El usuario prefiere la barra de Windows con skin
+        public static bool TaskbarEnabled = true;       // Islas sobre la barra real de Windows (I3)
         public static TaskbarFormatKind TaskbarFormat = TaskbarFormatKind.Islands;
         public static int TaskbarGap = 14;               // 0..80 px entre globos
-        public static bool TaskbarEdges = false;         // Globos a los extremos
+        public static bool TaskbarEdges = true;          // Islas a los extremos (formato B, el aprobado por defecto)
         public static TaskbarSearchKind TaskbarSearch = TaskbarSearchKind.Full;
         public static GlassStyleKind GlassStyle = GlassStyleKind.Aero;
 
@@ -91,7 +91,7 @@ namespace StreeckSuite.Core
         public static int WidgetGlassPercent = 60;      // 0..100
 
         /// <summary>
-        /// AlgÃºn ajuste cambiÃ³ (lo lanzan Save y NotifyChanged).
+        /// Algún ajuste cambió (lo lanzan Save y NotifyChanged).
         /// </summary>
         public static event Action Changed;
 
@@ -146,7 +146,7 @@ namespace StreeckSuite.Core
                 {
                     foreach (string url in raw.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)) CalendarIcalUrls.Add(url);
                 }
-                if (values.TryGetValue("agenda.google", out raw) && raw.Length > 0 && !CalendarIcalUrls.Contains(raw)) CalendarIcalUrls.Add(raw); // VersiÃ³n anterior: un solo enlace
+                if (values.TryGetValue("agenda.google", out raw) && raw.Length > 0 && !CalendarIcalUrls.Contains(raw)) CalendarIcalUrls.Add(raw); // Versión anterior: un solo enlace
                 EventAlertMinutes = ReadInt(values, "agenda.avisoMin", EventAlertMinutes, 0, 30);
                 FileTrayEnabled = ReadBool(values, "bandeja.activa", FileTrayEnabled);
                 FileTrayPersist = ReadBool(values, "bandeja.conservar", FileTrayPersist);
@@ -165,11 +165,11 @@ namespace StreeckSuite.Core
                 AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
                 StartMenuWinKey = ReadBool(values, "inicio.teclaWindows", StartMenuWinKey);
                 StartMenuShowRecent = ReadBool(values, "inicio.recientes", StartMenuShowRecent);
-                TaskbarEnabled = ReadBool(values, "barra.activa", TaskbarEnabled);
+                TaskbarEnabled = ReadBool(values, "barra.islas", TaskbarEnabled);
                 TaskbarFormatKind format;
                 if (values.TryGetValue("barra.formato", out raw) && Enum.TryParse(raw, out format)) TaskbarFormat = format;
                 TaskbarGap = ReadInt(values, "barra.separacion", TaskbarGap, 0, 80);
-                TaskbarEdges = ReadBool(values, "barra.extremos", TaskbarEdges);
+                TaskbarEdges = ReadBool(values, "barra.extremos2", TaskbarEdges);
                 TaskbarSearchKind search;
                 if (values.TryGetValue("barra.busqueda", out raw) && Enum.TryParse(raw, out search)) TaskbarSearch = search;
                 GlassStyleKind glass;
@@ -231,10 +231,10 @@ namespace StreeckSuite.Core
                     "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
                     "inicio.teclaWindows=" + (StartMenuWinKey ? 1 : 0),
                     "inicio.recientes=" + (StartMenuShowRecent ? 1 : 0),
-                    "barra.activa=" + (TaskbarEnabled ? 1 : 0),
+                    "barra.islas=" + (TaskbarEnabled ? 1 : 0),
                     "barra.formato=" + TaskbarFormat,
                     "barra.separacion=" + TaskbarGap,
-                    "barra.extremos=" + (TaskbarEdges ? 1 : 0),
+                    "barra.extremos2=" + (TaskbarEdges ? 1 : 0),
                     "barra.busqueda=" + TaskbarSearch,
                     "cristal.estilo=" + GlassStyle,
                     "widgets.acento=" + ToHex(WidgetAccent),

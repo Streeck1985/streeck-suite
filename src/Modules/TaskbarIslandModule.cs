@@ -1,31 +1,32 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using StreeckSuite.Core;
 
 namespace StreeckSuite.Modules
 {
     /// <summary>
-    /// Barra de tareas de Streeck (fase I): muestra la barra de islas, le reserva su franja a las ventanas maximizadas
-    /// (AppBar) y oculta la barra de Windows mientras está activa. Al salir, al desactivarla en Ajustes o si la suite
-    /// falla, la barra de Windows vuelve tal como estaba (el estado original se guarda en barra_estado.txt).
+    /// Islas sobre la barra de tareas REAL de Windows (mockup I3). La suite mete streeck_taskbar_*.dll en el Explorador
+    /// (ver native\StreeckTaskbar\tap.cpp) y le pasa los ajustes del panel por barra_skin.ini y un evento con nombre.
+    /// Al apagarlo o al salir, la DLL devuelve la barra normal. Si el Explorador se reinicia, se vuelve a meter.
     /// </summary>
     public class TaskbarIslandModule : IModule
     {
         public string Id { get { return "taskbar_islands"; } }
-        public string Name { get { return "Barra de tareas en islas"; } }
-        public string Version { get { return "2.0.0"; } }
+        public string Name { get { return "Islas en la barra de Windows"; } }
+        public string Version { get { return "3.0.0"; } }
         public bool IsEnabled { get; set; }
 
-        private static readonly string StateFile = Path.Combine(Path.GetDirectoryName(Log.FilePath), "barra_estado.txt");
+        private const string ReloadEventName = @"Local\StreeckSuite.TaskbarSkin";
+        private static readonly string IniFile = Path.Combine(Path.GetDirectoryName(Log.FilePath), "barra_skin.ini");
 
-        private EventBus _eventBus;
-        private TaskbarWindow _bar;
-        private Timer _guard;
+        private ExplorerWatcher _watcher;
         private Action _settingsChanged;
-        private bool _active, _gameMode, _fullscreen;
-        private DateTime _windowsTrayUntil = DateTime.MinValue;
+        private SuiteSettings.TaskbarSearchKind _appliedSearch;
 
         public TaskbarIslandModule()
         {
@@ -34,270 +35,182 @@ namespace StreeckSuite.Modules
 
         public void Initialize(EventBus eventBus)
         {
-            _eventBus = eventBus;
-            _eventBus.Subscribe(Events.GameModeActive, payload => OnUi(() => { _gameMode = payload is bool && (bool)payload; UpdateVisibility(); }));
-            _eventBus.Subscribe(Events.TaskbarShowWindowsTray, payload => OnUi(ShowWindowsTray));
         }
 
         public void Start()
         {
-            _bar = new TaskbarWindow(_eventBus);
-            IntPtr handle = _bar.Handle; // Manejador listo para recibir los avisos de la AppBar aunque esté oculta
-            _bar.AppBarNotify += OnAppBarNotify;
-            _bar.ExplorerRestarted += () => { if (_active) { HideWindowsTaskbar(); RegisterAppBar(); } };
-
-            // Si la suite falla o el sistema se apaga, la barra de Windows no se queda escondida
-            AppDomain.CurrentDomain.UnhandledException += (s, e) => RestoreWindowsTaskbar();
-            AppDomain.CurrentDomain.ProcessExit += (s, e) => RestoreWindowsTaskbar();
-
-            // Explorer a veces vuelve a mostrar su barra (cambios de pantalla, tecla Windows): se vuelve a ocultar
-            _guard = new Timer { Interval = 1000 };
-            _guard.Tick += (s, e) =>
+            _appliedSearch = SuiteSettings.TaskbarSearch;
+            _watcher = new ExplorerWatcher();
+            _watcher.ExplorerRestarted += () =>
             {
-                if (_active && DateTime.Now > _windowsTrayUntil) HideWindowsTaskbar();
+                // El Explorador nuevo tarda en tener su barra lista
+                System.Windows.Forms.Timer later = new System.Windows.Forms.Timer { Interval = 4000 };
+                later.Tick += (s, e) => { later.Dispose(); Apply(); };
+                later.Start();
             };
-            _guard.Start();
-
-            _settingsChanged = () => OnUi(Apply);
+            _settingsChanged = () =>
+            {
+                if (SuiteSettings.TaskbarSearch != _appliedSearch)
+                {
+                    _appliedSearch = SuiteSettings.TaskbarSearch;
+                    ApplySearchMode(_appliedSearch);
+                }
+                Apply();
+            };
             SuiteSettings.Changed += _settingsChanged;
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
             Apply();
         }
 
         public void Stop()
         {
             SuiteSettings.Changed -= _settingsChanged;
-            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
-            if (_guard != null) { _guard.Dispose(); _guard = null; }
-            Deactivate();
-            if (_bar != null) { _bar.Dispose(); _bar = null; }
-        }
-
-        private void OnDisplayChanged(object sender, EventArgs e) { OnUi(Apply); }
-
-        private void OnUi(Action action)
-        {
-            if (_bar != null && !_bar.IsDisposed && _bar.IsHandleCreated) _bar.BeginInvoke(action);
-        }
-
-        // Activa o desactiva la barra según el interruptor y vuelve a colocarla (formato, separación, cristal)
-        private void Apply()
-        {
-            if (_bar == null) return;
-            if (SuiteSettings.TaskbarEnabled && !_active) Activate();
-            else if (!SuiteSettings.TaskbarEnabled && _active) Deactivate();
-            if (_active)
-            {
-                RegisterAppBar();
-                _bar.Relayout();
-            }
-            UpdateVisibility();
-        }
-
-        private void Activate()
-        {
-            SaveOriginalState();
-            HideWindowsTaskbar();
-            _active = true;
-            RegisterAppBar();
-            Log.Info("[Taskbar] Barra de Streeck activa");
-        }
-
-        private void Deactivate()
-        {
-            if (!_active) return;
-            _active = false;
-            UnregisterAppBar();
-            if (_bar != null) _bar.Hide();
-            RestoreWindowsTaskbar();
+            WriteSettings(false);
+            Signal();
+            if (_watcher != null) { _watcher.Dispose(); _watcher = null; }
             Log.Info("[Taskbar] Barra de Windows restaurada");
         }
 
-        private void UpdateVisibility()
+        // Escribe los ajustes, mete la DLL si aún no está y le avisa
+        private void Apply()
         {
-            if (_bar == null) return;
-            bool show = _active && !_gameMode && !_fullscreen;
-            if (show && !_bar.Visible) { _bar.Show(); _bar.Relayout(); }
-            else if (!show && _bar.Visible) _bar.Hide();
-        }
-
-        private void OnAppBarNotify(int code, IntPtr lParam)
-        {
-            if (code == AbnFullscreenApp)
+            WriteSettings(SuiteSettings.TaskbarEnabled);
+            if (SuiteSettings.TaskbarEnabled)
             {
-                _fullscreen = lParam != IntPtr.Zero;
-                UpdateVisibility();
+                string result = Inject();
+                if (result != null) Log.Error("[Taskbar] No se pudo entrar a la barra: {0}", result);
             }
-            else if (code == AbnPosChanged && _active)
-            {
-                RegisterAppBar();
-            }
+            // La DLL tarda un momento en conectarse la primera vez: se avisa ahora y otra vez en unos segundos
+            Signal();
+            ThreadPool.QueueUserWorkItem(_ => { Thread.Sleep(3000); Signal(); });
         }
 
-        // ⌃: no se pueden copiar los iconos de otros programas, así que se muestra un momento la barra de Windows
-        // con su bandeja de iconos ocultos abierta (Win + B selecciona la flecha y Enter la abre)
-        private void ShowWindowsTray()
+        private static void WriteSettings(bool active)
         {
-            if (!_active) return;
-            _windowsTrayUntil = DateTime.Now.AddSeconds(12);
-            foreach (IntPtr tray in TrayWindows()) ShowWindow(tray, SwShowNa);
-            Timer later = new Timer { Interval = 250 };
-            later.Tick += (s, e) =>
-            {
-                later.Dispose();
-                NativeMethods.keybd_event(0x5B, 0, 0, UIntPtr.Zero);
-                NativeMethods.keybd_event(0x42, 0, 0, UIntPtr.Zero);
-                NativeMethods.keybd_event(0x42, 0, 2, UIntPtr.Zero);
-                NativeMethods.keybd_event(0x5B, 0, 2, UIntPtr.Zero);
-                NativeMethods.keybd_event(0x0D, 0, 0, UIntPtr.Zero);
-                NativeMethods.keybd_event(0x0D, 0, 2, UIntPtr.Zero);
-            };
-            later.Start();
-        }
-
-        #region Barra de Windows
-
-        private static IntPtr[] TrayWindows()
-        {
-            System.Collections.Generic.List<IntPtr> list = new System.Collections.Generic.List<IntPtr>();
-            IntPtr main = NativeMethods.FindWindow("Shell_TrayWnd", null);
-            if (main != IntPtr.Zero) list.Add(main);
-            IntPtr secondary = IntPtr.Zero;
-            while ((secondary = NativeMethods.FindWindowEx(IntPtr.Zero, secondary, "Shell_SecondaryTrayWnd", null)) != IntPtr.Zero) list.Add(secondary);
-            return list.ToArray();
-        }
-
-        // Se guarda solo la primera vez: si la suite se cerró a la fuerza, el archivo conserva el estado verdadero
-        private static void SaveOriginalState()
-        {
-            if (File.Exists(StateFile)) return;
             try
             {
-                APPBARDATA data = NewData(NativeMethods.FindWindow("Shell_TrayWnd", null));
-                int state = (int)SHAppBarMessage(AbmGetState, ref data);
-                File.WriteAllText(StateFile, state.ToString());
+                File.WriteAllLines(IniFile, new[]
+                {
+                    "activo=" + (active ? 1 : 0),
+                    "formato=" + (int)SuiteSettings.TaskbarFormat,
+                    "separacion=" + SuiteSettings.TaskbarGap,
+                    "extremos=" + (SuiteSettings.TaskbarEdges ? 1 : 0),
+                    "cristal=" + (int)SuiteSettings.GlassStyle,
+                });
             }
             catch (Exception ex)
             {
-                Log.Error("[Taskbar] No se pudo guardar el estado de la barra de Windows: {0}", ex.Message);
+                Log.Error("[Taskbar] No se pudieron guardar los ajustes de la barra: {0}", ex.Message);
             }
         }
 
-        // Ocultar automáticamente hace que Windows deje de reservar su franja; además se esconde para que no asome
-        private static void HideWindowsTaskbar()
+        private static void Signal()
         {
-            IntPtr main = NativeMethods.FindWindow("Shell_TrayWnd", null);
-            if (main == IntPtr.Zero) return;
-            APPBARDATA data = NewData(main);
-            if (((int)SHAppBarMessage(AbmGetState, ref data) & AbsAutoHide) == 0)
+            try
             {
-                data.lParam = (IntPtr)AbsAutoHide;
-                SHAppBarMessage(AbmSetState, ref data);
+                using (EventWaitHandle reload = new EventWaitHandle(false, EventResetMode.AutoReset, ReloadEventName)) reload.Set();
             }
-            foreach (IntPtr tray in TrayWindows())
+            catch (Exception ex)
             {
-                if (IsWindowVisible(tray)) ShowWindow(tray, SwHide);
+                Log.Error("[Taskbar] No se pudo avisar a la barra: {0}", ex.Message);
             }
         }
 
-        private static readonly object RestoreLock = new object();
-
-        internal static void RestoreWindowsTaskbar()
+        // Búsqueda de la barra: es el ajuste propio de Windows (0 oculta, 1 icono, 2 cuadro completo)
+        private static void ApplySearchMode(SuiteSettings.TaskbarSearchKind kind)
         {
-            lock (RestoreLock)
+            int mode = kind == SuiteSettings.TaskbarSearchKind.Hidden ? 0 : kind == SuiteSettings.TaskbarSearchKind.Icon ? 1 : 2;
+            try
             {
-                if (!File.Exists(StateFile)) return;
-                try
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Search"))
                 {
-                    int state;
-                    if (!int.TryParse(File.ReadAllText(StateFile).Trim(), out state)) state = AbsAlwaysOnTop;
-                    IntPtr main = NativeMethods.FindWindow("Shell_TrayWnd", null);
-                    if (main != IntPtr.Zero)
-                    {
-                        APPBARDATA data = NewData(main);
-                        data.lParam = (IntPtr)state;
-                        SHAppBarMessage(AbmSetState, ref data);
-                    }
-                    foreach (IntPtr tray in TrayWindows()) ShowWindow(tray, SwShowNa);
-                    File.Delete(StateFile);
+                    key.SetValue("SearchboxTaskbarMode", mode, RegistryValueKind.DWord);
                 }
-                catch (Exception ex)
-                {
-                    Log.Error("[Taskbar] No se pudo restaurar la barra de Windows: {0}", ex.Message);
-                }
+                IntPtr result;
+                SendMessageTimeout((IntPtr)0xFFFF, 0x001A, IntPtr.Zero, "TraySettings", 2, 1000, out result);
             }
-        }
-
-        #endregion
-
-        #region AppBar propia
-
-        private bool _registered;
-
-        private void RegisterAppBar()
-        {
-            APPBARDATA data = NewData(_bar.Handle);
-            if (!_registered)
+            catch (Exception ex)
             {
-                data.uCallbackMessage = TaskbarWindow.AppBarCallback;
-                if (SHAppBarMessage(AbmNew, ref data) == IntPtr.Zero) { Log.Error("[Taskbar] No se pudo registrar la AppBar"); return; }
-                _registered = true;
+                Log.Error("[Taskbar] No se pudo cambiar la búsqueda de la barra: {0}", ex.Message);
             }
-            Screen screen = Screen.PrimaryScreen;
-            data.uEdge = AbeBottom;
-            data.rc.Left = screen.Bounds.Left;
-            data.rc.Right = screen.Bounds.Right;
-            data.rc.Bottom = screen.Bounds.Bottom;
-            data.rc.Top = screen.Bounds.Bottom - _bar.ReservedHeight;
-            SHAppBarMessage(AbmQueryPos, ref data);
-            data.rc.Top = data.rc.Bottom - _bar.ReservedHeight;
-            SHAppBarMessage(AbmSetPos, ref data);
         }
 
-        private void UnregisterAppBar()
+        #region Entrar al Explorador
+
+        // Windows carga la DLL en el Explorador al poner un gancho de ventana en el hilo de su barra; la DLL se fija
+        // sola y el gancho se quita enseguida. Si ya estaba dentro, no hace nada (lo controla la propia DLL).
+        private static string Inject()
         {
-            if (!_registered || _bar == null) return;
-            APPBARDATA data = NewData(_bar.Handle);
-            SHAppBarMessage(AbmRemove, ref data);
-            _registered = false;
+            string folder = Path.GetDirectoryName(Application.ExecutablePath);
+            string dll = Directory.GetFiles(folder, "streeck_taskbar_*.dll").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).LastOrDefault();
+            if (dll == null) return "falta streeck_taskbar_*.dll junto a la suite (compílala con native\\build_tap.ps1)";
+
+            IntPtr module = LoadLibrary(dll);
+            if (module == IntPtr.Zero) return "LoadLibrary falló (" + Marshal.GetLastWin32Error() + ")";
+            IntPtr hookProc = GetProcAddress(module, "StreeckHookProc");
+            if (hookProc == IntPtr.Zero) return "la DLL no tiene StreeckHookProc";
+            IntPtr tray = NativeMethods.FindWindow("Shell_TrayWnd", null);
+            if (tray == IntPtr.Zero) return "no se encontró la barra de Windows";
+            uint pid;
+            uint thread = GetWindowThreadProcessId(tray, out pid);
+            IntPtr hook = SetWindowsHookEx(WhCallWndProc, hookProc, module, thread);
+            if (hook == IntPtr.Zero) return "SetWindowsHookEx falló (" + Marshal.GetLastWin32Error() + ")";
+            IntPtr ignored;
+            SendMessageTimeout(tray, 0, IntPtr.Zero, IntPtr.Zero, 2, 3000, out ignored); // WM_NULL: obliga a cargarla ya
+            Thread.Sleep(300);
+            UnhookWindowsHookEx(hook);
+            return null;
         }
 
-        #endregion
+        private const int WhCallWndProc = 4;
 
-        #region Win32
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibrary(string path);
 
-        private const int AbmNew = 0, AbmRemove = 1, AbmQueryPos = 2, AbmSetPos = 3, AbmGetState = 4, AbmSetState = 10;
-        private const int AbnPosChanged = 1, AbnFullscreenApp = 2;
-        private const int AbsAutoHide = 1, AbsAlwaysOnTop = 2, AbeBottom = 3;
-        private const int SwHide = 0, SwShowNa = 8;
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct APPBARDATA
-        {
-            public int cbSize;
-            public IntPtr hWnd;
-            public int uCallbackMessage;
-            public int uEdge;
-            public NativeMethods.RECT rc;
-            public IntPtr lParam;
-        }
-
-        private static APPBARDATA NewData(IntPtr hwnd)
-        {
-            APPBARDATA data = new APPBARDATA();
-            data.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
-            data.hWnd = hwnd;
-            return data;
-        }
-
-        [DllImport("shell32.dll")]
-        private static extern IntPtr SHAppBarMessage(int dwMessage, ref APPBARDATA pData);
+        [DllImport("kernel32.dll", CharSet = CharSet.Ansi)]
+        private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
         [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, IntPtr proc, IntPtr module, uint threadId);
 
         [DllImport("user32.dll")]
-        private static extern bool IsWindowVisible(IntPtr hWnd);
+        private static extern bool UnhookWindowsHookEx(IntPtr hook);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
+
+        /// <summary>
+        /// Ventana invisible que recibe "TaskbarCreated" cuando el Explorador se reinicia.
+        /// </summary>
+        private sealed class ExplorerWatcher : NativeWindow, IDisposable
+        {
+            private static readonly int TaskbarCreated = RegisterWindowMessage("TaskbarCreated");
+            public event Action ExplorerRestarted;
+
+            public ExplorerWatcher()
+            {
+                CreateHandle(new CreateParams { Caption = "StreeckSuite.ExplorerWatcher" });
+            }
+
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == TaskbarCreated && ExplorerRestarted != null) ExplorerRestarted();
+                base.WndProc(ref m);
+            }
+
+            public void Dispose()
+            {
+                DestroyHandle();
+            }
+
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+            private static extern int RegisterWindowMessage(string message);
+        }
 
         #endregion
     }
