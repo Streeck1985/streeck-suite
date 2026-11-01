@@ -26,7 +26,6 @@ namespace StreeckSuite.Core
         // Barra de tareas
         public const string TaskbarSetMode = "TASKBAR:SET_MODE";              // payload: string
         public const string TaskbarSetGap = "TASKBAR:SET_GAP";                // payload: int
-        public const string TaskbarShowWindowsTray = "TASKBAR:SHOW_WINDOWS_TRAY";
 
         // Menú de inicio y búsqueda (botones de la barra)
         public const string StartMenuToggle = "START:TOGGLE";

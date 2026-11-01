@@ -87,16 +87,6 @@ namespace StreeckSuite
                 return;
             }
 
-            // Herramienta de desarrollo: StreeckSuite.exe --preview-taskbar <carpeta>
-            if (args != null && args.Length >= 2 && args[0] == "--preview-taskbar")
-            {
-                NativeMethods.SetProcessDPIAware();
-                SuiteSettings.Load();
-                System.IO.Directory.CreateDirectory(args[1]);
-                using (TaskbarWindow bar = new TaskbarWindow(EventBus.Instance)) bar.RenderPreviews(args[1]);
-                return;
-            }
-
             // Herramienta de desarrollo: StreeckSuite.exe --preview-start <carpeta>
             if (args != null && args.Length >= 2 && args[0] == "--preview-start")
             {

@@ -1068,48 +1068,29 @@ namespace StreeckSuite.Modules
 
             float y = 66;
             DrawCard(g, y, 66);
-            DrawToggleRow(g, y + 4, "Usar la barra de Streeck", "Esconde la de Windows; al apagarlo o cerrar la suite vuelve la normal", SuiteSettings.TaskbarEnabled,
+            DrawToggleRow(g, y + 4, "Islas en la barra de Windows", "Tu barra real con islas; al apagarlo o cerrar la suite vuelve la normal", SuiteSettings.TaskbarEnabled,
                 () => { SuiteSettings.TaskbarEnabled = !SuiteSettings.TaskbarEnabled; SuiteSettings.Save(); });
 
+            // Por ahora solo los formatos que no mueven piezas (juntas al centro y cápsula siguen en pruebas)
             y = 146;
-            DrawCard(g, y, 96);
+            DrawCard(g, y, 110);
             DrawText(g, "Formato", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "3 islas", "Cápsula", "Completa" }, (int)SuiteSettings.TaskbarFormat,
-                i => { SuiteSettings.TaskbarFormat = (SuiteSettings.TaskbarFormatKind)i; SuiteSettings.Save(); });
-
-            // Separación: deslizador de 0 a 80 px y atajos (a los extremos pega cada isla a su borde)
-            y = 256;
-            DrawCard(g, y, 112);
-            DrawLabelValue(g, y + 12, "Separación entre globos", SuiteSettings.TaskbarEdges ? "A los extremos" : SuiteSettings.TaskbarGap + " px", _semi14, _bold13);
-            DrawSlider(g, new RectangleF(InnerX, y + 44, InnerW, 6), SuiteSettings.TaskbarGap / 80f,
-                f => { SuiteSettings.TaskbarGap = (int)Math.Round(f * 80); SuiteSettings.TaskbarEdges = false; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
-            string[] presets = { "Juntas (0 px)", "Flotantes (14 px)", "A los extremos" };
-            float chipX = InnerX;
-            for (int i = 0; i < presets.Length; i++)
+            int format = SuiteSettings.TaskbarFormat == SuiteSettings.TaskbarFormatKind.Full ? 1 : 0;
+            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "3 islas a los extremos", "Completa" }, format, i =>
             {
-                int index = i;
-                float chipW = g.MeasureString(presets[i], _reg12).Width + 22;
-                RectangleF chip = new RectangleF(chipX, y + 66, chipW, 30);
-                bool selected = index == 2 ? SuiteSettings.TaskbarEdges : !SuiteSettings.TaskbarEdges && SuiteSettings.TaskbarGap == (index == 0 ? 0 : 14);
-                FillRound(g, chip, 15, selected ? Color.FromArgb(46, Accent) : Hover(chip) ? Color.FromArgb(40, 47, 62) : Field);
-                StrokeRound(g, chip, 15, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
-                DrawText(g, presets[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
-                AddHit(chip, () =>
-                {
-                    if (index == 2) SuiteSettings.TaskbarEdges = true;
-                    else { SuiteSettings.TaskbarEdges = false; SuiteSettings.TaskbarGap = index == 0 ? 0 : 14; }
-                    SuiteSettings.Save();
-                });
-                chipX = chip.Right + 8;
-            }
+                SuiteSettings.TaskbarFormat = i == 1 ? SuiteSettings.TaskbarFormatKind.Full : SuiteSettings.TaskbarFormatKind.Islands;
+                SuiteSettings.TaskbarEdges = true;
+                SuiteSettings.Save();
+            });
+            DrawText(g, "Juntas al centro y cápsula: en pruebas", _reg12, Gray, new RectangleF(InnerX, y + 88, InnerW, 16), StringAlignment.Near);
 
-            y = 382;
+            y = 270;
             DrawCard(g, y, 96);
             DrawText(g, "Búsqueda en la barra", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Completa", "Solo icono", "Oculta" }, (int)SuiteSettings.TaskbarSearch,
                 i => { SuiteSettings.TaskbarSearch = (SuiteSettings.TaskbarSearchKind)i; SuiteSettings.Save(); });
 
-            y = 492;
+            y = 380;
             DrawCard(g, y, 118);
             DrawText(g, "Estilo de cristal", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Aero acrílico", "100 % transparente", "Obsidiana", "Neón" }, (int)SuiteSettings.GlassStyle,
