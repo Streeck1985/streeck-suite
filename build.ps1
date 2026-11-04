@@ -57,6 +57,7 @@ $CmdArgs = @(
     "/utf8output",
     "/win32icon:$PSScriptRoot\assets\streeck.ico",
     "/resource:$PSScriptRoot\assets\streeck.ico,StreeckSuite.streeck.ico",
+"/resource:$PSScriptRoot\StreeckSuite_512.png,StreeckSuite.logo.png",
     $RefArg,
     "/out:$OutputFile"
 ) + $WinRtRefs + $SourceFiles
