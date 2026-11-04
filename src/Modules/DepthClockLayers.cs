@@ -290,6 +290,9 @@ namespace StreeckSuite.Modules
         /// </summary>
         public Bitmap ComposeForeground(ClockSettings settings)
         {
+            // Reloj estirado: "cercano" es lo que está más cerca que lo que hay detrás de la hora (igual que el recorte)
+            if (_depth != null) _nearThreshold = BehindClockDepth(_depth, VisionModel.Depth.Size, DepthClockLayout.DigitsArea(_screen, settings)) + ForegroundMargin;
+
             OcclusionMode mode = settings.Mode;
             if (mode == OcclusionMode.Auto) mode = SubjectFound ? OcclusionMode.Subject : OcclusionMode.Near;
 
@@ -318,11 +321,18 @@ namespace StreeckSuite.Modules
         /// </summary>
         public float GetColumnObstacleTop(float colLeft, float colRight, float fromY)
         {
-            bool useSubject = _subject != null && SubjectFound == true;
-            float[] map = useSubject ? _subject : _depth;
-            if (map == null) return 1f;
-            int size = useSubject ? VisionModel.Subject.Size : VisionModel.Depth.Size;
-            float threshold = useSubject ? 0.35f : 0.55f;
+            // Obstáculo = el sujeto principal o cualquier cosa cercana (palmeras, casas, la isla): la hora estirada
+            // los rodea todos. Se toma la primera fila con obstáculo en cualquiera de los dos mapas.
+            float top = 1f;
+            if (_subject != null && SubjectFound) top = Math.Min(top, FirstRow(_subject, VisionModel.Subject.Size, 0.35f, colLeft, colRight, fromY));
+            if (_depth != null) top = Math.Min(top, FirstRow(_depth, VisionModel.Depth.Size, _nearThreshold, colLeft, colRight, fromY));
+            return top;
+        }
+
+        private float _nearThreshold = 0.55f;
+
+        private static float FirstRow(float[] map, int size, float threshold, float colLeft, float colRight, float fromY)
+        {
             int xStart = Math.Max(0, (int)(colLeft * size));
             int xEnd = Math.Min(size - 1, (int)(colRight * size));
             if (xEnd < xStart) xEnd = xStart;
