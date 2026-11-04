@@ -34,9 +34,12 @@
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
 #include <winrt/Windows.UI.Xaml.Media.Animation.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
+#include <winrt/Windows.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.Media.Control.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <shlwapi.h>
+#include <shcore.h>
 #include <mutex>
 #include <algorithm>
 #include <cstdio>
@@ -79,6 +82,11 @@ struct Settings
     bool MiniPlayer = false;  // 4.ª isla con la música (sugerencia aprobada del mockup de la barra)
     Color IslandColor{ 219, 0, 0, 0 };  // Mismo color y opacidad que la isla de arriba (para el skin Notch)
     int Skin = 1;                       // Skin de la barra (ver enum Skin); Notch por defecto
+    // Icono del botón de Inicio: 0 Windows original, 3 ojitos (dibujados aquí); el resto es la imagen inicio_archivo
+    int StartIcon = 0;
+    int StartSize = 100;                // 70..140 %
+    int StartHover = 1;                 // 0 nada, 1 crece, 2 gira
+    std::wstring StartFile;
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -97,6 +105,9 @@ struct FrameState
     double Slack = 16;
     bool Hooked = false;
     bool Pending = false;
+    // Icono de Inicio de esta barra
+    winrt::weak_ref<wux::FrameworkElement> StartButton, StartHookedButton;
+    std::wstring StartDrawn;
 };
 
 // Todo esto solo se toca desde el hilo de la interfaz de la barra (los avisos del árbol llegan ahí)
@@ -159,6 +170,11 @@ static void LoadSettings()
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
     g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
     g_settings.Skin = std::clamp(ToInt(values, L"skin", 1), 0, 9);
+    g_settings.StartIcon = std::clamp(ToInt(values, L"inicio_icono", 0), 0, 6);
+    g_settings.StartSize = std::clamp(ToInt(values, L"inicio_tamano", 100), 70, 140);
+    g_settings.StartHover = std::clamp(ToInt(values, L"inicio_efecto", 1), 0, 2);
+    auto startFile = values.find(L"inicio_archivo");
+    g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
     int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
     auto color = values.find(L"color");
@@ -476,12 +492,14 @@ static void StyleBackground(InstanceHandle handle)
 }
 
 static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height);
+static void ApplyStartIcon(FrameState& state);
 
 static void LayoutFrame(FrameState& state)
 {
     wuxc::Grid root = state.Root.get();
     wux::FrameworkElement repeater = state.Repeater.get();
     if (!root || !repeater) return;
+    try { ApplyStartIcon(state); } catch (...) { }
 
     // Piezas reales de la barra en tres grupos: 0 clima, 1 inicio + búsqueda + apps, 2 bandeja + reloj
     struct Item { wux::FrameworkElement Element; int Group; Rect Bounds; };
@@ -944,6 +962,204 @@ static void StartMedia()
             Log(L"Mini reproductor sin música: " + std::wstring(error.message()));
         }
     }).detach();
+}
+
+#pragma endregion
+
+#pragma region Icono de Inicio
+
+// Icono del botón de Inicio (mockup «Icono de Inicio» aprobado). Se esconde el icono animado de Windows y en su
+// misma celda se pone el nuestro: la imagen que prepara la suite o, con «Ojitos», dos ojos que parpadean.
+// El botón sigue siendo el de Windows (clic, menú, arrastrar).
+
+#pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "shcore.lib")
+
+static wux::FrameworkElement FindStartButton(wux::FrameworkElement const& repeater)
+{
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(repeater);
+    for (int i = 0; i < count; i++)
+    {
+        wux::FrameworkElement element = wuxm::VisualTreeHelper::GetChild(repeater, i).try_as<wux::FrameworkElement>();
+        if (!element) continue;
+        std::wstring name(element.Name());
+        if (name == L"StartButton" || name == L"LaunchListButton") return element;
+    }
+    return nullptr;
+}
+
+// La imagen se lee del archivo a memoria (sin ms-appx ni rutas file:, que la barra no siempre acepta)
+static wuxm::ImageSource LoadStartImage()
+{
+    if (g_settings.StartFile.empty()) return nullptr;
+    winrt::com_ptr<IStream> stream;
+    if (FAILED(SHCreateStreamOnFileEx(g_settings.StartFile.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, 0, FALSE, nullptr, stream.put())))
+    {
+        Log(L"Icono de Inicio: no se pudo abrir " + g_settings.StartFile);
+        return nullptr;
+    }
+    winrt::Windows::Storage::Streams::IRandomAccessStream random{ nullptr };
+    if (FAILED(CreateRandomAccessStreamOverStream(stream.get(), BSOS_DEFAULT, winrt::guid_of<winrt::Windows::Storage::Streams::IRandomAccessStream>(), winrt::put_abi(random))))
+    {
+        return nullptr;
+    }
+    wuxm::Imaging::BitmapImage bitmap;
+    bitmap.SetSource(random);
+    return bitmap;
+}
+
+static wux::FrameworkElement MakeStartIcon(double size)
+{
+    wuxc::Grid holder;
+    holder.Name(L"StreeckStartIcon");
+    holder.Width(size);
+    holder.Height(size);
+    holder.HorizontalAlignment(wux::HorizontalAlignment::Center);
+    holder.VerticalAlignment(wux::VerticalAlignment::Center);
+    holder.IsHitTestVisible(false);
+    wuxm::CompositeTransform transform;
+    transform.CenterX(size / 2);
+    transform.CenterY(size / 2);
+    holder.RenderTransform(transform);
+
+    if (g_settings.StartIcon == 3)
+    {
+        // Ojitos: píldora negra con dos ojos blancos que parpadean cada 3,5 s (lo anima el compositor)
+        wuxc::Border pill;
+        pill.Background(wuxm::SolidColorBrush(Argb(255, 0, 0, 0)));
+        pill.Height(size * 0.75);
+        pill.CornerRadius(wux::CornerRadiusHelper::FromUniformRadius(size * 0.375));
+        pill.VerticalAlignment(wux::VerticalAlignment::Center);
+        holder.Children().Append(pill);
+        for (int i = 0; i < 2; i++)
+        {
+            wuxs::Rectangle eye;
+            eye.Width(size * 0.19);
+            eye.Height(size * 0.375);
+            eye.RadiusX(size * 0.095);
+            eye.RadiusY(size * 0.095);
+            eye.Fill(wuxm::SolidColorBrush(Argb(255, 255, 255, 255)));
+            eye.HorizontalAlignment(wux::HorizontalAlignment::Left);
+            eye.VerticalAlignment(wux::VerticalAlignment::Center);
+            eye.Margin(wux::ThicknessHelper::FromLengths(i == 0 ? size * 0.25 : size * 0.56, 0, 0, 0));
+            wuxm::ScaleTransform scale;
+            scale.CenterY(size * 0.1875);
+            eye.RenderTransform(scale);
+            holder.Children().Append(eye);
+
+            wuxm::Animation::DoubleAnimationUsingKeyFrames blink;
+            std::pair<int, double> keys[] = { { 0, 1.0 }, { 3360, 1.0 }, { 3430, 0.15 }, { 3500, 1.0 } };
+            for (auto& key : keys)
+            {
+                wuxm::Animation::LinearDoubleKeyFrame frame;
+                frame.KeyTime(wuxm::Animation::KeyTimeHelper::FromTimeSpan(std::chrono::milliseconds(key.first)));
+                frame.Value(key.second);
+                blink.KeyFrames().Append(frame);
+            }
+            blink.RepeatBehavior(wuxm::Animation::RepeatBehaviorHelper::Forever());
+            wuxm::Animation::Storyboard story;
+            wuxm::Animation::Storyboard::SetTarget(blink, scale);
+            wuxm::Animation::Storyboard::SetTargetProperty(blink, L"ScaleY");
+            story.Children().Append(blink);
+            story.Begin();
+        }
+    }
+    else
+    {
+        wuxc::Image image;
+        image.Source(LoadStartImage());
+        image.Stretch(wuxm::Stretch::Uniform);
+        holder.Children().Append(image);
+    }
+    return holder;
+}
+
+// Al pasar el ratón: crece o gira un poco (lo anima el compositor en 150 ms)
+static void HoverStartIcon(winrt::Windows::Foundation::IInspectable const& sender, bool inside)
+{
+    wux::FrameworkElement button = sender.try_as<wux::FrameworkElement>();
+    if (!button) return;
+    wux::FrameworkElement holder = FindByName(button, L"StreeckStartIcon");
+    if (!holder) return;
+    wuxm::CompositeTransform transform = holder.RenderTransform().try_as<wuxm::CompositeTransform>();
+    if (!transform) return;
+    double scale = inside && g_settings.StartHover == 1 ? 1.18 : 1.0;
+    double angle = inside && g_settings.StartHover == 2 ? 90.0 : 0.0;
+    wuxm::Animation::Storyboard story;
+    std::pair<const wchar_t*, double> targets[] = { { L"ScaleX", scale }, { L"ScaleY", scale }, { L"Rotation", angle } };
+    for (auto& target : targets)
+    {
+        wuxm::Animation::DoubleAnimation animation;
+        animation.To(target.second);
+        animation.Duration(wux::DurationHelper::FromTimeSpan(std::chrono::milliseconds(150)));
+        animation.EnableDependentAnimation(true);
+        wuxm::Animation::Storyboard::SetTarget(animation, transform);
+        wuxm::Animation::Storyboard::SetTargetProperty(animation, target.first);
+        story.Children().Append(animation);
+    }
+    story.Begin();
+}
+
+static void ApplyStartIcon(FrameState& state)
+{
+    wux::FrameworkElement repeater = state.Repeater.get();
+    if (!repeater) return;
+    wux::FrameworkElement button = state.StartButton.get();
+    if (!button)
+    {
+        button = FindStartButton(repeater);
+        if (!button) return;
+        state.StartButton = button;
+        state.StartDrawn.clear();
+    }
+    wux::FrameworkElement icon = FindByName(button, L"Icon");
+    if (!icon) return;
+    wuxc::Panel panel = wuxm::VisualTreeHelper::GetParent(icon).try_as<wuxc::Panel>();
+    if (!panel) return;
+
+    wux::FrameworkElement current = nullptr;
+    for (auto child : panel.Children())
+    {
+        wux::FrameworkElement element = child.try_as<wux::FrameworkElement>();
+        if (element && element.Name() == L"StreeckStartIcon") { current = element; break; }
+    }
+    bool wanted = g_settings.Active && g_settings.StartIcon != 0;
+    std::wstring signature = std::to_wstring(g_settings.StartIcon) + L"|" + std::to_wstring(g_settings.StartSize) + L"|" + g_settings.StartFile;
+    if (current && (!wanted || signature != state.StartDrawn))
+    {
+        uint32_t index;
+        if (panel.Children().IndexOf(current, index)) panel.Children().RemoveAt(index);
+        current = nullptr;
+    }
+    if (!wanted)
+    {
+        if (!state.StartDrawn.empty()) icon.Opacity(1);
+        state.StartDrawn.clear();
+        return;
+    }
+    if (!current)
+    {
+        double baseSize = icon.ActualWidth() > 4 ? std::min(icon.ActualWidth(), 32.0) : 24.0;
+        wux::FrameworkElement holder = MakeStartIcon(baseSize * g_settings.StartSize / 100.0);
+        if (wuxc::Grid::GetRow(icon) || wuxc::Grid::GetColumn(icon))
+        {
+            wuxc::Grid::SetRow(holder, wuxc::Grid::GetRow(icon));
+            wuxc::Grid::SetColumn(holder, wuxc::Grid::GetColumn(icon));
+        }
+        wuxc::Grid::SetRowSpan(holder, wuxc::Grid::GetRowSpan(icon));
+        wuxc::Grid::SetColumnSpan(holder, wuxc::Grid::GetColumnSpan(icon));
+        panel.Children().Append(holder);
+        state.StartDrawn = signature;
+        Log(L"Icono de Inicio aplicado (" + signature + L")");
+    }
+    icon.Opacity(0); // Windows a veces lo vuelve a mostrar al animar el botón: se reaplica en cada pasada
+
+    if (state.StartHookedButton.get() != button)
+    {
+        button.PointerEntered([](auto&& sender, auto&&) { try { HoverStartIcon(sender, true); } catch (...) { } });
+        button.PointerExited([](auto&& sender, auto&&) { try { HoverStartIcon(sender, false); } catch (...) { } });
+        state.StartHookedButton = button;
+    }
 }
 
 #pragma endregion

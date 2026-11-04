@@ -100,6 +100,11 @@ namespace StreeckSuite.Modules
                     // Las islas de la barra imitan al notch: su color y su opacidad
                     "color=" + SuiteSettings.IslandColor,
                     "opacidad=" + SuiteSettings.IslandOpacityPercent,
+                    // Icono del botón de Inicio (la imagen la prepara StartIconRenderer; los ojitos los dibuja la DLL)
+                    "inicio_icono=" + SuiteSettings.StartIcon,
+                    "inicio_tamano=" + SuiteSettings.StartIconSize,
+                    "inicio_efecto=" + SuiteSettings.StartIconHover,
+                    "inicio_archivo=" + (StartIconRenderer.PrepareFile(SuiteSettings.StartIcon) ?? ""),
                 });
             }
             catch (Exception ex)

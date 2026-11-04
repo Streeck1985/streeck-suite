@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock, Eyes, About }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, StartIcon, Widgets, Clock, Eyes, About }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 768, SideW = 210, ContentX = 238, ContentW = 534;
@@ -318,6 +318,7 @@ namespace StreeckSuite.Modules
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
                 case Page.Eyes: DrawEyes(g); break;
+                case Page.StartIcon: DrawStartIcon(g); break;
                 case Page.About: DrawAbout(g); break;
             }
             DrawCloseButton(g);
@@ -348,7 +349,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D", "Ojitos", "Acerca de" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Botón de Inicio", "Widgets", "Reloj 3D", "Ojitos", "Acerca de" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -462,6 +463,11 @@ namespace StreeckSuite.Modules
                     case Page.Eyes:
                         using (GraphicsPath leftEye = LayeredWindow.RoundedRect(new RectangleF(4, 6, 6, 12), 3)) g.DrawPath(pen, leftEye);
                         using (GraphicsPath rightEye = LayeredWindow.RoundedRect(new RectangleF(14, 6, 6, 12), 3)) g.DrawPath(pen, rightEye);
+                        break;
+                    case Page.StartIcon:
+                        using (GraphicsPath tile = LayeredWindow.RoundedRect(new RectangleF(3, 3, 18, 18), 5)) g.DrawPath(pen, tile);
+                        g.DrawPolygon(pen, new[] { new PointF(12, 7), new PointF(13.4f, 10.6f), new PointF(17, 12), new PointF(13.4f, 13.4f),
+                            new PointF(12, 17), new PointF(10.6f, 13.4f), new PointF(7, 12), new PointF(10.6f, 10.6f) });
                         break;
                     case Page.About:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
@@ -1268,6 +1274,85 @@ namespace StreeckSuite.Modules
             DrawRowDivider(g, y + 59);
             DrawToggleRow(g, y + 60, "Hacen cositas cuando no usas la PC", "Bostezan, cabecean, silban o se estiran; al minuto se duermen", SuiteSettings.EyesFidgets,
                 () => { SuiteSettings.EyesFidgets = !SuiteSettings.EyesFidgets; SuiteSettings.Save(); });
+        }
+
+        #endregion
+
+        #region Página Botón de Inicio (mockup «Icono de Inicio»)
+
+        private static Bitmap[] _startIconPreviews;
+
+        private void DrawStartIcon(Graphics g)
+        {
+            DrawTitle(g, "Botón de Inicio");
+            if (_startIconPreviews == null)
+            {
+                _startIconPreviews = new Bitmap[StartIconRenderer.Names.Length];
+                for (int i = 0; i < _startIconPreviews.Length; i++) _startIconPreviews[i] = StartIconRenderer.Render(i, 72);
+            }
+
+            // Galería: 7 iconos en dos filas
+            float y = 66;
+            DrawCard(g, y, 230);
+            DrawText(g, "Icono", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
+            const int perRow = 4;
+            float gap = 10, tileW = (InnerW - (perRow - 1) * gap) / perRow, tileH = 82;
+            for (int i = 0; i < StartIconRenderer.Names.Length; i++)
+            {
+                int index = i;
+                RectangleF tile = new RectangleF(InnerX + (i % perRow) * (tileW + gap), y + 40 + (i / perRow) * (tileH + gap), tileW, tileH);
+                bool selected = SuiteSettings.StartIcon == i;
+                FillRound(g, tile, 10, selected ? Color.FromArgb(46, Accent) : Hover(tile) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, tile, 10, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(_startIconPreviews[i], tile.X + (tile.Width - 32) / 2, tile.Y + 12, 32, 32);
+                DrawText(g, StartIconRenderer.Names[i], _reg12, selected ? ValueColor : TextColor, new RectangleF(tile.X, tile.Y + 50, tile.Width, 22), StringAlignment.Center);
+                AddHit(tile, () =>
+                {
+                    if (index == StartIconRenderer.Custom && !PickStartImage()) return;
+                    SuiteSettings.StartIcon = index;
+                    SuiteSettings.Save();
+                });
+            }
+
+            // Tamaño y efecto
+            y += 230 + 14;
+            DrawCard(g, y, 108);
+            DrawInlineSlider(g, y + 14, "Tamaño", SuiteSettings.StartIconSize + " %", (SuiteSettings.StartIconSize - 70) / 70f,
+                f => { SuiteSettings.StartIconSize = 70 + (int)Math.Round(f * 14) * 5; SuiteSettings.NotifyChanged(); });
+            DrawText(g, "Al pasar el ratón", _semi14, TextColor, new RectangleF(InnerX, y + 54, 160, 40), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 300, y + 58, 300, 34), new[] { "Nada", "Crece", "Gira" }, SuiteSettings.StartIconHover,
+                i => { SuiteSettings.StartIconHover = i; SuiteSettings.Save(); });
+
+            y += 108 + 14;
+            DrawCard(g, y, 64);
+            string note = SuiteSettings.TaskbarEnabled
+                ? "Al darle clic sigue abriendo el menú de inicio. «Windows original» lo deja como siempre."
+                : "Activa «Islas en la barra de Windows» en Barra de tareas para ver el icono.";
+            DrawText(g, note, _reg12, SuiteSettings.TaskbarEnabled ? Gray : Color.FromArgb(251, 191, 36), new RectangleF(InnerX, y + 8, InnerW, 20), StringAlignment.Near);
+            DrawText(g, "«Tu imagen»: mejor un PNG cuadrado con fondo transparente (mínimo 64×64).", _reg12, Gray, new RectangleF(InnerX, y + 34, InnerW, 20), StringAlignment.Near);
+        }
+
+        // «Tu imagen»: elegir un PNG, ICO, JPG o BMP
+        private bool PickStartImage()
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Title = "Elige la imagen para el botón de Inicio";
+                dialog.Filter = "Imágenes|*.png;*.ico;*.jpg;*.jpeg;*.bmp;*.gif";
+                if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+                if (!StartIconRenderer.ImportCustom(dialog.FileName))
+                {
+                    MessageBox.Show(this, "No se pudo abrir esa imagen.", "Streeck Suite", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+            }
+            if (_startIconPreviews != null)
+            {
+                _startIconPreviews[StartIconRenderer.Custom].Dispose();
+                _startIconPreviews[StartIconRenderer.Custom] = StartIconRenderer.Render(StartIconRenderer.Custom, 72);
+            }
+            return true;
         }
 
         #endregion
