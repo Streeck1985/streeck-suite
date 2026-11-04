@@ -720,6 +720,12 @@ namespace StreeckSuite.Modules
                 SuiteSettings.BluetoothLowBatteryPercent == 0 ? "Sin aviso" : SuiteSettings.BluetoothLowBatteryPercent + " %", _reg13, _bold13);
             DrawSlider(g, new RectangleF(InnerX, y + 82, InnerW, 6), SuiteSettings.BluetoothLowBatteryPercent / 50f,
                 f => { SuiteSettings.BluetoothLowBatteryPercent = (int)Math.Round(f * 10) * 5; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
+
+            // Aviso de volumen de Windows (fase J5): la isla muestra el suyo
+            y += 100 + 14;
+            DrawCard(g, y, 66);
+            DrawToggleRow(g, y + 4, "Esconder el aviso de volumen de Windows", "La isla muestra el suyo al subir o bajar el volumen", SuiteSettings.HideWindowsVolume,
+                () => { SuiteSettings.HideWindowsVolume = !SuiteSettings.HideWindowsVolume; SuiteSettings.Save(); NativeOsd.Apply(SuiteSettings.HideWindowsVolume); });
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
