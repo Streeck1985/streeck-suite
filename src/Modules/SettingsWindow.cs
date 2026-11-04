@@ -1130,13 +1130,30 @@ namespace StreeckSuite.Modules
             DrawText(g, "Estilo de cristal", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Aero acrílico", "100 % transparente", "Obsidiana", "Neón" }, (int)SuiteSettings.GlassStyle,
                 i => { SuiteSettings.GlassStyle = (SuiteSettings.GlassStyleKind)i; SuiteSettings.Save(); });
-            DrawText(g, "Se aplica a la barra, el menú de inicio y la isla", _reg12, Gray, new RectangleF(InnerX, y + 92, InnerW, 16), StringAlignment.Near);
+            DrawText(g, "Se aplica al menú de inicio (la barra usa su skin y la isla su color)", _reg12, Gray, new RectangleF(InnerX, y + 92, InnerW, 16), StringAlignment.Near);
 
             // Mini reproductor (sugerencia del mockup de la barra): con él, la isla de arriba no repite la música
             y += 118 + 14;
             DrawCard(g, y, 66);
             DrawToggleRow(g, y + 4, "Mini reproductor en la barra", "Una isla más con la canción; la isla de arriba deja de mostrar música", SuiteSettings.TaskbarMiniPlayer,
                 () => { SuiteSettings.TaskbarMiniPlayer = !SuiteSettings.TaskbarMiniPlayer; SuiteSettings.Save(); });
+
+            // Skin de la barra (galería aprobada): 10 opciones en dos filas
+            y += 66 + 14;
+            DrawCard(g, y, 104);
+            DrawText(g, "Skin", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
+            string[] skins = { "Cristal", "Notch", "Dock", "Neón", "Fantasma", "Línea fina", "Aurora", "Aero 7", "Cristal líquido", "Gamer RGB" };
+            float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
+            for (int i = 0; i < skins.Length; i++)
+            {
+                int index = i;
+                RectangleF chip = new RectangleF(InnerX + (i % 5) * (chipW + chipGap), y + 38 + (i / 5) * 32, chipW, 28);
+                bool selected = SuiteSettings.TaskbarSkin == i;
+                FillRound(g, chip, 8, selected ? Color.FromArgb(46, Accent) : Hover(chip) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, chip, 8, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                DrawText(g, skins[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
+                AddHit(chip, () => { SuiteSettings.TaskbarSkin = index; SuiteSettings.Save(); });
+            }
         }
 
         #endregion
