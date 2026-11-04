@@ -1069,6 +1069,13 @@ namespace StreeckSuite.Modules
             System.IO.Directory.CreateDirectory(folder);
             List<KeyValuePair<string, Action>> states = new List<KeyValuePair<string, Action>>();
             states.Add(new KeyValuePair<string, Action>("compacta", () => { _mode = Mode.Compact; }));
+            // Música de ejemplo (con y sin letra), para revisar el diseño aunque no suene nada
+            MediaInfo sample = new MediaInfo { Title = "Can't Stop", Artist = "Red Hot Chili Peppers", AppName = "Spotify", IsPlaying = true, IsAvailable = true,
+                Accent = Color.FromArgb(120, 140, 230), Position = TimeSpan.FromSeconds(31), Duration = TimeSpan.FromSeconds(269), PositionSampledAt = DateTime.Now };
+            const string sampleLrc = "[00:20.00] Can't stop, addicted to the shindig\n[00:23.00] Chop top, he says I'm gonna win big\n[00:26.00] Choose not a life of imitation\n" +
+                "[00:29.00] Distant cousin to the reservation\n[00:32.00] Defunct the pistol that you pay for\n[00:35.00] This punk, the feeling that you stay for\n[00:38.00] In time I want to be your best friend";
+            states.Add(new KeyValuePair<string, Action>("panel-musica-ejemplo", () => { MediaService.SetPreview(sample); LyricsService.SetPreview(sample, sampleLrc); _music.ShowLyrics = false; _mode = Mode.Expanded; _viewIndex = _views.IndexOf(_music); }));
+            states.Add(new KeyValuePair<string, Action>("panel-musica-letra", () => { _music.ShowLyrics = true; _mode = Mode.Expanded; _viewIndex = _views.IndexOf(_music); }));
             foreach (IslandView view in AvailableViews())
             {
                 IslandView v = view;
