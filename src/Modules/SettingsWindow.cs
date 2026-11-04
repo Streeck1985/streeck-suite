@@ -1245,7 +1245,7 @@ namespace StreeckSuite.Modules
             float y = 62;
             DrawCard(g, y, 66);
             DrawText(g, "Estilo", _semi13, TextColor, new RectangleF(InnerX, y + 8, 200, 18), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(InnerX, y + 28, InnerW, 30), new[] { "Clásico (detrás del sujeto)", "Estirado (estilo Samsung)" },
+            DrawSegmented(g, new RectangleF(InnerX, y + 28, InnerW, 30), new[] { "Detrás del sujeto", "Contorno" },
                 (int)s.Style, i => ChangeClock(c => c.Style = (ClockStyle)i));
 
             // Posición y tamaño (el estirado suma cuánto puede crecer un número)
