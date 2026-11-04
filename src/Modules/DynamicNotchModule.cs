@@ -857,6 +857,18 @@ namespace StreeckSuite.Modules
             // Las vistas trabajan en coordenadas de la isla (sin el margen de la sombra)
             PointF point = new PointF(e.X - ShadowPad, e.Y - ShadowPad);
 
+            // Clic derecho: solo lo usan las vistas del panel (menú de un icono de la bandeja)
+            if (e.Button == MouseButtons.Right)
+            {
+                if (_mode == Mode.Expanded && ActiveView.OnRightClick(new PointF(point.X, point.Y - Px(ContentTop))))
+                {
+                    _peekUntil = DateTime.Now.AddMilliseconds(InteractionPeekMs);
+                    RenderSurface();
+                }
+                return;
+            }
+            if (e.Button != MouseButtons.Left) return;
+
             if (_mode == Mode.Alert)
             {
                 ActiveView.OnClick(point);       // Notificación: abre la app; fin de tiempo: siguiente fase
