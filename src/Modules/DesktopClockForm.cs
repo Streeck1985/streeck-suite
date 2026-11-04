@@ -288,7 +288,8 @@ namespace StreeckSuite.Modules
                 }
             }
 
-            if (layers.Foreground != null) g.DrawImageUnscaled(layers.Foreground, 0, 0);
+            // El estirado nunca queda detrás de nada: rodea los objetos en lugar de pasar por debajo
+            if (layers.Foreground != null && settings.Style != ClockStyle.Samsung) g.DrawImageUnscaled(layers.Foreground, 0, 0);
         }
 
         /// <summary>

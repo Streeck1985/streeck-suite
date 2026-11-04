@@ -13,7 +13,7 @@ namespace StreeckSuite.Modules
     internal static class SamsungClockRenderer
     {
         private const float Margin = 12f;      // Distancia mínima entre un número y la silueta
-        private const float MinScale = 0.55f;  // Lo más que se encoge un número sin sitio
+        private const float MinScale = 0.25f;  // Lo más que se encoge un número sin sitio
 
         public static void Draw(Graphics g, Size screen, ClockSettings settings, DepthClockLayers layers, DateTime now, CultureInfo spanish, WeatherService.Conditions weather)
         {

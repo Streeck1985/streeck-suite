@@ -99,6 +99,7 @@ namespace StreeckSuite
                     ClockSettings saved = ClockSettings.Load();
                     var cases = new[]
                     {
+                        new { Name = "tus-ajustes", Style = saved.Style, Font = saved.FontFamily, Weight = saved.SamsungWeight, Color = saved.SamsungColor },
                         new { Name = "clasico", Style = ClockStyle.Apple, Font = saved.FontFamily, Weight = 2, Color = "#ffffff" },
                         new { Name = "estirado-segoe", Style = ClockStyle.Samsung, Font = "Segoe UI Variable Display", Weight = 2, Color = "#ffffff" },
                         new { Name = "estirado-bahnschrift", Style = ClockStyle.Samsung, Font = "Bahnschrift", Weight = 1, Color = "#ffd666" },
