@@ -47,6 +47,15 @@ namespace StreeckSuite.Modules
             }
         }
 
+        /// <summary>
+        /// Herramienta de desarrollo (--preview-island): una canción de ejemplo para dibujar la vista Música.
+        /// </summary>
+        internal static void SetPreview(MediaInfo media)
+        {
+            EnsureStarted();
+            _current = media;
+        }
+
         public static void EnsureStarted()
         {
             lock (_gate)

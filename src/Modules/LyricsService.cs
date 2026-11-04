@@ -67,6 +67,19 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
+        /// Herramienta de desarrollo (--preview-island): letra de ejemplo ya cargada para esa canción.
+        /// </summary>
+        internal static void SetPreview(MediaInfo media, string lrc)
+        {
+            lock (Sync)
+            {
+                _trackKey = media.Artist + "\n" + media.Title;
+                _lines = Parse(lrc);
+                _state = State.Ready;
+            }
+        }
+
+        /// <summary>
         /// Índice de la línea que se canta en <paramref name="position"/> (-1 antes de la primera).
         /// </summary>
         public static int IndexAt(TimeSpan position)

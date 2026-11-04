@@ -235,7 +235,7 @@ namespace StreeckSuite.Modules
         private DateTime _optimisticUntil;
 
         // Letra sincronizada (fase J2): la isla se parte en dos; la línea cantada se ilumina y un clic salta a ella
-        private const float PlayerWidth = 440, LyricsWidth = 260, LineHeight = 30;
+        private const float PlayerWidth = 380, LyricsWidth = 330, LineHeight = 28;
         private bool _showLyrics;
         private float _lyricsScroll = -1;  // Desplazamiento suave de la lista (en líneas)
         private readonly List<KeyValuePair<RectangleF, TimeSpan>> _lineHits = new List<KeyValuePair<RectangleF, TimeSpan>>();
@@ -243,6 +243,13 @@ namespace StreeckSuite.Modules
         public override float PanelWidth
         {
             get { return _showLyrics ? PlayerWidth + LyricsWidth : PlayerWidth; }
+        }
+
+        // Vista previa: mostrar u ocultar la letra sin clic
+        internal bool ShowLyrics
+        {
+            get { return _showLyrics; }
+            set { _showLyrics = value; _lyricsScroll = -1; }
         }
 
         public override string TabName
@@ -260,10 +267,10 @@ namespace StreeckSuite.Modules
             get { return MediaService.Current.IsAvailable; }
         }
 
-        // Carátula 72 + 14 + progreso 24 + 14 + controles 52
+        // Reproductor compacto del mockup N2 (como Bloom): portada 58 + 14 + progreso y tiempos 22 + controles 28
         public override SizeF BaseSize
         {
-            get { return new SizeF(440, 176); }
+            get { return new SizeF(PlayerWidth, 128); }
         }
 
         public override Color? BorderColor
@@ -273,7 +280,7 @@ namespace StreeckSuite.Modules
 
         public override bool IsAnimated
         {
-            get { return true; } // Ecualizador y progreso
+            get { return true; } // Ecualizador, progreso y letra
         }
 
         private bool IsPlaying
@@ -298,7 +305,7 @@ namespace StreeckSuite.Modules
             {
                 using (Pen divider = new Pen(Color.FromArgb(alpha * 26 / 255, Color.White), 1))
                 {
-                    g.DrawLine(divider, playerWidth, p.Px(4), playerWidth, size.Height - p.Px(4));
+                    g.DrawLine(divider, playerWidth, 0, playerWidth, size.Height);
                 }
                 DrawLyrics(g, new RectangleF(playerWidth + p.Px(18), 0, size.Width - playerWidth - p.Px(18) - p.Px(PadX), size.Height), alpha, p, media);
             }
@@ -313,7 +320,8 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
-        /// Cinco líneas centradas en la que se canta (blanca y más grande); la lista se desliza suave al cambiar.
+        /// Cinco líneas centradas en la que se canta (blanca, en negrita y más grande); la lista se desliza suave al
+        /// cambiar. Una línea que no cabe se dibuja con letra más chica en lugar de cortarse.
         /// </summary>
         private void DrawLyrics(Graphics g, RectangleF area, int alpha, IslandPainter p, MediaInfo media)
         {
@@ -331,18 +339,37 @@ namespace StreeckSuite.Modules
             float centerY = area.Y + area.Height / 2;
             Region clip = g.Clip;
             g.SetClip(area);
-            for (int i = Math.Max(0, current - 4); i < Math.Min(lines.Count, current + 5); i++)
+            for (int i = Math.Max(0, current - 3); i < Math.Min(lines.Count, current + 4); i++)
             {
                 float y = centerY + (i - _lyricsScroll) * lineHeight - lineHeight / 2;
                 if (y < area.Y - lineHeight || y > area.Bottom) continue;
                 bool active = i == current;
                 int distance = Math.Abs(i - current);
-                int lineAlpha = active ? alpha : alpha * Math.Max(50, 150 - distance * 40) / 255;
+                int lineAlpha = active ? alpha : alpha * Math.Max(45, 140 - distance * 35) / 255;
                 RectangleF row = new RectangleF(area.X, y, area.Width, lineHeight);
-                p.DrawText(g, lines[i].Text, active ? p.Bold15 : p.Text13, Color.FromArgb(lineAlpha, Color.White), row, StringAlignment.Near);
+                Font font = FittingFont(g, lines[i].Text, active ? 11.25f : 9.75f, active, area.Width, p);
+                p.DrawText(g, lines[i].Text, font, Color.FromArgb(lineAlpha, Color.White), row, StringAlignment.Near);
                 _lineHits.Add(new KeyValuePair<RectangleF, TimeSpan>(row, lines[i].Time));
             }
             g.Clip = clip;
+        }
+
+        // Fuentes de la letra por tamaño (se reutilizan entre dibujos)
+        private readonly Dictionary<string, Font> _fonts = new Dictionary<string, Font>();
+
+        private Font FittingFont(Graphics g, string text, float points, bool bold, float width, IslandPainter p)
+        {
+            for (float size = points; ; size -= 0.75f)
+            {
+                string key = size + (bold ? "b" : "r") + p.Px(1);
+                Font font;
+                if (!_fonts.TryGetValue(key, out font))
+                {
+                    font = new Font("Segoe UI", size * p.Px(1), bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Point);
+                    _fonts[key] = font;
+                }
+                if (size <= 7.5f || g.MeasureString(text, font).Width <= width) return font;
+            }
         }
 
         private void DrawPlayer(Graphics g, SizeF size, int alpha, IslandPainter p, MediaInfo media)
@@ -350,91 +377,75 @@ namespace StreeckSuite.Modules
             Color accent = media.Accent;
             float x = p.Px(PadX), width = size.Width - 2 * p.Px(PadX);
             Color white = Color.FromArgb(alpha, Color.White);
+            Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
             // Brillo ambiental del color de la portada detrás de ella (como Bloom)
-            RectangleF glow = new RectangleF(x - p.Px(26), -p.Px(26), p.Px(124), p.Px(124));
+            RectangleF glow = new RectangleF(x - p.Px(30), -p.Px(30), p.Px(118), p.Px(118));
             using (GraphicsPath glowPath = new GraphicsPath())
             {
                 glowPath.AddEllipse(glow);
                 using (PathGradientBrush brush = new PathGradientBrush(glowPath))
                 {
-                    brush.CenterColor = Color.FromArgb(alpha * 120 / 255, accent);
+                    brush.CenterColor = Color.FromArgb(alpha * 115 / 255, accent);
                     brush.SurroundColors = new[] { Color.FromArgb(0, accent) };
                     g.FillEllipse(brush, glow);
                 }
             }
 
-            // Carátula 72 px
-            RectangleF art = new RectangleF(x, 0, p.Px(72), p.Px(72));
+            // Portada 58 px
+            RectangleF art = new RectangleF(x, 0, p.Px(58), p.Px(58));
             if (media.Art != null)
             {
-                p.DrawRoundedImage(g, media.Art, art, p.Px(16), alpha);
+                p.DrawRoundedImage(g, media.Art, art, p.Px(12), alpha);
             }
             else
             {
-                IslandPainter.FillRounded(g, art, p.Px(16), Color.FromArgb(alpha, 60, 68, 88));
+                IslandPainter.FillRounded(g, art, p.Px(12), Color.FromArgb(alpha, 60, 68, 88));
                 p.DrawText(g, IslandPainter.GlyphMusic, p.ThumbFont, white, art, StringAlignment.Center);
             }
 
-            // Ecualizador a la derecha
-            float barsWidth = p.Px(34);
-            p.DrawBars(g, new RectangleF(x + width - barsWidth, art.Y + (art.Height - p.Px(28)) / 2, barsWidth, p.Px(28)), alpha, accent, IsPlaying);
+            // Título y "artista · app"; ecualizador pequeño a la derecha
+            float barsWidth = p.Px(26);
+            p.DrawBars(g, new RectangleF(x + width - barsWidth, art.Y + p.Px(8), barsWidth, p.Px(20)), alpha, accent, IsPlaying);
+            float textX = art.Right + p.Px(12);
+            float textWidth = x + width - barsWidth - p.Px(10) - textX;
+            p.DrawText(g, media.Title, p.Bold15, white, new RectangleF(textX, p.Px(8), textWidth, p.Px(22)), StringAlignment.Near);
+            string subtitle = string.IsNullOrEmpty(media.AppName) ? media.Artist : string.IsNullOrEmpty(media.Artist) ? media.AppName : media.Artist + " · " + media.AppName;
+            p.DrawText(g, string.IsNullOrEmpty(subtitle) ? " " : subtitle, p.Text12, gray, new RectangleF(textX, p.Px(30), textWidth, p.Px(18)), StringAlignment.Near);
 
-            // Título, artista y etiqueta de la app
-            float textX = art.Right + p.Px(14);
-            float textWidth = x + width - barsWidth - p.Px(12) - textX;
-            p.DrawText(g, media.Title, p.Bold17, white, new RectangleF(textX, p.Px(2), textWidth, p.Px(24)), StringAlignment.Near);
-            p.DrawText(g, string.IsNullOrEmpty(media.Artist) ? " " : media.Artist, p.Text13, IslandPainter.Fade(IslandPainter.Gray, alpha),
-                new RectangleF(textX, p.Px(26), textWidth, p.Px(20)), StringAlignment.Near);
-            float chipRight = textX;
-            if (!string.IsNullOrEmpty(media.AppName))
-            {
-                SizeF chipText = g.MeasureString(media.AppName, p.Bold12);
-                RectangleF chip = new RectangleF(textX, p.Px(50), chipText.Width + p.Px(10), p.Px(19));
-                IslandPainter.FillRounded(g, chip, p.Px(8), Color.FromArgb(alpha * 40 / 255, accent));
-                p.DrawText(g, media.AppName, p.Bold12, IslandPainter.Fade(Lighten(accent), alpha), chip, StringAlignment.Center);
-                chipRight = chip.Right + p.Px(6);
-            }
-
-            // «♪ Letra»: solo si LRCLIB tiene la letra sincronizada de esta canción
-            _lyricsButton = RectangleF.Empty;
-            if (LyricsService.CurrentState == LyricsService.State.Ready)
-            {
-                string label = _showLyrics ? "Ocultar letra" : "♪ Letra";
-                SizeF labelSize = g.MeasureString(label, p.Bold12);
-                _lyricsButton = new RectangleF(chipRight, p.Px(50), labelSize.Width + p.Px(12), p.Px(19));
-                IslandPainter.FillRounded(g, _lyricsButton, p.Px(9), _showLyrics ? Color.FromArgb(alpha * 40 / 255, Color.White) : Color.FromArgb(alpha, Color.White));
-                p.DrawText(g, label, p.Bold12, _showLyrics ? white : Color.FromArgb(alpha, Color.Black), _lyricsButton, StringAlignment.Center);
-            }
-
-            // Progreso con tiempos
+            // Progreso fino con tiempos
             float progress = media.Progress;
-            _progressBar = new RectangleF(x, p.Px(86) - p.Px(6), width, p.Px(17)); // Zona de clic más alta que la barra
-            IslandPainter.DrawBar(g, new RectangleF(x, p.Px(86), width, p.Px(5)), Math.Max(0, progress),
-                IslandPainter.Fade(IslandPainter.Track, alpha), Color.FromArgb(alpha, accent));
+            float barY = p.Px(72);
+            _progressBar = new RectangleF(x, barY - p.Px(6), width, p.Px(16)); // Zona de clic más alta que la barra
+            IslandPainter.DrawBar(g, new RectangleF(x, barY, width, p.Px(4)), Math.Max(0, progress), Color.FromArgb(alpha * 38 / 255, Color.White), white);
             if (progress >= 0)
             {
                 TimeSpan position = TimeSpan.FromSeconds(media.Duration.TotalSeconds * progress);
-                p.DrawText(g, FormatTime(position), p.Text11, IslandPainter.Fade(IslandPainter.Gray, alpha),
-                    new RectangleF(x, p.Px(95), p.Px(60), p.Px(15)), StringAlignment.Near);
-                p.DrawText(g, FormatTime(media.Duration), p.Text11, IslandPainter.Fade(IslandPainter.Gray, alpha),
-                    new RectangleF(x + width - p.Px(60), p.Px(95), p.Px(60), p.Px(15)), StringAlignment.Far);
+                p.DrawText(g, FormatTime(position), p.Text11, gray, new RectangleF(x, barY + p.Px(7), p.Px(60), p.Px(15)), StringAlignment.Near);
+                p.DrawText(g, FormatTime(media.Duration), p.Text11, gray, new RectangleF(x + width - p.Px(60), barY + p.Px(7), p.Px(60), p.Px(15)), StringAlignment.Far);
             }
 
-            // Controles: ⏮ 44 px, ⏯ 52 px en un círculo solo de contorno (sin relleno), ⏭ 44 px, separados 26 px
-            float controlsY = p.Px(124);
-            float center = size.Width / 2;
-            _playButton = new RectangleF(center - p.Px(26), controlsY, p.Px(52), p.Px(52));
-            _prevButton = new RectangleF(_playButton.X - p.Px(26) - p.Px(44), controlsY + p.Px(4), p.Px(44), p.Px(44));
-            _nextButton = new RectangleF(_playButton.Right + p.Px(26), controlsY + p.Px(4), p.Px(44), p.Px(44));
-            float ringWidth = p.Px(1.6f);
-            using (Pen ring = new Pen(white, ringWidth))
-            {
-                g.DrawEllipse(ring, RectangleF.Inflate(_playButton, -ringWidth / 2, -ringWidth / 2));
-            }
+            // Controles sencillos (sin aro) y «Letra» en la misma fila, solo si LRCLIB tiene la letra sincronizada
+            float controlsY = p.Px(98);
+            float button = p.Px(30), gap = p.Px(18);
+            bool hasLyrics = LyricsService.CurrentState == LyricsService.State.Ready;
+            string label = _showLyrics ? "Ocultar" : "♪ Letra";
+            float labelWidth = hasLyrics ? g.MeasureString(label, p.Bold12).Width + p.Px(16) : 0;
+            float rowWidth = 3 * button + 2 * gap + (hasLyrics ? gap + labelWidth : 0);
+            float left = x + (width - rowWidth) / 2;
+            _prevButton = new RectangleF(left, controlsY, button, button);
+            _playButton = new RectangleF(_prevButton.Right + gap, controlsY, button, button);
+            _nextButton = new RectangleF(_playButton.Right + gap, controlsY, button, button);
+            p.DrawText(g, IslandPainter.GlyphPrevious, p.Glyph16, white, _prevButton, StringAlignment.Center);
             p.DrawText(g, IsPlaying ? IslandPainter.GlyphPause : IslandPainter.GlyphPlay, p.Glyph20, white, _playButton, StringAlignment.Center);
-            p.DrawText(g, IslandPainter.GlyphPrevious, p.Glyph20, white, _prevButton, StringAlignment.Center);
-            p.DrawText(g, IslandPainter.GlyphNext, p.Glyph20, white, _nextButton, StringAlignment.Center);
+            p.DrawText(g, IslandPainter.GlyphNext, p.Glyph16, white, _nextButton, StringAlignment.Center);
+            _lyricsButton = RectangleF.Empty;
+            if (hasLyrics)
+            {
+                _lyricsButton = new RectangleF(_nextButton.Right + gap, controlsY + (button - p.Px(22)) / 2, labelWidth, p.Px(22));
+                IslandPainter.FillRounded(g, _lyricsButton, p.Px(11), _showLyrics ? Color.FromArgb(alpha * 40 / 255, Color.White) : white);
+                p.DrawText(g, label, p.Bold12, _showLyrics ? white : Color.FromArgb(alpha, Color.Black), _lyricsButton, StringAlignment.Center);
+            }
         }
 
         public override bool OnClick(PointF point)
