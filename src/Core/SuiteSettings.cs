@@ -43,6 +43,15 @@ namespace StreeckSuite.Core
         public static string IslandColor = "#000000";   // Color de fondo de la isla (negro como el notch de Bloom)
         public static bool DoNotDisturb = false;        // Centro de control: la isla no muestra avisos de apps
         public static bool HideWindowsVolume = true;    // Esconde el aviso de volumen de Windows (la isla muestra el suyo)
+        public static bool TaskbarMiniPlayer = true;    // 4.ª isla en la barra con la música (entonces la isla de arriba no la repite)
+
+        /// <summary>
+        /// La música se muestra en la barra de tareas: la isla de arriba no la repite.
+        /// </summary>
+        public static bool MusicInTaskbar
+        {
+            get { return TaskbarEnabled && TaskbarMiniPlayer; }
+        }
         public enum IslandIdleKind { Widgets, Eyes }
         public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
@@ -139,6 +148,7 @@ namespace StreeckSuite.Core
                 if (values.TryGetValue("isla.color", out raw) && raw.Length > 0) IslandColor = raw;
                 DoNotDisturb = ReadBool(values, "isla.nomolestar", DoNotDisturb);
                 HideWindowsVolume = ReadBool(values, "isla.ocultarvolumenwindows", HideWindowsVolume);
+                TaskbarMiniPlayer = ReadBool(values, "barra.miniplayer", TaskbarMiniPlayer);
                 IslandIdleKind idle;
                 if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
@@ -221,6 +231,7 @@ namespace StreeckSuite.Core
                     "isla.color=" + IslandColor,
                     "isla.nomolestar=" + (DoNotDisturb ? 1 : 0),
                     "isla.ocultarvolumenwindows=" + (HideWindowsVolume ? 1 : 0),
+                    "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
                     "isla.cerrada=" + IslandIdle,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,

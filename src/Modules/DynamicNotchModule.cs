@@ -368,7 +368,7 @@ namespace StreeckSuite.Modules
         // Pestañas que el usuario dejó visibles en el panel de ajustes
         private bool IsTabEnabled(IslandView view)
         {
-            if (view == _music) return SuiteSettings.IslandShowMusic;
+            if (view == _music) return SuiteSettings.IslandShowMusic && !SuiteSettings.MusicInTaskbar; // En la barra no se repite
             if (view is AudioView) return SuiteSettings.IslandShowSound;
             if (view is WeatherView) return SuiteSettings.IslandShowWeather;
             if (view is SystemView) return SuiteSettings.IslandShowSystem;
@@ -676,7 +676,7 @@ namespace StreeckSuite.Modules
             if (next != _mode)
             {
                 // Como Bloom: al abrirse, si suena algo, empieza en Música
-                if (next == Mode.Expanded && _mode != Mode.Expanded && Attached && MediaService.Current.IsAvailable && MediaService.Current.IsPlaying)
+                if (next == Mode.Expanded && _mode != Mode.Expanded && Attached && !SuiteSettings.MusicInTaskbar && MediaService.Current.IsAvailable && MediaService.Current.IsPlaying)
                 {
                     int music = _views.IndexOf(_music);
                     if (music >= 0 && IsTabEnabled(_music)) _viewIndex = music;
