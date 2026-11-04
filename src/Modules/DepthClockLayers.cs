@@ -281,6 +281,9 @@ namespace StreeckSuite.Modules
             layers._depth = VisionModel.Depth.Run(layers.Background);
             layers._subject = VisionModel.Subject.Run(layers.Background);
             layers.SubjectFound = LooksLikeASubject(layers._subject, VisionModel.Subject.Size);
+            // Reloj estirado: "cerca" se fija una vez por fondo (la mitad más lejana del fondo + margen), así no cambia
+            // al mover la hora. Cielo y nubes quedan lejos; palmeras, casas y la isla, cerca.
+            layers._nearThreshold = layers.DepthPercentile(0.5f) + 0.12f;
             Log.Info("[DepthClockModule] Fondo analizado: {0} (sujeto principal: {1})", wallpaperPath, layers.SubjectFound ? "sí" : "no");
             return layers;
         }
@@ -290,9 +293,6 @@ namespace StreeckSuite.Modules
         /// </summary>
         public Bitmap ComposeForeground(ClockSettings settings)
         {
-            // Reloj estirado: "cercano" es lo que está más cerca que lo que hay detrás de la hora (igual que el recorte)
-            if (_depth != null) _nearThreshold = BehindClockDepth(_depth, VisionModel.Depth.Size, DepthClockLayout.DigitsArea(_screen, settings)) + ForegroundMargin;
-
             OcclusionMode mode = settings.Mode;
             if (mode == OcclusionMode.Auto) mode = SubjectFound ? OcclusionMode.Subject : OcclusionMode.Near;
 
@@ -330,6 +330,23 @@ namespace StreeckSuite.Modules
         }
 
         private float _nearThreshold = 0.55f;
+
+        /// <summary>
+        /// Desarrollo: profundidad en un punto (fracciones de la pantalla) y percentil p (0..1) de todo el fondo.
+        /// </summary>
+        internal float DepthAt(float fx, float fy)
+        {
+            int size = VisionModel.Depth.Size;
+            return _depth == null ? -1 : _depth[Math.Min(size - 1, (int)(fy * size)) * size + Math.Min(size - 1, (int)(fx * size))];
+        }
+
+        internal float DepthPercentile(float p)
+        {
+            if (_depth == null) return -1;
+            float[] copy = (float[])_depth.Clone();
+            Array.Sort(copy);
+            return copy[Math.Min(copy.Length - 1, (int)(p * copy.Length))];
+        }
 
         private static float FirstRow(float[] map, int size, float threshold, float colLeft, float colRight, float fromY)
         {

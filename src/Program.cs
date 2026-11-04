@@ -97,6 +97,30 @@ namespace StreeckSuite
                 using (DepthClockLayers layers = DepthClockLayers.Analyze(WallpaperInfo.GetCurrentPath(), screen))
                 {
                     ClockSettings saved = ClockSettings.Load();
+                    // Valores de profundidad del fondo, para ajustar qué cuenta como "cerca"
+                    var probe = new System.Text.StringBuilder();
+                    foreach (float p in new[] { 0.1f, 0.25f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f }) probe.AppendFormat("p{0:0}={1:0.000} ", p * 100, layers.DepthPercentile(p));
+                    probe.AppendLine();
+                    for (float fy = 0.05f; fy < 1f; fy += 0.1f)
+                    {
+                        for (float fx = 0.05f; fx < 1f; fx += 0.1f) probe.AppendFormat("{0:0.00} ", layers.DepthAt(fx, fy));
+                        probe.AppendLine();
+                    }
+                    System.IO.File.WriteAllText(System.IO.Path.Combine(args[1], "profundidad.txt"), probe.ToString());
+
+                    // El reloj del usuario a varias alturas (como mover el deslizador Vertical)
+                    foreach (float top in new[] { 0.05f, 0.15f, 0.25f, 0.35f })
+                    {
+                        ClockSettings s = saved.Clone();
+                        s.Top = top;
+                        if (layers.Foreground != null) layers.Foreground.Dispose();
+                        layers.Foreground = layers.ComposeForeground(s);
+                        using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(screen.Width, screen.Height))
+                        {
+                            using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(bitmap)) DesktopClockForm.PaintClock(g, screen, s, layers, null, new DateTime(2026, 11, 3, 19, 44, 7));
+                            bitmap.Save(System.IO.Path.Combine(args[1], "vertical-" + (int)(top * 100) + ".png"));
+                        }
+                    }
                     var cases = new[]
                     {
                         new { Name = "tus-ajustes", Style = saved.Style, Font = saved.FontFamily, Weight = saved.SamsungWeight, Color = saved.SamsungColor },
