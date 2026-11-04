@@ -21,18 +21,14 @@ namespace StreeckSuite.Modules
             get
             {
                 int textWidth = TextRenderer.MeasureText(Text ?? "", Measure).Width;
-                return new SizeF(Math.Max(180, 64 + textWidth), 38);
+                return new SizeF(Math.Max(160, 40 + textWidth), 38);
             }
         }
 
+        // Solo el letrero, sin icono (el usuario lo prefiere así)
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
-            float glyphWidth = p.Px(22);
-            float textWidth = g.MeasureString(Text ?? "", p.Semibold13).Width;
-            float left = (size.Width - glyphWidth - p.Px(8) - textWidth) / 2;
-            p.DrawText(g, Glyph, p.Glyph16, Color.FromArgb(alpha, GlyphColor), new RectangleF(left, 0, glyphWidth, size.Height), StringAlignment.Center);
-            p.DrawText(g, Text ?? "", p.Semibold13, Color.FromArgb(alpha, Color.White),
-                new RectangleF(left + glyphWidth + p.Px(8), 0, textWidth + p.Px(4), size.Height), StringAlignment.Near);
+            p.DrawText(g, Text ?? "", p.Semibold13, Color.FromArgb(alpha, Color.White), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
         }
     }
 }
