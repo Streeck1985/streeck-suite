@@ -224,6 +224,7 @@ namespace StreeckSuite
             // 4. Iniciar todos los módulos registrados
             manager.StartAll();
             MemoryTrim.Start(); // Devuelve a Windows la memoria que ya no se usa
+            Modules.UpdateService.StartAutomatic(); // Busca versiones nuevas en GitHub (al minuto y cada día)
 
             // Cierre ordenado pedido desde fuera (--salir), en el hilo de la interfaz
             using (Control exitTarget = new Control())

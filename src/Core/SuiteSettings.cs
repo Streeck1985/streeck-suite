@@ -67,6 +67,8 @@ namespace StreeckSuite.Core
         public static bool EyesBlush = true;
         public static bool EyesMoods = true;     // Reaccionan a lo que pasa (música, avisos, internet, Bloq Mayús...)
         public static bool EyesFidgets = true;   // Cositas cuando no usas la PC (bostezo, cabeceo, silbar, estirarse)
+
+        public static bool UpdateAuto = true;    // Buscar versiones nuevas en GitHub al iniciar y cada día
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -173,6 +175,7 @@ namespace StreeckSuite.Core
                 EyesBlush = ReadBool(values, "ojos.rubor", EyesBlush);
                 EyesMoods = ReadBool(values, "ojos.emociones", EyesMoods);
                 EyesFidgets = ReadBool(values, "ojos.sinuso", EyesFidgets);
+                UpdateAuto = ReadBool(values, "actualizar.auto", UpdateAuto);
                 IslandMonitorKind monitor;
                 if (values.TryGetValue("isla.monitor", out raw) && Enum.TryParse(raw, out monitor)) IslandMonitor = monitor;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
@@ -265,6 +268,7 @@ namespace StreeckSuite.Core
                     "ojos.rubor=" + (EyesBlush ? 1 : 0),
                     "ojos.emociones=" + (EyesMoods ? 1 : 0),
                     "ojos.sinuso=" + (EyesFidgets ? 1 : 0),
+                    "actualizar.auto=" + (UpdateAuto ? 1 : 0),
                     "isla.monitor=" + IslandMonitor,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,

@@ -15,6 +15,14 @@ namespace StreeckSuite.Modules
         public string Glyph = "";
         public string Text = "";
         public Color GlyphColor = Color.White;
+        public Action Click; // Qué hace un clic en el aviso (p. ej. abrir Acerca de con la versión nueva)
+
+        public override bool OnClick(PointF point)
+        {
+            if (Click == null) return false;
+            Click();
+            return true;
+        }
 
         public override SizeF BaseSize
         {
