@@ -154,6 +154,19 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
+        /// Fondo analizado (null si aún no hay) y clima actual, para la ventana de «Mover reloj».
+        /// </summary>
+        internal DepthClockLayers Layers
+        {
+            get { return _layers; }
+        }
+
+        internal WeatherService.Conditions Weather
+        {
+            get { return _weather != null ? _weather.Current : null; }
+        }
+
+        /// <summary>
         /// null mientras no se haya analizado ningún fondo.
         /// </summary>
         internal bool? SubjectFound
