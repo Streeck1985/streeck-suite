@@ -50,10 +50,34 @@ namespace StreeckSuite.Modules
             _hook.Apply();
             _settingsChanged = () => { if (_hook != null) _hook.Apply(); };
             SuiteSettings.Changed += _settingsChanged;
+            ListenForStartButton();
+        }
+
+        // Clic en el botón de Inicio de la barra real: la DLL de la barra avisa con este evento
+        private System.Threading.EventWaitHandle _startClick;
+        private System.Threading.ManualResetEvent _stopListening;
+
+        private void ListenForStartButton()
+        {
+            if (_startClick != null) return;
+            _startClick = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, @"Local\StreeckSuite.StartClick");
+            _stopListening = new System.Threading.ManualResetEvent(false);
+            System.Threading.WaitHandle[] handles = { _startClick, _stopListening };
+            System.Threading.Thread listener = new System.Threading.Thread(() =>
+            {
+                while (System.Threading.WaitHandle.WaitAny(handles) == 0)
+                {
+                    if (_menu != null && !_menu.IsDisposed && _menu.IsHandleCreated) _menu.BeginInvoke((Action)_menu.Toggle);
+                }
+            });
+            listener.IsBackground = true;
+            listener.Name = "Clic de Inicio";
+            listener.Start();
         }
 
         public void Stop()
         {
+            if (_stopListening != null) { _stopListening.Set(); _stopListening = null; _startClick = null; }
             SuiteSettings.Changed -= _settingsChanged;
             if (_hook != null) { _hook.Dispose(); _hook = null; }
             if (_menu != null && !_menu.IsDisposed) _menu.Hide();

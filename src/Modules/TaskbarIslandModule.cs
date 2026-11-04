@@ -104,6 +104,7 @@ namespace StreeckSuite.Modules
                     "inicio_icono=" + SuiteSettings.StartIcon,
                     "inicio_tamano=" + SuiteSettings.StartIconSize,
                     "inicio_efecto=" + SuiteSettings.StartIconHover,
+                    "inicio_clic=" + (SuiteSettings.StartButtonOpensSuite ? 1 : 0),
                     "inicio_archivo=" + (StartIconRenderer.PrepareFile(SuiteSettings.StartIcon) ?? ""),
                 });
             }
