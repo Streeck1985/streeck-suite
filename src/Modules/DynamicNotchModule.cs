@@ -708,7 +708,7 @@ namespace StreeckSuite.Modules
         {
             if (_mode == Mode.Tucked) return new SizeF(Px(120), Px(6));
             SizeF size = ActiveView.BaseSize;
-            if (_mode == Mode.Expanded) return new SizeF(Px(PanelWidth), Px(ContentTop + size.Height + PanelBottom));
+            if (_mode == Mode.Expanded) return new SizeF(Px(ActiveView.PanelWidth), Px(ContentTop + size.Height + PanelBottom));
             return new SizeF(Px(size.Width), Px(size.Height));
         }
 
