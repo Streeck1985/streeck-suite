@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -20,6 +20,16 @@ namespace StreeckSuite.Modules
     }
 
     /// <summary>
+    /// Estilo visual del reloj en el escritorio:
+    /// Apple (Clásico 3D detrás del sujeto) o Samsung (Adaptativo One UI con dígitos que se estiran contorneando la silueta).
+    /// </summary>
+    internal enum ClockStyle
+    {
+        Apple,
+        Samsung
+    }
+
+    /// <summary>
     /// Ajustes del reloj, guardados en %LOCALAPPDATA%\StreeckSuite\reloj.ini. Posición y tamaño son fracciones
     /// de la pantalla, así valen para cualquier resolución. Los valores por defecto replican el mockup a 1080p.
     /// </summary>
@@ -27,6 +37,7 @@ namespace StreeckSuite.Modules
     {
         public const string DefaultFontFamily = "Segoe UI Variable Display";
 
+        public ClockStyle Style = ClockStyle.Apple;
         public float CenterX = 0.5f;   // Centro horizontal de la hora (0 = borde izquierdo, 1 = derecho)
         public float Top = 0.30f;      // Parte superior visible de los dígitos, en fracción de la altura
         public float Size = 0.48f;     // Altura de la fuente de la hora, en fracción de la altura de pantalla
@@ -36,6 +47,10 @@ namespace StreeckSuite.Modules
         public bool ShowWeather = true;
         public bool Enabled = true;     // Interruptor de la página Reloj 3D del panel de ajustes
         public bool ShowSeconds = true; // 19:44:07 en lugar de 19:44
+        // Reloj estirado (estilo Samsung, mockup R1)
+        public string SamsungColor = "#ffffff";  // Color de los números
+        public float SamsungMaxStretch = 0.65f;  // Altura máxima de un número estirado, en fracción de la pantalla
+        public int SamsungWeight = 2;            // 0 fino, 1 normal, 2 grueso
 
         private static string FilePath
         {
@@ -61,7 +76,12 @@ namespace StreeckSuite.Modules
                     float number;
                     bool isNumber = float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number);
                     // "arribaDigitos" sustituye al antiguo "arriba", que medía la caja de la fuente y no los dígitos
-                    if (key == "centroX" && isNumber) settings.CenterX = number;
+                    if (key == "estilo")
+                    {
+                        ClockStyle style;
+                        if (Enum.TryParse(value, true, out style)) settings.Style = style;
+                    }
+                    else if (key == "centroX" && isNumber) settings.CenterX = number;
                     else if (key == "arribaDigitos" && isNumber) settings.Top = number;
                     else if (key == "tamano" && isNumber) settings.Size = number;
                     else if (key == "fuente" && value.Length > 0) settings.FontFamily = value;
@@ -69,6 +89,9 @@ namespace StreeckSuite.Modules
                     else if (key == "clima") settings.ShowWeather = value != "0";
                     else if (key == "activo") settings.Enabled = value != "0";
                     else if (key == "segundos") settings.ShowSeconds = value != "0";
+                    else if (key == "colorSamsung" && value.Length > 0) settings.SamsungColor = value;
+                    else if (key == "estiramientoSamsung" && isNumber) settings.SamsungMaxStretch = number;
+                    else if (key == "grosorEstirado" && isNumber) settings.SamsungWeight = Math.Max(0, Math.Min(2, (int)number));
                     else if (key == "modo")
                     {
                         OcclusionMode mode;
@@ -89,6 +112,7 @@ namespace StreeckSuite.Modules
             {
                 File.WriteAllLines(FilePath, new[]
                 {
+                    "estilo=" + Style,
                     "centroX=" + CenterX.ToString("0.###", CultureInfo.InvariantCulture),
                     "arribaDigitos=" + Top.ToString("0.###", CultureInfo.InvariantCulture),
                     "tamano=" + Size.ToString("0.###", CultureInfo.InvariantCulture),
@@ -97,7 +121,10 @@ namespace StreeckSuite.Modules
                     "fecha=" + (ShowDate ? "1" : "0"),
                     "clima=" + (ShowWeather ? "1" : "0"),
                     "activo=" + (Enabled ? "1" : "0"),
-                    "segundos=" + (ShowSeconds ? "1" : "0")
+                    "segundos=" + (ShowSeconds ? "1" : "0"),
+                    "colorSamsung=" + SamsungColor,
+                    "estiramientoSamsung=" + SamsungMaxStretch.ToString("0.###", CultureInfo.InvariantCulture),
+                    "grosorEstirado=" + SamsungWeight
                 });
             }
             catch (IOException ex)
@@ -282,6 +309,32 @@ namespace StreeckSuite.Modules
             GC.WaitForPendingFinalizers();
             GC.Collect();
             return foreground;
+        }
+
+        /// <summary>
+        /// Reloj estirado: primera fila (fracción 0..1 de la pantalla) con sujeto en la columna colLeft..colRight,
+        /// buscando desde fromY hacia abajo. Usa la silueta del sujeto y, si el fondo no tiene uno, lo cercano según
+        /// la profundidad. Sin obstáculo devuelve 1 (la base de la pantalla).
+        /// </summary>
+        public float GetColumnObstacleTop(float colLeft, float colRight, float fromY)
+        {
+            bool useSubject = _subject != null && SubjectFound == true;
+            float[] map = useSubject ? _subject : _depth;
+            if (map == null) return 1f;
+            int size = useSubject ? VisionModel.Subject.Size : VisionModel.Depth.Size;
+            float threshold = useSubject ? 0.35f : 0.55f;
+            int xStart = Math.Max(0, (int)(colLeft * size));
+            int xEnd = Math.Min(size - 1, (int)(colRight * size));
+            if (xEnd < xStart) xEnd = xStart;
+            for (int y = Math.Max(0, (int)(fromY * size)); y < size; y++)
+            {
+                int row = y * size;
+                for (int x = xStart; x <= xEnd; x++)
+                {
+                    if (map[row + x] >= threshold) return (float)y / size;
+                }
+            }
+            return 1f;
         }
 
         /// <summary>
