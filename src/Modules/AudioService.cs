@@ -120,6 +120,75 @@ namespace StreeckSuite.Modules
 
         #endregion
 
+        #region Micrófono (Centro de control)
+
+        private CoreAudio.IAudioEndpointVolume _mic;
+        private DateTime _micAttachedAt = DateTime.MinValue;
+
+        // Micrófono predeterminado; se vuelve a buscar cada 5 s por si cambió (p. ej. se conectaron audífonos)
+        private CoreAudio.IAudioEndpointVolume Mic
+        {
+            get
+            {
+                if (_mic != null && (DateTime.Now - _micAttachedAt).TotalSeconds < 5) return _mic;
+                if (_mic != null) { Marshal.ReleaseComObject(_mic); _mic = null; }
+                _micAttachedAt = DateTime.Now;
+                CoreAudio.IMMDevice device;
+                if (_enumerator.GetDefaultAudioEndpoint(CoreAudio.EDataFlow.Capture, CoreAudio.ERole.Communications, out device) != 0 || device == null) return null;
+                object instance;
+                Guid iid = CoreAudio.IID_IAudioEndpointVolume;
+                if (device.Activate(ref iid, CoreAudio.CLSCTX_ALL, IntPtr.Zero, out instance) == 0) _mic = (CoreAudio.IAudioEndpointVolume)instance;
+                Marshal.ReleaseComObject(device);
+                return _mic;
+            }
+        }
+
+        public bool HasMic
+        {
+            get { return Mic != null; }
+        }
+
+        public float MicLevel
+        {
+            get
+            {
+                float level = 0;
+                CoreAudio.IAudioEndpointVolume mic = Mic;
+                if (mic != null) mic.GetMasterVolumeLevelScalar(out level);
+                return level;
+            }
+        }
+
+        public bool MicMuted
+        {
+            get
+            {
+                bool muted = false;
+                CoreAudio.IAudioEndpointVolume mic = Mic;
+                if (mic != null) mic.GetMute(out muted);
+                return muted;
+            }
+        }
+
+        public void SetMicLevel(float level)
+        {
+            CoreAudio.IAudioEndpointVolume mic = Mic;
+            if (mic == null) return;
+            Guid context = SuiteContext;
+            mic.SetMasterVolumeLevelScalar(Math.Max(0f, Math.Min(1f, level)), ref context);
+            if (level > 0 && MicMuted) mic.SetMute(false, ref context);
+        }
+
+        public void ToggleMicMute()
+        {
+            CoreAudio.IAudioEndpointVolume mic = Mic;
+            if (mic == null) return;
+            Guid context = SuiteContext;
+            mic.SetMute(!MicMuted, ref context);
+        }
+
+        #endregion
+
         #region Dispositivos
 
         public string DefaultDeviceName

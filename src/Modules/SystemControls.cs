@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using StreeckSuite.Core;
 using Windows.Devices.Radios;
+using Windows.Devices.WiFi;
 using Windows.Networking.Connectivity;
 
 namespace StreeckSuite.Modules
@@ -107,124 +108,258 @@ namespace StreeckSuite.Modules
 
         #endregion
 
-        #region Brillo (DDC/CI)
+        #region Redes Wi-Fi
 
-        // Monitores de escritorio: el brillo se cambia por DDC/CI (dxva2). Es lento (~50 ms), así que va en un hilo y
-        // solo se aplica el último valor pedido mientras se arrastra.
-        private static IntPtr[] _monitors;
-        private static int _brightness = -1;        // 0..100, -1 = el monitor no lo permite (o aún no se sabe)
-        private static int _pendingBrightness = -1;
-        private static bool _brightnessLoaded;
-        private static readonly AutoResetEvent BrightnessRequested = new AutoResetEvent(false);
-        private static Thread _brightnessThread;
-
-        public static int Brightness
+        internal class WifiNetwork
         {
-            get { EnsureBrightness(); return _pendingBrightness >= 0 ? _pendingBrightness : _brightness; }
+            public string Name;
+            public int Bars;          // 0..4
+            public bool Secured;
+            public bool Connected;
+            public WiFiAvailableNetwork Network;
         }
 
-        public static bool BrightnessSupported
+        private static WiFiAdapter _adapter;
+        private static List<WifiNetwork> _networks = new List<WifiNetwork>();
+        private static bool _scanning;
+        private static string _wifiProblem;   // Por qué no hay lista (sin adaptador, ubicación apagada...)
+
+        public static List<WifiNetwork> Networks
         {
-            get { EnsureBrightness(); return _brightness >= 0; }
+            get { lock (Sync) return _networks; }
         }
 
-        public static bool BrightnessLoaded
+        public static bool Scanning
         {
-            get { return _brightnessLoaded; }
+            get { return _scanning; }
         }
 
-        public static void SetBrightness(int percent)
+        public static string WifiProblem
         {
-            if (!BrightnessSupported) return;
-            _pendingBrightness = Math.Max(0, Math.Min(100, percent));
-            BrightnessRequested.Set();
+            get { return _wifiProblem; }
         }
 
-        private static void EnsureBrightness()
+        /// <summary>
+        /// ¿Se navega por cable? (para no mostrar el nombre de la conexión por cable como si fuera Wi-Fi)
+        /// </summary>
+        public static bool OnEthernet
         {
-            lock (Sync)
+            get
             {
-                if (_brightnessThread != null) return;
-                _brightnessThread = new Thread(BrightnessLoop) { IsBackground = true, Name = "Brillo DDC/CI" };
-                _brightnessThread.Start();
+                try
+                {
+                    ConnectionProfile profile = NetworkInformation.GetInternetConnectionProfile();
+                    return profile != null && !profile.IsWlanConnectionProfile;
+                }
+                catch (Exception)
+                {
+                    return false;
+                }
             }
         }
 
-        private static void BrightnessLoop()
+        /// <summary>
+        /// Busca redes en segundo plano (tarda 2-4 s). Windows 11 pide la ubicación activada para dar la lista.
+        /// </summary>
+        public static void ScanWifi()
         {
+            if (_scanning) return;
+            _scanning = true;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (_adapter == null)
+                    {
+                        if (WinRtAsync.Wait(WiFiAdapter.RequestAccessAsync()) != WiFiAccessStatus.Allowed)
+                        {
+                            _wifiProblem = "Activa la ubicación en Configuración → Privacidad para ver las redes";
+                            return;
+                        }
+                        IReadOnlyList<WiFiAdapter> adapters = WinRtAsync.Wait(WiFiAdapter.FindAllAdaptersAsync());
+                        if (adapters.Count == 0) { _wifiProblem = "Este equipo no tiene Wi-Fi"; return; }
+                        _adapter = adapters[0];
+                    }
+                    WinRtAsync.Wait(_adapter.ScanAsync(), TimeSpan.FromSeconds(10));
+                    string connected = null;
+                    ConnectionProfile current = WinRtAsync.Wait(_adapter.NetworkAdapter.GetConnectedProfileAsync());
+                    if (current != null && current.IsWlanConnectionProfile) connected = current.WlanConnectionProfileDetails.GetConnectedSsid();
+
+                    Dictionary<string, WifiNetwork> best = new Dictionary<string, WifiNetwork>();
+                    foreach (WiFiAvailableNetwork network in _adapter.NetworkReport.AvailableNetworks)
+                    {
+                        if (string.IsNullOrEmpty(network.Ssid)) continue; // Redes ocultas
+                        WifiNetwork existing;
+                        if (best.TryGetValue(network.Ssid, out existing) && existing.Bars >= network.SignalBars) continue;
+                        best[network.Ssid] = new WifiNetwork
+                        {
+                            Name = network.Ssid,
+                            Bars = network.SignalBars,
+                            Secured = network.SecuritySettings.NetworkAuthenticationType != NetworkAuthenticationType.Open80211,
+                            Connected = network.Ssid == connected,
+                            Network = network
+                        };
+                    }
+                    List<WifiNetwork> list = new List<WifiNetwork>(best.Values);
+                    list.Sort((a, b) => a.Connected != b.Connected ? (a.Connected ? -1 : 1) : b.Bars.CompareTo(a.Bars));
+                    lock (Sync) _networks = list;
+                    _wifiProblem = list.Count == 0 ? "No se encontraron redes" : null;
+                }
+                catch (Exception ex)
+                {
+                    _wifiProblem = "No se pudieron buscar redes";
+                    Log.Error("[SystemControls] Búsqueda de redes: {0}", ex.Message);
+                }
+                finally
+                {
+                    _scanning = false;
+                }
+            });
+        }
+
+        /// <summary>
+        /// Conecta a una red. Las guardadas y las abiertas entran directo; si pide contraseña nueva se abre la lista
+        /// de redes de Windows (la isla no puede recibir el teclado sin robarle el foco a tu ventana).
+        /// </summary>
+        public static void ConnectWifi(WifiNetwork network)
+        {
+            if (_adapter == null || network == null || network.Connected) return;
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    WiFiConnectionResult result = WinRtAsync.Wait(_adapter.ConnectAsync(network.Network, WiFiReconnectionKind.Automatic), TimeSpan.FromSeconds(20));
+                    if (result.ConnectionStatus == WiFiConnectionStatus.Success) { ScanWifi(); return; }
+                    if (network.Secured) System.Diagnostics.Process.Start("ms-availablenetworks:");
+                    Log.Info("[SystemControls] No se conectó a {0}: {1}", network.Name, result.ConnectionStatus);
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("[SystemControls] Conectar a {0}: {1}", network.Name, ex.Message);
+                }
+            });
+        }
+
+        #endregion
+
+        #region Dispositivos Bluetooth
+
+        internal class PairedDevice
+        {
+            public string Name;
+            public bool Connected;
+            public bool IsAudio;      // Audífonos y bocinas: se conectan y desconectan desde la isla
+            public int Battery = -1;
+            public BLUETOOTH_DEVICE_INFO Info;
+        }
+
+        private static readonly Guid AudioSink = new Guid("0000110B-0000-1000-8000-00805F9B34FB");
+        private static readonly Guid Handsfree = new Guid("0000111E-0000-1000-8000-00805F9B34FB");
+
+        /// <summary>
+        /// Dispositivos Bluetooth emparejados (los clásicos; los de bajo consumo como algunos mouse se conectan solos).
+        /// </summary>
+        public static List<PairedDevice> PairedDevices()
+        {
+            List<PairedDevice> devices = new List<PairedDevice>();
+            BLUETOOTH_DEVICE_SEARCH_PARAMS search = new BLUETOOTH_DEVICE_SEARCH_PARAMS();
+            search.dwSize = Marshal.SizeOf(typeof(BLUETOOTH_DEVICE_SEARCH_PARAMS));
+            search.fReturnAuthenticated = true;
+            search.fReturnRemembered = true;
+            search.fReturnConnected = true;
+            BLUETOOTH_DEVICE_INFO info = new BLUETOOTH_DEVICE_INFO();
+            info.dwSize = Marshal.SizeOf(typeof(BLUETOOTH_DEVICE_INFO));
+            IntPtr find = BluetoothFindFirstDevice(ref search, ref info);
+            if (find == IntPtr.Zero) return devices;
             try
             {
-                List<IntPtr> handles = new List<IntPtr>();
-                EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (monitor, dc, rect, data) =>
+                List<BluetoothDevice> known = BluetoothService.ConnectedDevices;
+                do
                 {
-                    uint count;
-                    if (GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, out count) && count > 0)
+                    // Clase de dispositivo: el grupo mayor 0x04 es audio/vídeo
+                    bool audio = ((info.ulClassofDevice >> 8) & 0x1F) == 0x04;
+                    PairedDevice device = new PairedDevice { Name = info.szName, Connected = info.fConnected, IsAudio = audio, Info = info };
+                    foreach (BluetoothDevice k in known)
                     {
-                        PHYSICAL_MONITOR[] physical = new PHYSICAL_MONITOR[count];
-                        if (GetPhysicalMonitorsFromHMONITOR(monitor, count, physical)) foreach (PHYSICAL_MONITOR m in physical) handles.Add(m.Handle);
+                        if (!string.IsNullOrEmpty(k.Name) && info.szName.StartsWith(k.Name, StringComparison.OrdinalIgnoreCase)) device.Battery = k.Battery;
                     }
-                    return true;
-                }, IntPtr.Zero);
-                _monitors = handles.ToArray();
-                foreach (IntPtr handle in _monitors)
-                {
-                    uint min, current, max;
-                    if (GetMonitorBrightness(handle, out min, out current, out max) && max > min)
-                    {
-                        _brightness = (int)Math.Round(100.0 * (current - min) / (max - min));
-                        break;
-                    }
-                }
+                    devices.Add(device);
+                    info = new BLUETOOTH_DEVICE_INFO();
+                    info.dwSize = Marshal.SizeOf(typeof(BLUETOOTH_DEVICE_INFO));
+                } while (BluetoothFindNextDevice(find, ref info));
             }
-            catch (Exception ex)
+            finally
             {
-                Log.Error("[SystemControls] No se pudo leer el brillo: {0}", ex.Message);
+                BluetoothFindDeviceClose(find);
             }
-            _brightnessLoaded = true;
-            if (_brightness < 0) return;
+            devices.Sort((a, b) => a.Connected != b.Connected ? (a.Connected ? -1 : 1) : string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+            return devices;
+        }
 
-            for (;;)
+        /// <summary>
+        /// Conecta o desconecta unos audífonos o una bocina apagando y encendiendo su servicio de audio (lo mismo que
+        /// hacen otras apps; Windows no tiene una función oficial para esto).
+        /// </summary>
+        public static void ToggleAudioDevice(PairedDevice device)
+        {
+            if (device == null || !device.IsAudio) return;
+            BLUETOOTH_DEVICE_INFO info = device.Info;
+            bool connect = !device.Connected;
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                BrightnessRequested.WaitOne();
-                int wanted = _pendingBrightness;
-                if (wanted < 0) continue;
-                foreach (IntPtr handle in _monitors)
+                foreach (Guid service in new[] { AudioSink, Handsfree })
                 {
-                    uint min, current, max;
-                    if (GetMonitorBrightness(handle, out min, out current, out max) && max > min)
-                    {
-                        SetMonitorBrightness(handle, (uint)(min + (max - min) * wanted / 100.0));
-                    }
+                    Guid id = service;
+                    uint result = BluetoothSetServiceState(IntPtr.Zero, ref info, ref id, connect ? 1u : 0u);
+                    if (result != 0 && result != 87) Log.Info("[SystemControls] Servicio {0} de {1}: código {2}", service, info.szName, result);
                 }
-                _brightness = wanted;
-                if (_pendingBrightness == wanted) _pendingBrightness = -1;
-            }
+            });
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SYSTEMTIME_BT
+        {
+            public ushort Year, Month, DayOfWeek, Day, Hour, Minute, Second, Milliseconds;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct PHYSICAL_MONITOR
+        internal struct BLUETOOTH_DEVICE_INFO
         {
-            public IntPtr Handle;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string Description;
+            public int dwSize;
+            public ulong Address;
+            public uint ulClassofDevice;
+            [MarshalAs(UnmanagedType.Bool)] public bool fConnected;
+            [MarshalAs(UnmanagedType.Bool)] public bool fRemembered;
+            [MarshalAs(UnmanagedType.Bool)] public bool fAuthenticated;
+            private SYSTEMTIME_BT stLastSeen;
+            private SYSTEMTIME_BT stLastUsed;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 248)] public string szName;
         }
 
-        private delegate bool MonitorEnumProc(IntPtr monitor, IntPtr dc, IntPtr rect, IntPtr data);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BLUETOOTH_DEVICE_SEARCH_PARAMS
+        {
+            public int dwSize;
+            [MarshalAs(UnmanagedType.Bool)] public bool fReturnAuthenticated;
+            [MarshalAs(UnmanagedType.Bool)] public bool fReturnRemembered;
+            [MarshalAs(UnmanagedType.Bool)] public bool fReturnUnknown;
+            [MarshalAs(UnmanagedType.Bool)] public bool fReturnConnected;
+            [MarshalAs(UnmanagedType.Bool)] public bool fIssueInquiry;
+            public byte cTimeoutMultiplier;
+            public IntPtr hRadio;
+        }
 
-        [DllImport("user32.dll")]
-        private static extern bool EnumDisplayMonitors(IntPtr dc, IntPtr clip, MonitorEnumProc callback, IntPtr data);
+        [DllImport("bthprops.cpl", CharSet = CharSet.Unicode)]
+        private static extern IntPtr BluetoothFindFirstDevice(ref BLUETOOTH_DEVICE_SEARCH_PARAMS search, ref BLUETOOTH_DEVICE_INFO info);
 
-        [DllImport("dxva2.dll")]
-        private static extern bool GetNumberOfPhysicalMonitorsFromHMONITOR(IntPtr monitor, out uint count);
+        [DllImport("bthprops.cpl", CharSet = CharSet.Unicode)]
+        private static extern bool BluetoothFindNextDevice(IntPtr find, ref BLUETOOTH_DEVICE_INFO info);
 
-        [DllImport("dxva2.dll")]
-        private static extern bool GetPhysicalMonitorsFromHMONITOR(IntPtr monitor, uint count, [Out] PHYSICAL_MONITOR[] monitors);
+        [DllImport("bthprops.cpl")]
+        private static extern bool BluetoothFindDeviceClose(IntPtr find);
 
-        [DllImport("dxva2.dll")]
-        private static extern bool GetMonitorBrightness(IntPtr monitor, out uint minimum, out uint current, out uint maximum);
-
-        [DllImport("dxva2.dll")]
-        private static extern bool SetMonitorBrightness(IntPtr monitor, uint value);
-
+        [DllImport("bthprops.cpl", CharSet = CharSet.Unicode)]
+        private static extern uint BluetoothSetServiceState(IntPtr radio, ref BLUETOOTH_DEVICE_INFO info, ref Guid service, uint flags);
         #endregion
     }
 }
