@@ -57,6 +57,16 @@ namespace StreeckSuite.Core
         public enum IslandMonitorKind { Primary, Mouse }
         public static IslandMonitorKind IslandMonitor = IslandMonitorKind.Primary; // Varios monitores: la isla en el principal o donde esté el ratón
         public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
+
+        // Ojitos (mockup «Ojitos del notch»)
+        public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops }
+        public static EyesStyleKind EyesStyle = EyesStyleKind.Actual;
+        public static string EyesColor = "#FFFFFF";
+        public static bool EyesBrows = true;
+        public static bool EyesMouth = false;
+        public static bool EyesBlush = true;
+        public static bool EyesMoods = true;     // Reaccionan a lo que pasa (música, avisos, internet, Bloq Mayús...)
+        public static bool EyesFidgets = true;   // Cositas cuando no usas la PC (bostezo, cabeceo, silbar, estirarse)
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -155,6 +165,14 @@ namespace StreeckSuite.Core
                 TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 9);
                 IslandIdleKind idle;
                 if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
+                EyesStyleKind eyesStyle;
+                if (values.TryGetValue("ojos.estilo", out raw) && Enum.TryParse(raw, out eyesStyle)) EyesStyle = eyesStyle;
+                if (values.TryGetValue("ojos.color", out raw) && raw.Length > 0) EyesColor = raw;
+                EyesBrows = ReadBool(values, "ojos.cejas", EyesBrows);
+                EyesMouth = ReadBool(values, "ojos.boca", EyesMouth);
+                EyesBlush = ReadBool(values, "ojos.rubor", EyesBlush);
+                EyesMoods = ReadBool(values, "ojos.emociones", EyesMoods);
+                EyesFidgets = ReadBool(values, "ojos.sinuso", EyesFidgets);
                 IslandMonitorKind monitor;
                 if (values.TryGetValue("isla.monitor", out raw) && Enum.TryParse(raw, out monitor)) IslandMonitor = monitor;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
@@ -240,6 +258,13 @@ namespace StreeckSuite.Core
                     "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
                     "barra.skin=" + TaskbarSkin,
                     "isla.cerrada=" + IslandIdle,
+                    "ojos.estilo=" + EyesStyle,
+                    "ojos.color=" + EyesColor,
+                    "ojos.cejas=" + (EyesBrows ? 1 : 0),
+                    "ojos.boca=" + (EyesMouth ? 1 : 0),
+                    "ojos.rubor=" + (EyesBlush ? 1 : 0),
+                    "ojos.emociones=" + (EyesMoods ? 1 : 0),
+                    "ojos.sinuso=" + (EyesFidgets ? 1 : 0),
                     "isla.monitor=" + IslandMonitor,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,

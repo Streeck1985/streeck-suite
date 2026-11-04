@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock, Eyes }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 768, SideW = 210, ContentX = 238, ContentW = 534;
@@ -315,6 +315,7 @@ namespace StreeckSuite.Modules
                 case Page.Taskbar: DrawTaskbar(g); break;
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
+                case Page.Eyes: DrawEyes(g); break;
             }
             DrawCloseButton(g);
         }
@@ -344,7 +345,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D", "Ojitos" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -454,6 +455,10 @@ namespace StreeckSuite.Modules
                     case Page.Clock:
                         g.DrawEllipse(pen, 3, 3, 18, 18);
                         g.DrawLines(pen, new[] { new PointF(12, 7), new PointF(12, 12), new PointF(15, 14) });
+                        break;
+                    case Page.Eyes:
+                        using (GraphicsPath leftEye = LayeredWindow.RoundedRect(new RectangleF(4, 6, 6, 12), 3)) g.DrawPath(pen, leftEye);
+                        using (GraphicsPath rightEye = LayeredWindow.RoundedRect(new RectangleF(14, 6, 6, 12), 3)) g.DrawPath(pen, rightEye);
                         break;
                 }
             }
@@ -1158,6 +1163,103 @@ namespace StreeckSuite.Modules
                 DrawText(g, skins[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
                 AddHit(chip, () => { SuiteSettings.TaskbarSkin = index; SuiteSettings.Save(); });
             }
+        }
+
+        #endregion
+
+        #region Página Ojitos (mockup «Ojitos del notch»)
+
+        private void DrawEyes(Graphics g)
+        {
+            DrawTitle(g, "Ojitos");
+
+            float y = 66;
+            DrawCard(g, y, 58);
+            DrawToggleRow(g, y, "Ojitos en la isla cerrada", "En lugar de los widgets (también en la página Isla)",
+                SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes,
+                () =>
+                {
+                    SuiteSettings.IslandIdle = SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes ? SuiteSettings.IslandIdleKind.Widgets : SuiteSettings.IslandIdleKind.Eyes;
+                    SuiteSettings.Save();
+                });
+
+            // Muestra: el estilo elegido en cuatro estados
+            y += 58 + 14;
+            DrawCard(g, y, 96);
+            IslandEyes.Mood[] moods = { IslandEyes.Mood.Idle, IslandEyes.Mood.Happy, IslandEyes.Mood.Surprised, IslandEyes.Mood.Sleep };
+            string[] moodNames = { "Normal", "Feliz", "Sorpresa", "Dormido" };
+            float cellW = (InnerW - 3 * 10) / 4;
+            for (int i = 0; i < moods.Length; i++)
+            {
+                RectangleF pill = new RectangleF(InnerX + i * (cellW + 10) + (cellW - 110) / 2, y + 14, 110, 44);
+                FillRound(g, pill, 22, Color.Black);
+                IslandEyes.DrawPreview(g, new PointF(pill.X + pill.Width / 2, pill.Y + pill.Height / 2), 0.95f, moods[i]);
+                DrawText(g, moodNames[i], _reg12, Gray, new RectangleF(InnerX + i * (cellW + 10), y + 64, cellW, 20), StringAlignment.Center);
+            }
+
+            // Estilo: 9 opciones en dos filas
+            y += 96 + 14;
+            DrawCard(g, y, 110);
+            DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
+            string[] styles = { "Actual", "Con pupila", "Anime", "Gato", "Robot", "Puntitos", "Pixel", "Visor LED", "Cíclope" };
+            float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
+            for (int i = 0; i < styles.Length; i++)
+            {
+                int index = i;
+                RectangleF chip = new RectangleF(InnerX + (i % 5) * (chipW + chipGap), y + 40 + (i / 5) * 32, chipW, 28);
+                bool selected = (int)SuiteSettings.EyesStyle == i;
+                FillRound(g, chip, 8, selected ? Color.FromArgb(46, Accent) : Hover(chip) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, chip, 8, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                DrawText(g, styles[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
+                AddHit(chip, () => { SuiteSettings.EyesStyle = (SuiteSettings.EyesStyleKind)index; SuiteSettings.Save(); });
+            }
+
+            // Color y extras
+            y += 110 + 14;
+            DrawCard(g, y, 96);
+            DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 4, 120, 40), StringAlignment.Near);
+            string[] colors = { "#FFFFFF", "#38BDF8", "#F472B6", "#A3E635", "#FBBF24" };
+            const float swatch = 22, swatchGap = 10;
+            float sx = ContentRight - 16 - (colors.Length * (swatch + swatchGap) - swatchGap);
+            foreach (string hex in colors)
+            {
+                RectangleF circle = new RectangleF(sx, y + 13, swatch, swatch);
+                using (SolidBrush fill = new SolidBrush(ColorTranslator.FromHtml(hex))) g.FillEllipse(fill, circle);
+                if (string.Equals(SuiteSettings.EyesColor, hex, StringComparison.OrdinalIgnoreCase))
+                {
+                    using (Pen ring = new Pen(Accent, 2f)) g.DrawEllipse(ring, RectangleF.Inflate(circle, 3, 3));
+                }
+                string picked = hex;
+                AddHit(circle, () => { SuiteSettings.EyesColor = picked; SuiteSettings.Save(); });
+                sx += swatch + swatchGap;
+            }
+            string[] extras = { "Cejas", "Boquita", "Rubor" };
+            bool[] extraOn = { SuiteSettings.EyesBrows, SuiteSettings.EyesMouth, SuiteSettings.EyesBlush };
+            float extraW = (InnerW - 2 * 8) / 3;
+            for (int i = 0; i < extras.Length; i++)
+            {
+                int index = i;
+                bool on = extraOn[i];
+                RectangleF cell = new RectangleF(InnerX + i * (extraW + 8), y + 50, extraW, 32);
+                FillRound(g, cell, 10, CardFill);
+                DrawText(g, extras[i], _reg13, TextColor, new RectangleF(cell.X + 10, cell.Y, extraW - 50, cell.Height), StringAlignment.Near);
+                DrawToggle(g, cell.Right - 10 - 30, cell.Y + 8, on, true, () =>
+                {
+                    if (index == 0) SuiteSettings.EyesBrows = !on;
+                    else if (index == 1) SuiteSettings.EyesMouth = !on;
+                    else SuiteSettings.EyesBlush = !on;
+                    SuiteSettings.Save();
+                });
+            }
+
+            // Personalidad
+            y += 96 + 14;
+            DrawCard(g, y, 118);
+            DrawToggleRow(g, y, "Reaccionan a lo que pasa", "Música, avisos, sin internet, Bloq Mayús, tareas, clic derecho…", SuiteSettings.EyesMoods,
+                () => { SuiteSettings.EyesMoods = !SuiteSettings.EyesMoods; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 59);
+            DrawToggleRow(g, y + 60, "Hacen cositas cuando no usas la PC", "Bostezan, cabecean, silban o se estiran; al minuto se duermen", SuiteSettings.EyesFidgets,
+                () => { SuiteSettings.EyesFidgets = !SuiteSettings.EyesFidgets; SuiteSettings.Save(); });
         }
 
         #endregion
