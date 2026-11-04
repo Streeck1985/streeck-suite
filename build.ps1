@@ -34,6 +34,8 @@ $WinRtRefs = @(
     "$FrameworkDir\System.Runtime.WindowsRuntime.dll",
     "$FrameworkDir\System.Runtime.InteropServices.WindowsRuntime.dll",
     "$WinMetadata\Windows.AI.winmd",
+    "$WinMetadata\Windows.Devices.winmd",
+    "$WinMetadata\Windows.Networking.winmd",
     "$WinMetadata\Windows.ApplicationModel.winmd",
     "$WinMetadata\Windows.Foundation.winmd",
     "$WinMetadata\Windows.Globalization.winmd",

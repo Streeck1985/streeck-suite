@@ -241,7 +241,8 @@ namespace StreeckSuite.Modules
             _settingsChanged = OnSettingsChanged;
             SuiteSettings.Changed += _settingsChanged;
             _audio = CreateAudioService();
-            _views = new List<IslandView> { _music };
+            // Como Bloom: el Centro de control va primero (fase J3)
+            _views = new List<IslandView> { new ControlCenterView(_audio), _music };
             if (_audio != null) _views.Add(new AudioView(_audio));
             _views.Add(new WeatherView());
             _views.Add(new SystemView());
@@ -392,7 +393,7 @@ namespace StreeckSuite.Modules
         /// </summary>
         private void EnqueueNotification(IslandNotification notification)
         {
-            if (!SuiteSettings.NotificationsEnabled || !Visible) return;
+            if (!SuiteSettings.NotificationsEnabled || SuiteSettings.DoNotDisturb || !Visible) return;
             _notificationQueue.Enqueue(notification);
             if (_mode == Mode.Alert && _alertView == _notificationAlert && DateTime.Now < _alertUntil)
             {
