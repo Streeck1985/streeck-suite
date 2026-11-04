@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock, Eyes }
+        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock, Eyes, About }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 768, SideW = 210, ContentX = 238, ContentW = 534;
@@ -117,6 +117,7 @@ namespace StreeckSuite.Modules
             _clockChanged = InvalidateSafe;
             EventBus.Instance.Subscribe(Core.Events.PrivacyStateChanged, _privacyChanged);
             AgendaService.Updated += _clockChanged; // Estado de los calendarios en la página Tiempo y agenda
+            UpdateService.Changed += _clockChanged; // Estado de la búsqueda de actualizaciones (Acerca de)
             if (DepthClockModule.Current != null) DepthClockModule.Current.LayersChanged += _clockChanged;
         }
 
@@ -181,6 +182,7 @@ namespace StreeckSuite.Modules
         {
             EventBus.Instance.Unsubscribe(Core.Events.PrivacyStateChanged, _privacyChanged);
             AgendaService.Updated -= _clockChanged;
+            UpdateService.Changed -= _clockChanged;
             if (DepthClockModule.Current != null) DepthClockModule.Current.LayersChanged -= _clockChanged;
             if (_instance == this) _instance = null;
             base.OnFormClosed(e);
@@ -316,6 +318,7 @@ namespace StreeckSuite.Modules
                 case Page.Widgets: DrawWidgets(g); break;
                 case Page.Clock: DrawClock(g); break;
                 case Page.Eyes: DrawEyes(g); break;
+                case Page.About: DrawAbout(g); break;
             }
             DrawCloseButton(g);
         }
@@ -345,7 +348,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D", "Ojitos" };
+            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Widgets", "Reloj 3D", "Ojitos", "Acerca de" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -459,6 +462,11 @@ namespace StreeckSuite.Modules
                     case Page.Eyes:
                         using (GraphicsPath leftEye = LayeredWindow.RoundedRect(new RectangleF(4, 6, 6, 12), 3)) g.DrawPath(pen, leftEye);
                         using (GraphicsPath rightEye = LayeredWindow.RoundedRect(new RectangleF(14, 6, 6, 12), 3)) g.DrawPath(pen, rightEye);
+                        break;
+                    case Page.About:
+                        g.DrawEllipse(pen, 3, 3, 18, 18);
+                        g.DrawLine(pen, 12, 11, 12, 16.5f);
+                        g.DrawLine(pen, 12, 7.5f, 12, 7.6f);
                         break;
                 }
             }
@@ -1260,6 +1268,103 @@ namespace StreeckSuite.Modules
             DrawRowDivider(g, y + 59);
             DrawToggleRow(g, y + 60, "Hacen cositas cuando no usas la PC", "Bostezan, cabecean, silban o se estiran; al minuto se duermen", SuiteSettings.EyesFidgets,
                 () => { SuiteSettings.EyesFidgets = !SuiteSettings.EyesFidgets; SuiteSettings.Save(); });
+        }
+
+        #endregion
+
+        #region Página Acerca de (mockup «Actualizaciones Streeck»)
+
+        private static Image _appLogo;
+
+        private void DrawAbout(Graphics g)
+        {
+            DrawTitle(g, "Acerca de");
+            UpdateService.State state = UpdateService.Current;
+
+            float y = 66;
+            bool downloading = state == UpdateService.State.Downloading;
+            DrawCard(g, y, downloading ? 96 : 78);
+            if (_appLogo == null)
+            {
+                try { _appLogo = Icon.ExtractAssociatedIcon(Application.ExecutablePath).ToBitmap(); }
+                catch (Exception) { }
+            }
+            RectangleF logo = new RectangleF(InnerX, y + 16, 46, 46);
+            if (_appLogo != null)
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(_appLogo, logo);
+            }
+            DrawText(g, "Streeck Suite " + AppInfo.Version, _semi14, TextColor, new RectangleF(InnerX + 60, y + 18, 260, 20), StringAlignment.Near);
+            string status;
+            switch (state)
+            {
+                case UpdateService.State.Checking: status = "Revisando GitHub…"; break;
+                case UpdateService.State.UpToDate: status = "Tienes la versión más reciente · revisado " + Ago(UpdateService.LastChecked); break;
+                case UpdateService.State.Available: status = string.Format("Hay una versión nueva: {0} ({1:0.0} MB)", UpdateService.LatestVersion, UpdateService.SizeBytes / 1048576.0); break;
+                case UpdateService.State.Downloading: status = "Descargando " + UpdateService.LatestVersion + "… se cierra y se vuelve a abrir sola"; break;
+                case UpdateService.State.Error: status = "No se pudo revisar: " + UpdateService.ErrorText; break;
+                default: status = "Aún no se ha revisado"; break;
+            }
+            DrawText(g, status, _reg12, state == UpdateService.State.Available ? ValueColor : Gray, new RectangleF(InnerX + 60, y + 40, 300, 18), StringAlignment.Near);
+
+            string action = state == UpdateService.State.Available ? "Actualizar ahora"
+                          : state == UpdateService.State.Checking ? "Buscando…"
+                          : downloading ? "Descargando…"
+                          : state == UpdateService.State.Error ? "Reintentar" : "Buscar actualizaciones";
+            RectangleF button = new RectangleF(ContentRight - 16 - 170, y + 22, 170, 34);
+            bool primary = state == UpdateService.State.Available;
+            FillRound(g, button, 9, primary ? Accent : Hover(button) ? Color.FromArgb(40, 47, 62) : Field);
+            if (!primary) StrokeRound(g, button, 9, SoftBorder, 1, false);
+            DrawText(g, action, _semi13, primary ? Back : TextColor, button, StringAlignment.Center);
+            if (state != UpdateService.State.Checking && !downloading)
+            {
+                AddHit(button, () => { if (UpdateService.Current == UpdateService.State.Available) UpdateService.Install(); else UpdateService.Check(); });
+            }
+            if (downloading)
+            {
+                RectangleF track = new RectangleF(InnerX, y + 76, InnerW, 6);
+                FillRound(g, track, 3, TrackColor);
+                FillRound(g, new RectangleF(track.X, track.Y, Math.Max(6, track.Width * UpdateService.Progress), 6), 3, Accent);
+            }
+            y += (downloading ? 96 : 78) + 14;
+
+            // Novedades de la versión nueva (las notas del release en GitHub)
+            if (state == UpdateService.State.Available && !string.IsNullOrEmpty(UpdateService.Notes))
+            {
+                string[] lines = UpdateService.Notes.Replace("\r", "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                int count = Math.Min(6, lines.Length);
+                DrawCard(g, y, 44 + count * 20);
+                DrawText(g, "Novedades de la " + UpdateService.LatestVersion, _semi14, TextColor, new RectangleF(InnerX, y + 12, 400, 20), StringAlignment.Near);
+                for (int i = 0; i < count; i++)
+                {
+                    string line = lines[i].Trim().TrimStart('-', '*', '#', ' ');
+                    DrawText(g, "•  " + line, _reg12, Gray, new RectangleF(InnerX, y + 38 + i * 20, InnerW, 18), StringAlignment.Near);
+                }
+                y += 44 + count * 20 + 14;
+            }
+
+            DrawCard(g, y, 58);
+            DrawToggleRow(g, y, "Buscar solo al iniciar y cada día", "Revisa GitHub en segundo plano; si hay algo nuevo te avisa la isla", SuiteSettings.UpdateAuto,
+                () => { SuiteSettings.UpdateAuto = !SuiteSettings.UpdateAuto; SuiteSettings.Save(); });
+            y += 58 + 14;
+
+            DrawCard(g, y, 52);
+            DrawText(g, "github.com/" + AppInfo.GitHubRepo, _reg13, ValueColor, new RectangleF(InnerX, y, 360, 52), StringAlignment.Near);
+            RectangleF open = new RectangleF(ContentRight - 16 - 120, y + 10, 120, 32);
+            FillRound(g, open, 9, Hover(open) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, open, 9, SoftBorder, 1, false);
+            DrawText(g, "Abrir página", _semi13, TextColor, open, StringAlignment.Center);
+            AddHit(open, () => OpenUrl("https://github.com/" + AppInfo.GitHubRepo + "/releases"));
+        }
+
+        private static string Ago(DateTime when)
+        {
+            double minutes = (DateTime.Now - when).TotalMinutes;
+            if (minutes < 1) return "ahora";
+            if (minutes < 60) return "hace " + (int)minutes + " min";
+            if (minutes < 1440) return "hace " + (int)(minutes / 60) + " h";
+            return "hace " + (int)(minutes / 1440) + " días";
         }
 
         #endregion

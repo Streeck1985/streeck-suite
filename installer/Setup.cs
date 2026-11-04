@@ -22,7 +22,7 @@ namespace StreeckSetup
     internal static class Program
     {
         public const string AppName = "Streeck Suite";
-        public const string Version = "1.0";
+        public const string Version = BuildInfo.Version; // La pone build_installer.ps1 (sale de src\Core\AppInfo.cs)
 
         [STAThread]
         private static void Main(string[] args)
@@ -31,6 +31,12 @@ namespace StreeckSetup
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             bool uninstall = args.Contains("--uninstall");
+            if (args.Contains("--update"))
+            {
+                // Actualización desde la suite: sin ventanas, conserva las opciones que ya tenías y vuelve a abrirla
+                using (SetupForm form = new SetupForm(false)) form.SilentUpdate();
+                return;
+            }
             int preview = Array.IndexOf(args, "--preview");
             if (preview >= 0 && preview + 1 < args.Length)
             {
@@ -306,6 +312,27 @@ namespace StreeckSetup
         #endregion
 
         #region Instalar y desinstalar
+
+        /// <summary>
+        /// --update: instala encima sin preguntar (mismo inicio con Windows y acceso directo que antes) y abre la suite.
+        /// </summary>
+        public void SilentUpdate()
+        {
+            try
+            {
+                using (RegistryKey run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
+                {
+                    _options[0] = run != null && run.GetValue("StreeckSuite") != null;
+                }
+                _options[1] = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Program.AppName + ".lnk"));
+                Install();
+                Process.Start(Path.Combine(InstallDir, "StreeckSuite.exe"));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("No se pudo actualizar Streeck Suite: " + ex.Message, Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
 
         private void Install()
         {

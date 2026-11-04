@@ -305,6 +305,7 @@ namespace StreeckSuite.Modules
 
             MouseClick += OnIslandClick;
             System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
+            UpdateService.Found += OnUpdateFound;
         }
 
         /// <summary>
@@ -563,9 +564,23 @@ namespace StreeckSuite.Modules
             _peek.Glyph = glyph;
             _peek.Text = text;
             _peek.GlyphColor = color;
+            _peek.Click = null;
             _alertView = _peek;
             _alertUntil = DateTime.Now.AddMilliseconds(PeekMs);
             UpdateMode();
+        }
+
+        // Versión nueva en GitHub: aviso más largo; un clic abre Acerca de para actualizar
+        private void OnUpdateFound(string version)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke((Action)(() =>
+            {
+                ShowPeek("", "Streeck Suite " + version + " está lista · clic para instalar", IslandPainter.Sky);
+                if (_alertView != _peek) return;
+                _peek.Click = () => SettingsWindow.Open(SettingsWindow.Page.About);
+                _alertUntil = DateTime.Now.AddSeconds(8);
+            }));
         }
 
         // Se revisa en cada fotograma: es barato (estado de una tecla y el idioma de la ventana activa)
@@ -1401,6 +1416,7 @@ namespace StreeckSuite.Modules
             {
                 _frameTimer.Dispose();
                 System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+                UpdateService.Found -= OnUpdateFound;
                 NativeOsd.Apply(false); // Devolver el aviso de volumen de Windows
                 SetWheelHook(false);
                 _mediaTimer.Dispose();
