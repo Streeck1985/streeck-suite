@@ -957,6 +957,19 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
     if (!root || !repeater) { Log(L"Barra sin RootGrid o TaskbarFrameRepeater"); return; }
     state->Root = root.as<wuxc::Grid>();
     state->Repeater = repeater;
+
+    // Fondo y borde de Windows de ESTA barra: en las de los otros monitores no siempre llega el aviso del árbol,
+    // así que se buscan aquí directamente y se registran como los de la principal
+    for (const wchar_t* name : { L"BackgroundFill", L"BackgroundStroke" })
+    {
+        wux::FrameworkElement background = FindByName(frame, name);
+        if (!background || !g_diagnostics) continue;
+        InstanceHandle handle = 0;
+        if (SUCCEEDED(g_diagnostics->GetHandleFromIInspectable(reinterpret_cast<::IInspectable*>(winrt::get_abi(background)), &handle)) && handle)
+        {
+            StyleBackground(handle);
+        }
+    }
     if (!state->Hooked)
     {
         // Cada vez que la barra se reacomoda (apps que abren o cierran, cambios de pantalla) se recolocan las islas
