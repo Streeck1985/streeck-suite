@@ -1173,6 +1173,15 @@ namespace StreeckSuite.Modules
             // A la izquierda del botón de cerrar (que ocupa la esquina superior derecha)
             DrawToggle(g, W - 44 - 12 - 44, 25, s.Enabled, false, () => ChangeClock(c => c.Enabled = !c.Enabled));
 
+            // «Mover reloj»: arrastrarlo a cualquier parte de la pantalla, como en Samsung
+            const string moveText = "Mover reloj";
+            float moveW = g.MeasureString(moveText, _reg13).Width + 24;
+            RectangleF move = new RectangleF(W - 44 - 12 - 44 - 16 - moveW, 22, moveW, 30);
+            FillRound(g, move, 8, Hover(move) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, move, 8, SoftBorder, 1, false);
+            DrawText(g, moveText, _reg13, TextColor, move, StringAlignment.Center);
+            AddHit(move, ClockPlacementWindow.Open);
+
             // Estilo: clásico (el sujeto pasa por delante) o estirado (estilo Samsung, mockup R1)
             bool stretched = s.Style == ClockStyle.Samsung;
             float y = 62;
