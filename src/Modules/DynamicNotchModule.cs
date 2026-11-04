@@ -247,7 +247,7 @@ namespace StreeckSuite.Modules
             _views.Add(new WeatherView());
             _views.Add(new SystemView());
             _views.Add(new TimerView());
-            _views.Add(new AgendaView());
+            _views.Add(new CalendarView()); // Fase J4: mes + agenda + Pomodoro + tareas (sustituye a la vista Agenda)
             _views.Add(_tray);
             _views.Add(new NotificationsView());
 
@@ -371,6 +371,7 @@ namespace StreeckSuite.Modules
             if (view is AudioView) return SuiteSettings.IslandShowSound;
             if (view is WeatherView) return SuiteSettings.IslandShowWeather;
             if (view is SystemView) return SuiteSettings.IslandShowSystem;
+            if (view is CalendarView) return SuiteSettings.IslandShowAgenda;
             return true;
         }
 
@@ -487,7 +488,18 @@ namespace StreeckSuite.Modules
         private void CheckEventAlerts(DateTime now)
         {
             int minutes = SuiteSettings.EventAlertMinutes;
-            if (minutes <= 0 || !Visible || (_mode == Mode.Alert && now < _alertUntil)) return;
+            if (!Visible || (_mode == Mode.Alert && now < _alertUntil)) return;
+
+            // Tareas con hora (fase J4): aviso en la isla al llegar su hora
+            foreach (TasksService.TaskItem task in TasksService.TakeDue())
+            {
+                _alert.Text = "✓ Tarea: " + task.Text + " · " + task.Due.Value.ToString("HH:mm");
+                _alertView = _alert;
+                _alertUntil = now.AddMilliseconds(EventAlertMs);
+                UpdateMode();
+                return;
+            }
+            if (minutes <= 0) return;
             foreach (AgendaEvent e in AgendaService.Events)
             {
                 if (e.AllDay || _alertedEvents.Contains(e.Key)) continue;

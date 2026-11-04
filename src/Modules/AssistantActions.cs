@@ -44,6 +44,34 @@ namespace StreeckSuite.Modules
             string text = Simplify(phrase);
             Match m;
 
+            // Tareas con hora (fase J4): "recuérdame enviar la factura a las 6", "anota llamar al proveedor mañana a las 9:30"
+            m = Regex.Match(text, @"^(?:recuerdame|avisame|anota|agrega(?:r)?(?: una)? tarea|nueva tarea)\s+(?:que\s+)?(?<what>.+?)\s+(?<day>manana\s+|hoy\s+)?a las\s+(?<h>\d{1,2})(?::(?<min>\d{2}))?\s*(?<ap>de la manana|de la tarde|de la noche|am|pm)?(?:\s+(?<day2>manana|hoy))?$");
+            if (m.Success)
+            {
+                int hour = int.Parse(m.Groups["h"].Value), minute = m.Groups["min"].Success ? int.Parse(m.Groups["min"].Value) : 0;
+                string ap = m.Groups["ap"].Value;
+                if ((ap == "de la tarde" || ap == "de la noche" || ap == "pm") && hour < 12) hour += 12;
+                if (ap == "de la manana" && hour == 12) hour = 0;
+                if (hour <= 23 && minute <= 59)
+                {
+                    bool tomorrow = m.Groups["day"].Value.Trim() == "manana" || m.Groups["day2"].Value == "manana";
+                    DateTime due = DateTime.Today.AddHours(hour).AddMinutes(minute);
+                    if (tomorrow) due = due.AddDays(1);
+                    else if (due < DateTime.Now && ap.Length == 0 && hour < 12 && due.AddHours(12) > DateTime.Now) due = due.AddHours(12); // "a las 6" ya pasó: las 18:00
+                    else if (due < DateTime.Now) due = due.AddDays(1);
+                    string what = OriginalWords(phrase, text, m.Groups["what"].Value);
+                    TasksService.Add(what, due);
+                    return new AssistantAction { Glyph = "", Title = "Tarea: «" + what + "»", Detail = "Te aviso en la isla " + (due.Date == DateTime.Today ? "hoy" : "mañana") + " a las " + due.ToString("HH:mm") };
+                }
+            }
+            m = Regex.Match(text, @"^(?:anota(?: una tarea)?|agrega(?:r)?(?: una)? tarea|nueva tarea)\s+(?:que\s+)?(?<what>.+)$");
+            if (m.Success)
+            {
+                string what = OriginalWords(phrase, text, m.Groups["what"].Value);
+                TasksService.Add(what, null);
+                return new AssistantAction { Glyph = "", Title = "Tarea: «" + what + "»", Detail = "La verás en el calendario de la isla" };
+            }
+
             // Temporizadores: "recuérdame en 20 minutos sacar la ropa", "pon un temporizador de media hora"
             m = Regex.Match(text, @"^(?:recuerdame|avisame|pon(?:me)?(?: un)? (?:temporizador|alarma|timer)|temporizador|timer)\s+(?:de\s+|en\s+|dentro de\s+)?(?<n>\d+|[a-z ]+?|media)\s*(?<u>hora|horas|minuto|minutos|min|segundos)?(?:\s+(?:para|que|a)\s+(?<what>.+)|\s+(?<what2>.+))?$");
             if (m.Success)
@@ -152,6 +180,18 @@ namespace StreeckSuite.Modules
         }
 
         // Recupera el trozo final de la frase original (con mayúsculas y tildes) que corresponde al texto simplificado
+        // Las palabras originales (con tildes) que ocupan el lugar de "part" dentro del texto simplificado
+        private static string OriginalWords(string phrase, string simplified, string part)
+        {
+            int at = simplified.IndexOf(part, StringComparison.Ordinal);
+            if (at < 0) return part;
+            int skip = simplified.Substring(0, at).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            int take = part.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            string[] words = phrase.Trim().TrimEnd('.', '!', '?').Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (skip + take > words.Length) return part;
+            return string.Join(" ", words, skip, take).Trim(',', '.', '«', '»', '"');
+        }
+
         private static string OriginalTail(string phrase, string simplifiedTail)
         {
             string trimmed = phrase.Trim().TrimEnd('.', '!', '?');
