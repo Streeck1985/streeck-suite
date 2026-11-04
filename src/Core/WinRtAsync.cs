@@ -34,5 +34,19 @@ namespace StreeckSuite.Core
             if (operation.Status == AsyncStatus.Canceled) throw new OperationCanceledException();
             return operation.GetResults();
         }
+
+        /// <summary>
+        /// Acciones sin resultado (p. ej. buscar redes Wi-Fi).
+        /// </summary>
+        public static void Wait(IAsyncAction action, TimeSpan timeout)
+        {
+            using (ManualResetEvent done = new ManualResetEvent(false))
+            {
+                action.Completed = (op, status) => done.Set();
+                if (!done.WaitOne(timeout)) throw new TimeoutException("La operación de Windows no respondió a tiempo");
+            }
+            if (action.Status == AsyncStatus.Error) throw action.ErrorCode;
+            if (action.Status == AsyncStatus.Canceled) throw new OperationCanceledException();
+        }
     }
 }
