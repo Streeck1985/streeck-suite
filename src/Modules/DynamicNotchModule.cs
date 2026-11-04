@@ -640,7 +640,8 @@ namespace StreeckSuite.Modules
             if (!Visible) return;
 
             MediaInfo media = MediaService.Current;
-            if (media.IsPlaying && !media.SameTrackAs(_lastMedia) && SuiteSettings.IslandSongPeekMs > 0
+            // Con el reproductor en la barra, la canción nueva ya se ve abajo: la isla de arriba no se despliega
+            if (media.IsPlaying && !media.SameTrackAs(_lastMedia) && SuiteSettings.IslandSongPeekMs > 0 && !SuiteSettings.MusicInTaskbar
                 && SuiteSettings.IslandShowMusic && !HiddenExceptAlerts)
             {
                 // Canción nueva: la isla se despliega unos segundos en la vista de música
