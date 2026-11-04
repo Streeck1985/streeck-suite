@@ -280,6 +280,7 @@ namespace StreeckSuite.Modules
                 // Cada barra se mide contra su propio pico reciente, que baja despacio: así los agudos también bailan
                 PeakDb[b] = Math.Max(Math.Max(db, PeakDb[b] - 0.12f), SilenceDb + RangeDb);
                 float target = db <= SilenceDb ? 0 : Math.Max(0, Math.Min(1, (db - (PeakDb[b] - RangeDb)) / RangeDb));
+                target = (float)Math.Pow(target, 0.75); // Curva del ecualizador de Bloom: los golpes suaves también se ven
 
                 // Sube rápido con el golpe y cae suave
                 Shown[b] = target > Shown[b] ? Shown[b] + (target - Shown[b]) * 0.7f : Math.Max(target, Shown[b] - 0.05f);

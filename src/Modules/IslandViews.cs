@@ -47,6 +47,14 @@ namespace StreeckSuite.Modules
         public abstract SizeF BaseSize { get; }
 
         /// <summary>
+        /// Ancho del panel abierto con esta vista, a 96 PPP (la de música se ensancha al mostrar la letra).
+        /// </summary>
+        public virtual float PanelWidth
+        {
+            get { return 440; }
+        }
+
+        /// <summary>
         /// Borde de la isla mientras se ve esta vista (null = el gris normal).
         /// </summary>
         public virtual Color? BorderColor
@@ -222,9 +230,20 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class MusicView : IslandView
     {
-        private RectangleF _prevButton, _playButton, _nextButton, _progressBar;
+        private RectangleF _prevButton, _playButton, _nextButton, _progressBar, _lyricsButton;
         private bool? _optimisticPlaying; // Respuesta inmediata al pulsar ⏯ hasta que el reproductor lo confirme
         private DateTime _optimisticUntil;
+
+        // Letra sincronizada (fase J2): la isla se parte en dos; la línea cantada se ilumina y un clic salta a ella
+        private const float PlayerWidth = 440, LyricsWidth = 260, LineHeight = 30;
+        private bool _showLyrics;
+        private float _lyricsScroll = -1;  // Desplazamiento suave de la lista (en líneas)
+        private readonly List<KeyValuePair<RectangleF, TimeSpan>> _lineHits = new List<KeyValuePair<RectangleF, TimeSpan>>();
+
+        public override float PanelWidth
+        {
+            get { return _showLyrics ? PlayerWidth + LyricsWidth : PlayerWidth; }
+        }
 
         public override string TabName
         {
@@ -269,9 +288,81 @@ namespace StreeckSuite.Modules
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             MediaInfo media = MediaService.Current;
+            LyricsService.Request(media);
+            if (_showLyrics && LyricsService.CurrentState == LyricsService.State.NotFound) _showLyrics = false;
+
+            float playerWidth = Math.Min(size.Width, p.Px(PlayerWidth));
+            DrawPlayer(g, new SizeF(playerWidth, size.Height), alpha, p, media);
+            _lineHits.Clear();
+            if (_showLyrics && size.Width > playerWidth + p.Px(40))
+            {
+                using (Pen divider = new Pen(Color.FromArgb(alpha * 26 / 255, Color.White), 1))
+                {
+                    g.DrawLine(divider, playerWidth, p.Px(4), playerWidth, size.Height - p.Px(4));
+                }
+                DrawLyrics(g, new RectangleF(playerWidth + p.Px(18), 0, size.Width - playerWidth - p.Px(18) - p.Px(PadX), size.Height), alpha, p, media);
+            }
+        }
+
+        // Posición actual de la canción, avanzando sola entre las lecturas del reproductor
+        private static TimeSpan LivePosition(MediaInfo media)
+        {
+            TimeSpan position = media.Position;
+            if (media.IsPlaying) position += DateTime.Now - media.PositionSampledAt;
+            return position;
+        }
+
+        /// <summary>
+        /// Cinco líneas centradas en la que se canta (blanca y más grande); la lista se desliza suave al cambiar.
+        /// </summary>
+        private void DrawLyrics(Graphics g, RectangleF area, int alpha, IslandPainter p, MediaInfo media)
+        {
+            List<LyricsService.Line> lines = LyricsService.Lines;
+            if (lines.Count == 0)
+            {
+                p.DrawText(g, "Buscando la letra…", p.Text13, IslandPainter.Fade(IslandPainter.Gray, alpha), area, StringAlignment.Center);
+                return;
+            }
+            int current = Math.Max(0, LyricsService.IndexAt(LivePosition(media)));
+            if (_lyricsScroll < 0) _lyricsScroll = current;
+            _lyricsScroll += (current - _lyricsScroll) * 0.35f; // Se redibuja ~10 veces por segundo: llega en medio segundo
+
+            float lineHeight = p.Px(LineHeight);
+            float centerY = area.Y + area.Height / 2;
+            Region clip = g.Clip;
+            g.SetClip(area);
+            for (int i = Math.Max(0, current - 4); i < Math.Min(lines.Count, current + 5); i++)
+            {
+                float y = centerY + (i - _lyricsScroll) * lineHeight - lineHeight / 2;
+                if (y < area.Y - lineHeight || y > area.Bottom) continue;
+                bool active = i == current;
+                int distance = Math.Abs(i - current);
+                int lineAlpha = active ? alpha : alpha * Math.Max(50, 150 - distance * 40) / 255;
+                RectangleF row = new RectangleF(area.X, y, area.Width, lineHeight);
+                p.DrawText(g, lines[i].Text, active ? p.Bold15 : p.Text13, Color.FromArgb(lineAlpha, Color.White), row, StringAlignment.Near);
+                _lineHits.Add(new KeyValuePair<RectangleF, TimeSpan>(row, lines[i].Time));
+            }
+            g.Clip = clip;
+        }
+
+        private void DrawPlayer(Graphics g, SizeF size, int alpha, IslandPainter p, MediaInfo media)
+        {
             Color accent = media.Accent;
             float x = p.Px(PadX), width = size.Width - 2 * p.Px(PadX);
             Color white = Color.FromArgb(alpha, Color.White);
+
+            // Brillo ambiental del color de la portada detrás de ella (como Bloom)
+            RectangleF glow = new RectangleF(x - p.Px(26), -p.Px(26), p.Px(124), p.Px(124));
+            using (GraphicsPath glowPath = new GraphicsPath())
+            {
+                glowPath.AddEllipse(glow);
+                using (PathGradientBrush brush = new PathGradientBrush(glowPath))
+                {
+                    brush.CenterColor = Color.FromArgb(alpha * 120 / 255, accent);
+                    brush.SurroundColors = new[] { Color.FromArgb(0, accent) };
+                    g.FillEllipse(brush, glow);
+                }
+            }
 
             // Carátula 72 px
             RectangleF art = new RectangleF(x, 0, p.Px(72), p.Px(72));
@@ -295,12 +386,25 @@ namespace StreeckSuite.Modules
             p.DrawText(g, media.Title, p.Bold17, white, new RectangleF(textX, p.Px(2), textWidth, p.Px(24)), StringAlignment.Near);
             p.DrawText(g, string.IsNullOrEmpty(media.Artist) ? " " : media.Artist, p.Text13, IslandPainter.Fade(IslandPainter.Gray, alpha),
                 new RectangleF(textX, p.Px(26), textWidth, p.Px(20)), StringAlignment.Near);
+            float chipRight = textX;
             if (!string.IsNullOrEmpty(media.AppName))
             {
                 SizeF chipText = g.MeasureString(media.AppName, p.Bold12);
                 RectangleF chip = new RectangleF(textX, p.Px(50), chipText.Width + p.Px(10), p.Px(19));
                 IslandPainter.FillRounded(g, chip, p.Px(8), Color.FromArgb(alpha * 40 / 255, accent));
                 p.DrawText(g, media.AppName, p.Bold12, IslandPainter.Fade(Lighten(accent), alpha), chip, StringAlignment.Center);
+                chipRight = chip.Right + p.Px(6);
+            }
+
+            // «♪ Letra»: solo si LRCLIB tiene la letra sincronizada de esta canción
+            _lyricsButton = RectangleF.Empty;
+            if (LyricsService.CurrentState == LyricsService.State.Ready)
+            {
+                string label = _showLyrics ? "Ocultar letra" : "♪ Letra";
+                SizeF labelSize = g.MeasureString(label, p.Bold12);
+                _lyricsButton = new RectangleF(chipRight, p.Px(50), labelSize.Width + p.Px(12), p.Px(19));
+                IslandPainter.FillRounded(g, _lyricsButton, p.Px(9), _showLyrics ? Color.FromArgb(alpha * 40 / 255, Color.White) : Color.FromArgb(alpha, Color.White));
+                p.DrawText(g, label, p.Bold12, _showLyrics ? white : Color.FromArgb(alpha, Color.Black), _lyricsButton, StringAlignment.Center);
             }
 
             // Progreso con tiempos
@@ -336,6 +440,11 @@ namespace StreeckSuite.Modules
         public override bool OnClick(PointF point)
         {
             MediaInfo media = MediaService.Current;
+            if (_lyricsButton.Contains(point)) { _showLyrics = !_showLyrics; _lyricsScroll = -1; return true; }
+            foreach (KeyValuePair<RectangleF, TimeSpan> line in _lineHits)
+            {
+                if (line.Key.Contains(point)) { MediaService.Seek(line.Value); return true; } // Clic en una línea: saltar ahí
+            }
             if (_prevButton.Contains(point)) { MediaService.Previous(); return true; }
             if (_nextButton.Contains(point)) { MediaService.Next(); return true; }
             if (_playButton.Contains(point))
