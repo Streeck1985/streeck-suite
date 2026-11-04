@@ -904,6 +904,10 @@ namespace StreeckSuite.Modules
             if (now.Second != _lastFullPaintSecond) CheckEventAlerts(now);
             CheckQuickChanges(now);
 
+            // Ojitos: dónde está la isla (para mirar al ratón) y sorpresa mientras se ve un aviso
+            IslandEyes.IslandRect = new Rectangle(Left + ShadowPad, Top + ShadowPad, PillW, PillH);
+            if (_mode == Mode.Alert && (_alertView == _notificationAlert || _alertView == _eventAlert || _alertView == _bluetoothAlert)) IslandEyes.Notice();
+
             // Nombre de la pestaña bajo el ratón (la barra solo muestra iconos)
             int hoveredTab = -1;
             if (_mode == Mode.Expanded)
@@ -936,7 +940,7 @@ namespace StreeckSuite.Modules
             }
 
             // Fuera de las transiciones basta con ~10 fps para lo que se mueve y para seguir al ratón
-            int interval = transitioning ? 16 : 100;
+            int interval = transitioning ? 16 : _mode != Mode.Tucked && ActiveView.WantsSmoothFrames ? 33 : 100;
             if (_frameTimer.Interval != interval) _frameTimer.Interval = interval;
         }
 
@@ -966,6 +970,13 @@ namespace StreeckSuite.Modules
             // Clic derecho: solo lo usan las vistas del panel (menú de un icono de la bandeja)
             if (e.Button == MouseButtons.Right)
             {
+                // Clic derecho en los ojitos cerrados: corazones
+                if (_mode == Mode.Compact && SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes)
+                {
+                    IslandEyes.React(IslandEyes.Mood.Love, 2.5);
+                    RenderSurface();
+                    return;
+                }
                 if (_mode == Mode.Expanded && ActiveView.OnRightClick(new PointF(point.X, point.Y - Px(ContentTop))))
                 {
                     _peekUntil = DateTime.Now.AddMilliseconds(InteractionPeekMs);

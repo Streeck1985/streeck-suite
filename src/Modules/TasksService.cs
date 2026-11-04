@@ -63,6 +63,7 @@ namespace StreeckSuite.Modules
                 task.Done = !task.Done;
                 Save();
             }
+            if (task.Done) IslandEyes.React(IslandEyes.Mood.Wink, 2); // Tarea terminada: guiño
             Raise();
         }
 

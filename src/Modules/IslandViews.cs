@@ -70,6 +70,14 @@ namespace StreeckSuite.Modules
             get { return false; }
         }
 
+        /// <summary>
+        /// Necesita ~30 fps ahora mismo (los ojitos mientras se mueven); si no, basta con ~10.
+        /// </summary>
+        public virtual bool WantsSmoothFrames
+        {
+            get { return false; }
+        }
+
         public abstract void Draw(Graphics g, SizeF size, int alpha, IslandPainter p);
 
         /// <summary>
@@ -144,9 +152,10 @@ namespace StreeckSuite.Modules
         private static DateTime _statsAt = DateTime.MinValue;
         private static bool _sampling;
 
-        // Ojitos: se duermen tras 60 s sin tocar el ratón ni el teclado y saludan al volver
-        private bool _wasAsleep;
-        private DateTime _wavedAt = DateTime.MinValue;
+        public override bool WantsSmoothFrames
+        {
+            get { return Eyes && IslandEyes.Lively; }
+        }
 
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
@@ -203,31 +212,25 @@ namespace StreeckSuite.Modules
             }
         }
 
+        // Ojitos con personalidad (IslandEyes): con tiempo en marcha o música van pequeños a la izquierda
         private void DrawEyesMode(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
+            double idle = IdleSeconds();
+            float unit = p.Px(11) / 16f; // El ojo del mockup mide 16 unidades y en la isla 11 px
             if (Busy)
             {
-                DrawCenter(g, size, alpha, p, size.Width - p.Px(32));
+                IslandEyes.Mood busyMood = TimerService.IsActive ? IslandEyes.Mood.Focus : IslandEyes.Mood.Happy;
+                IslandEyes.Draw(g, new PointF(p.Px(40), size.Height / 2), unit * 0.8f, alpha, busyMood, idle);
+                float shift = p.Px(36);
+                GraphicsState state = g.Save();
+                g.TranslateTransform(shift, 0);
+                DrawCenter(g, new SizeF(size.Width - shift, size.Height), alpha, p, size.Width - shift - p.Px(32));
+                g.Restore(state);
                 return;
             }
-            bool asleep = IdleSeconds() >= 60;
-            if (_wasAsleep && !asleep) _wavedAt = DateTime.Now; // Volviste: saluda
-            _wasAsleep = asleep;
-            bool waving = (DateTime.Now - _wavedAt).TotalSeconds < 1.6;
-
-            float eyeW = p.Px(11), eyeH = p.Px(14), gap = p.Px(14);
-            // Parpadeo de 140 ms cada 4 s
-            bool blink = !asleep && DateTime.Now.TimeOfDay.TotalMilliseconds % 4000 < 140;
-            float height = asleep || blink ? p.Px(3) : eyeH;
-            float total = 2 * eyeW + gap + (waving ? p.Px(26) : 0);
-            float x = (size.Width - total) / 2, y = (size.Height - height) / 2;
-            using (SolidBrush white = new SolidBrush(Color.FromArgb(alpha, Color.White)))
-            {
-                IslandPainter.FillRounded(g, new RectangleF(x, y, eyeW, height), Math.Min(eyeW, height) / 2, Color.FromArgb(alpha, Color.White));
-                IslandPainter.FillRounded(g, new RectangleF(x + eyeW + gap, y, eyeW, height), Math.Min(eyeW, height) / 2, Color.FromArgb(alpha, Color.White));
-            }
-            if (asleep) p.DrawText(g, "z", p.SmallFont, IslandPainter.Fade(IslandPainter.Gray, alpha), new RectangleF(x + total + p.Px(4), p.Px(2), p.Px(14), size.Height / 2), StringAlignment.Near);
-            if (waving) p.DrawText(g, "👋", p.EmojiFont, Color.FromArgb(alpha, Color.White), new RectangleF(x + 2 * eyeW + gap + p.Px(6), 0, p.Px(22), size.Height), StringAlignment.Center);
+            IslandEyes.Mood ambient = _networkGlyph == IslandPainter.GlyphOffline ? IslandEyes.Mood.Sad
+                                    : MediaService.Current.IsPlaying ? IslandEyes.Mood.Happy : IslandEyes.Mood.Idle;
+            IslandEyes.Draw(g, new PointF(size.Width / 2, size.Height / 2), unit, alpha, ambient, idle);
         }
 
         private static void SampleStats()
