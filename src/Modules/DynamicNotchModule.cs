@@ -301,6 +301,7 @@ namespace StreeckSuite.Modules
             PollMedia();
 
             MouseClick += OnIslandClick;
+            System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += OnNetworkAvailabilityChanged;
         }
 
         /// <summary>
@@ -538,6 +539,90 @@ namespace StreeckSuite.Modules
             _alertUntil = DateTime.Now.AddMilliseconds(CaptureAlertMs);
             UpdateMode();
         }
+
+        #region Avisos rápidos (fase J5)
+
+        private readonly PeekView _peek = new PeekView();
+        private const int PeekMs = 2200;
+        private bool? _capsLock;
+        private string _keyboardLanguage;
+        private PowerLineStatus? _powerLine;
+        private DateTime _osdAppliedAt = DateTime.MinValue;
+
+        // Píldora corta que se ensancha un momento; no tapa un aviso más importante que se esté viendo
+        private void ShowPeek(string glyph, string text, Color color)
+        {
+            if (!Visible) return;
+            if (_mode == Mode.Alert && _alertView != _peek && _alertView != _volumeAlert && DateTime.Now < _alertUntil) return;
+            _peek.Glyph = glyph;
+            _peek.Text = text;
+            _peek.GlyphColor = color;
+            _alertView = _peek;
+            _alertUntil = DateTime.Now.AddMilliseconds(PeekMs);
+            UpdateMode();
+        }
+
+        // Se revisa en cada fotograma: es barato (estado de una tecla y el idioma de la ventana activa)
+        private void CheckQuickChanges(DateTime now)
+        {
+            bool caps = Control.IsKeyLocked(Keys.CapsLock);
+            if (_capsLock != null && caps != _capsLock.Value)
+            {
+                ShowPeek("", caps ? "Bloq Mayús activado" : "Bloq Mayús desactivado", caps ? IslandPainter.Amber : Color.White);
+            }
+            _capsLock = caps;
+
+            string language = KeyboardLanguage();
+            if (_keyboardLanguage != null && language != null && language != _keyboardLanguage)
+            {
+                ShowPeek("", "Teclado: " + _keyboardLanguage + " → " + language, IslandPainter.Sky);
+            }
+            if (language != null) _keyboardLanguage = language;
+
+            // Cargador (solo en equipos con batería)
+            PowerStatus power = SystemInformation.PowerStatus;
+            if ((power.BatteryChargeStatus & BatteryChargeStatus.NoSystemBattery) == 0)
+            {
+                PowerLineStatus line = power.PowerLineStatus;
+                if (_powerLine != null && line != _powerLine.Value && line != PowerLineStatus.Unknown)
+                {
+                    int percent = (int)Math.Round(power.BatteryLifePercent * 100);
+                    ShowPeek(line == PowerLineStatus.Online ? "" : "",
+                        line == PowerLineStatus.Online ? "Cargando · " + percent + " %" : "Batería · " + percent + " %",
+                        line == PowerLineStatus.Online ? IslandPainter.Green : Color.White);
+                }
+                _powerLine = line;
+            }
+
+            // Aviso de volumen de Windows escondido (la isla muestra el suyo); se reaplica por si Explorer lo recreó
+            if ((now - _osdAppliedAt).TotalSeconds >= 3)
+            {
+                _osdAppliedAt = now;
+                NativeOsd.Apply(SuiteSettings.HideWindowsVolume);
+            }
+        }
+
+        private static string KeyboardLanguage()
+        {
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            uint ignored;
+            uint thread = NativeMethods.GetWindowThreadProcessId(foreground, out ignored);
+            int lcid = (int)(GetKeyboardLayout(thread).ToInt64() & 0xFFFF);
+            if (lcid == 0) return null;
+            try { return new System.Globalization.CultureInfo(lcid).TwoLetterISOLanguageName.ToUpperInvariant(); }
+            catch (Exception) { return null; }
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetKeyboardLayout(uint threadId);
+
+        private void OnNetworkAvailabilityChanged(object sender, System.Net.NetworkInformation.NetworkAvailabilityEventArgs e)
+        {
+            BeginInvokeSafe(() => ShowPeek(e.IsAvailable ? "" : "", e.IsAvailable ? "Conectado de nuevo" : "Sin conexión a internet",
+                e.IsAvailable ? IslandPainter.Green : Color.FromArgb(248, 113, 113)));
+        }
+
+        #endregion
 
         private void ShowVolume(float level, bool muted)
         {
@@ -809,6 +894,7 @@ namespace StreeckSuite.Modules
                 UpdateMode();
             }
             if (now.Second != _lastFullPaintSecond) CheckEventAlerts(now);
+            CheckQuickChanges(now);
 
             // Nombre de la pestaña bajo el ratón (la barra solo muestra iconos)
             int hoveredTab = -1;
@@ -1126,6 +1212,8 @@ namespace StreeckSuite.Modules
                 _mode = Mode.Alert; _alertView = _volumeAlert; _volumeAlert.Level = 0.82f; _volumeAlert.Muted = false;
                 _volumeAlert.DeviceName = _audio != null ? _audio.DefaultDeviceName : "Altavoces";
             }));
+            states.Add(new KeyValuePair<string, Action>("aviso-mayus", () => { _mode = Mode.Alert; _peek.Glyph = ""; _peek.Text = "Bloq Mayús activado"; _peek.GlyphColor = IslandPainter.Amber; _alertView = _peek; }));
+            states.Add(new KeyValuePair<string, Action>("aviso-idioma", () => { _mode = Mode.Alert; _peek.Glyph = ""; _peek.Text = "Teclado: ES → EN"; _peek.GlyphColor = IslandPainter.Sky; _alertView = _peek; }));
             states.Add(new KeyValuePair<string, Action>("aviso-silencio", () => { _mode = Mode.Alert; _alertView = _volumeAlert; _volumeAlert.Muted = true; }));
             states.Add(new KeyValuePair<string, Action>("aviso-texto", () => { _mode = Mode.Alert; _alert.Text = "🛡️ Modo Privacidad Aero: ACTIVADO (Ctrl+Alt+P)"; _alertView = _alert; }));
             states.Add(new KeyValuePair<string, Action>("compacta-tiempo", () =>
@@ -1279,6 +1367,8 @@ namespace StreeckSuite.Modules
             if (disposing)
             {
                 _frameTimer.Dispose();
+                System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged -= OnNetworkAvailabilityChanged;
+                NativeOsd.Apply(false); // Devolver el aviso de volumen de Windows
                 SetWheelHook(false);
                 _mediaTimer.Dispose();
                 if (_shownView != null) _shownView.OnHidden();
