@@ -288,9 +288,12 @@ namespace StreeckSuite.Modules
             }
         }
 
+        private Screen _monitor; // Monitor donde se abrió (el del ratón); no cambia mientras está abierta
+
         private void Relayout()
         {
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            if (!Visible || _monitor == null) _monitor = Screen.FromPoint(Cursor.Position);
+            Rectangle screen = _monitor.Bounds;
             int width = (int)Px(CardWidth), height = (int)Px(ContentHeight());
             Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, screen.Y + (int)Px(TopMargin) - ShadowPad,
                 width + 2 * ShadowPad, height + 2 * ShadowPad);

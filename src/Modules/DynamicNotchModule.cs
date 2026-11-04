@@ -870,6 +870,7 @@ namespace StreeckSuite.Modules
             if ((now - _lastTuckCheck).TotalMilliseconds >= TuckCheckMs)
             {
                 _lastTuckCheck = now;
+                FollowMouseMonitor();
                 _tuckRequested = SuiteSettings.IslandMaximized != SuiteSettings.MaximizedBehavior.AlwaysShow && ForegroundCoversNotch();
             }
 
@@ -1051,7 +1052,7 @@ namespace StreeckSuite.Modules
             NativeMethods.RECT rect;
             if (!NativeMethods.GetWindowRect(foreground, out rect)) return false;
 
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            Rectangle screen = IslandScreen.Bounds;
             Rectangle zone = new Rectangle(screen.X + (screen.Width - (int)Px(440)) / 2, screen.Y, (int)Px(440), (int)Px(TopMargin + 38 + 10));
             return zone.IntersectsWith(Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom));
         }
@@ -1060,9 +1061,26 @@ namespace StreeckSuite.Modules
         /// Zona donde el ratón cuenta como "encima de la isla": la propia isla con un pequeño margen,
         /// o una franja en el borde superior si está escondida.
         /// </summary>
+        // Monitor de la isla: el principal o el del ratón (Ajustes → Isla → Monitor). Solo se cambia con la isla cerrada.
+        private Screen _islandScreen;
+
+        private Screen IslandScreen
+        {
+            get { return _islandScreen ?? Screen.PrimaryScreen; }
+        }
+
+        private void FollowMouseMonitor()
+        {
+            Screen wanted = SuiteSettings.IslandMonitor == SuiteSettings.IslandMonitorKind.Mouse ? Screen.FromPoint(Cursor.Position) : Screen.PrimaryScreen;
+            if (_islandScreen != null && wanted.DeviceName == _islandScreen.DeviceName) return;
+            if (_islandScreen != null && (_mode == Mode.Expanded || _mode == Mode.Alert)) return; // No se mueve mientras se usa
+            _islandScreen = wanted;
+            ApplyBounds();
+        }
+
         private Rectangle HoverZone()
         {
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            Rectangle screen = IslandScreen.Bounds;
             if (_mode == Mode.Tucked && HiddenExceptAlerts) return Rectangle.Empty; // Invisible: el ratón no la abre
             if (_mode == Mode.Tucked)
             {
@@ -1075,7 +1093,7 @@ namespace StreeckSuite.Modules
 
         private void ApplyBounds()
         {
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            Rectangle screen = IslandScreen.Bounds;
             int width = PillW;
             int height = PillH;
 

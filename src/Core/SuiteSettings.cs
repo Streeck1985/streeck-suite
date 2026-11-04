@@ -54,6 +54,8 @@ namespace StreeckSuite.Core
             get { return TaskbarEnabled && TaskbarMiniPlayer; }
         }
         public enum IslandIdleKind { Widgets, Eyes }
+        public enum IslandMonitorKind { Primary, Mouse }
+        public static IslandMonitorKind IslandMonitor = IslandMonitorKind.Primary; // Varios monitores: la isla en el principal o donde esté el ratón
         public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
@@ -153,6 +155,8 @@ namespace StreeckSuite.Core
                 TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 9);
                 IslandIdleKind idle;
                 if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
+                IslandMonitorKind monitor;
+                if (values.TryGetValue("isla.monitor", out raw) && Enum.TryParse(raw, out monitor)) IslandMonitor = monitor;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
                 IslandStyleKind islandStyle;
                 if (values.TryGetValue("isla.estilo", out raw) && Enum.TryParse(raw, out islandStyle)) IslandStyle = islandStyle;
@@ -236,6 +240,7 @@ namespace StreeckSuite.Core
                     "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
                     "barra.skin=" + TaskbarSkin,
                     "isla.cerrada=" + IslandIdle,
+                    "isla.monitor=" + IslandMonitor,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,
                     "avisos.activos=" + (NotificationsEnabled ? 1 : 0),

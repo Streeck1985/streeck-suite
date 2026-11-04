@@ -397,11 +397,14 @@ namespace StreeckSuite.Modules
             return height + 14 + 18 + Pad;
         }
 
+        private Screen _monitor;
+
         private void Relayout()
         {
             _answerHeight = MeasureAnswer();
             if (_followTail) _scroll = Math.Max(0, _answerHeight - Px(MaxAnswerHeight));
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            if (!Visible || _monitor == null) _monitor = Screen.FromPoint(Cursor.Position); // Monitor del ratón al abrir
+            Rectangle screen = _monitor.Bounds;
             int width = (int)Px(CardWidth), height = (int)Px(ContentHeight());
             Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, screen.Y + (int)Px(TopMargin) - ShadowPad,
                 width + 2 * ShadowPad, height + 2 * ShadowPad);
