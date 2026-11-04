@@ -149,7 +149,7 @@ namespace StreeckSuite.Modules
         private const int TopMargin = 14;
         private const int TuckedTopMargin = 3;
         private const int TuckCheckMs = 250;
-        private const int ExpandDelayMs = 150;   // Ratón encima este tiempo antes de expandir (evita aperturas al pasar de largo)
+        private const int ExpandDelayMs = 200;   // Ratón encima este tiempo antes de expandir (como Bloom: no se abre al ir a las barras de título)
         // Con una ventana maximizada la isla está escondida sobre las pestañas: solo se asoma con el ratón pegado al borde
         // superior (2 px) durante medio segundo, para no abrirse al ir a hacer clic en una pestaña
         private const int TuckedEdgePx = 2;
@@ -165,9 +165,10 @@ namespace StreeckSuite.Modules
             get { return SuiteSettings.IslandCloseDelayMs + 300; }
         }
 
-        // Muelle: rigidez y amortiguación (zeta ≈ 0,7, con un pequeño rebote como el --spring-bounce del mockup)
-        private const float SpringStiffness = 320f;
-        private const float SpringDamping = 25f;
+        // Muelles de Bloom (mockup N1): ancho, alto y esquinas se mueven cada uno con su propia rigidez y amortiguación
+        private const float WidthStiffness = 400f, WidthDamping = 31f;
+        private const float HeightStiffness = 450f, HeightDamping = 29f;
+        private const float RadiusStiffness = 1000f, RadiusDamping = 40f;
         private const float FrameSeconds = 1f / 60f;
 
         private readonly EventBus _eventBus;
@@ -211,7 +212,7 @@ namespace StreeckSuite.Modules
 
         private Mode _mode = Mode.Compact;
         private IslandView _shownView;
-        private float _width, _height, _widthVelocity, _heightVelocity;
+        private float _width, _height, _widthVelocity, _heightVelocity, _radius, _radiusVelocity;
         private float _contentOpacity = 1f;
         private DateTime _alertUntil = DateTime.MinValue;
         private DateTime _peekUntil = DateTime.MinValue;
@@ -576,6 +577,12 @@ namespace StreeckSuite.Modules
             Mode next = DesiredMode();
             if (next != _mode)
             {
+                // Como Bloom: al abrirse, si suena algo, empieza en Música
+                if (next == Mode.Expanded && _mode != Mode.Expanded && Attached && MediaService.Current.IsAvailable && MediaService.Current.IsPlaying)
+                {
+                    int music = _views.IndexOf(_music);
+                    if (music >= 0 && IsTabEnabled(_music)) _viewIndex = music;
+                }
                 _mode = next;
                 _contentOpacity = 0f; // El contenido nuevo aparece en cuanto la forma empieza a cambiar
                 _frameTimer.Interval = 16;
@@ -666,6 +673,37 @@ namespace StreeckSuite.Modules
             _shownView.OnShown();
         }
 
+        // Esquinas: panel y avisos grandes con radio fijo (22 px pegada arriba, como Bloom); compacta, píldora
+        private float TargetRadius(SizeF target)
+        {
+            float radius;
+            if (_mode == Mode.Expanded || (_mode == Mode.Alert && (ActiveView == _alert || ActiveView == _notificationAlert))) radius = Px(Attached ? 22 : PanelRadius);
+            else if (_mode == Mode.Alert) radius = Px(22);
+            else radius = target.Height / 2;
+            return Math.Min(radius, target.Height / 2);
+        }
+
+        /// <summary>
+        /// Forma del notch pegado arriba: borde superior recto contra la pantalla, esquinas de abajo redondeadas y dos
+        /// "orejitas" cóncavas arriba que lo funden con el borde (como el notch de Bloom). closed=false deja abierto el
+        /// lado de arriba, para el borde fino.
+        /// </summary>
+        private GraphicsPath NotchPath(RectangleF b, float radius, bool closed)
+        {
+            float ear = Math.Min(Px(8), b.Height / 2);
+            float r = Math.Max(0.5f, Math.Min(radius, Math.Min(b.Width / 2, b.Height - ear)));
+            GraphicsPath path = new GraphicsPath();
+            path.AddArc(b.X - 2 * ear, b.Y, 2 * ear, 2 * ear, 270, 90);
+            path.AddLine(b.X, b.Y + ear, b.X, b.Bottom - r);
+            path.AddArc(b.X, b.Bottom - 2 * r, 2 * r, 2 * r, 180, -90);
+            path.AddLine(b.X + r, b.Bottom, b.Right - r, b.Bottom);
+            path.AddArc(b.Right - 2 * r, b.Bottom - 2 * r, 2 * r, 2 * r, 90, -90);
+            path.AddLine(b.Right, b.Bottom - r, b.Right, b.Y + ear);
+            path.AddArc(b.Right, b.Y, 2 * ear, 2 * ear, 180, 90);
+            if (closed) path.CloseFigure();
+            return path;
+        }
+
         private SizeF TargetSize()
         {
             if (_mode == Mode.Tucked) return new SizeF(Px(120), Px(6));
@@ -679,9 +717,23 @@ namespace StreeckSuite.Modules
         private const float PanelWidth = 440;
         private const float TabsTop = 12;
         private const float TabsHeight = 38;
-        private const float ContentTop = TabsTop + TabsHeight + 14;
-        private const float PanelBottom = 18;
         private const float PanelRadius = 26;
+
+        // Pegada arriba (notch de Bloom): sin barra de pestañas; los puntitos de las vistas van abajo
+        private static bool Attached
+        {
+            get { return SuiteSettings.IslandStyle == SuiteSettings.IslandStyleKind.Attached; }
+        }
+
+        private static float ContentTop
+        {
+            get { return Attached ? 16 : TabsTop + TabsHeight + 14; }
+        }
+
+        private static float PanelBottom
+        {
+            get { return Attached ? 26 : 18; }
+        }
 
         private readonly List<RectangleF> _tabRects = new List<RectangleF>();
         private readonly List<IslandView> _tabViews = new List<IslandView>();
@@ -747,8 +799,9 @@ namespace StreeckSuite.Modules
             if (DesiredMode() != _mode) UpdateMode();
 
             SizeF target = TargetSize();
-            bool springing = StepSpring(ref _width, ref _widthVelocity, target.Width)
-                           | StepSpring(ref _height, ref _heightVelocity, target.Height);
+            bool springing = StepSpring(ref _width, ref _widthVelocity, target.Width, WidthStiffness, WidthDamping)
+                           | StepSpring(ref _height, ref _heightVelocity, target.Height, HeightStiffness, HeightDamping)
+                           | StepSpring(ref _radius, ref _radiusVelocity, TargetRadius(target), RadiusStiffness, RadiusDamping);
             if (_contentOpacity < 1f) _contentOpacity = Math.Min(1f, _contentOpacity + FrameSeconds * 5f);
 
             if (springing) ApplyBounds();
@@ -768,9 +821,9 @@ namespace StreeckSuite.Modules
         /// <summary>
         /// Avanza un paso del muelle amortiguado. Devuelve true mientras siga en movimiento.
         /// </summary>
-        private static bool StepSpring(ref float value, ref float velocity, float target)
+        private static bool StepSpring(ref float value, ref float velocity, float target, float stiffness, float damping)
         {
-            float acceleration = SpringStiffness * (target - value) - SpringDamping * velocity;
+            float acceleration = stiffness * (target - value) - damping * velocity;
             velocity += acceleration * FrameSeconds;
             value += velocity * FrameSeconds;
 
@@ -894,8 +947,9 @@ namespace StreeckSuite.Modules
             int height = PillH;
 
             // Al esconderse también sube hacia el borde: el margen superior acompaña a la altura durante la animación
+            // Pegada arriba no hay margen: la isla nace del borde de la pantalla
             float openness = Math.Max(0f, Math.Min(1f, (height - Px(6)) / (Px(38) - Px(6))));
-            int top = (int)Math.Round(Px(TuckedTopMargin) + openness * (Px(TopMargin) - Px(TuckedTopMargin)));
+            int top = Attached ? 0 : (int)Math.Round(Px(TuckedTopMargin) + openness * (Px(TopMargin) - Px(TuckedTopMargin)));
 
             // La ventana es la isla más un margen alrededor para su sombra
             Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, screen.Y + top - ShadowPad,
@@ -935,11 +989,7 @@ namespace StreeckSuite.Modules
 
             // Panel expandido y avisos: tarjeta con esquinas de 26 px (22 en el de volumen); compacta: píldora
             RectangleF bounds = new RectangleF(ShadowPad, ShadowPad, PillW - 1, PillH - 1);
-            float radius;
-            if (_mode == Mode.Expanded || (_mode == Mode.Alert && (ActiveView == _alert || ActiveView == _notificationAlert))) radius = Px(PanelRadius);
-            else if (_mode == Mode.Alert) radius = Px(22);
-            else radius = bounds.Height / 2;
-            radius = Math.Min(radius, bounds.Height / 2);
+            float radius = Math.Min(_radius > 0 ? _radius : TargetRadius(new SizeF(PillW, PillH)), bounds.Height / 2);
             DrawSoftShadow(g, bounds, radius, ShadowPad * 0.8f, Px(6), _mode == Mode.Tucked ? 90 : 200);
 
             // A partir de aquí todo se dibuja en coordenadas de la isla
@@ -947,12 +997,15 @@ namespace StreeckSuite.Modules
             bounds.Offset(-ShadowPad, -ShadowPad);
 
             Color? viewBorder = _mode == Mode.Tucked ? null : ActiveView.BorderColor;
-            using (GraphicsPath path = IslandPainter.RoundedRect(bounds, radius))
-            using (SolidBrush fill = new SolidBrush(Glass.FillAtLeast(IslandPainter.Background.A)))
+            // Pegada arriba: negro del notch de Bloom (86 %), salvo que el estilo de cristal pida más opacidad
+            Color fillColor = Attached ? Color.FromArgb(Math.Max((int)Glass.Fill.A, 220), 0, 0, 0) : Glass.FillAtLeast(IslandPainter.Background.A);
+            using (GraphicsPath path = Attached ? NotchPath(bounds, radius, true) : IslandPainter.RoundedRect(bounds, radius))
+            using (GraphicsPath outline = Attached ? NotchPath(bounds, radius, false) : IslandPainter.RoundedRect(bounds, radius))
+            using (SolidBrush fill = new SolidBrush(fillColor))
             using (Pen pen = new Pen(viewBorder ?? Glass.Border, 1))
             {
                 g.FillPath(fill, path);
-                g.DrawPath(pen, path);
+                g.DrawPath(pen, outline);
             }
 
             if (_mode == Mode.Tucked) return; // Solo la rayita, sin contenido
@@ -967,11 +1020,44 @@ namespace StreeckSuite.Modules
                 return;
             }
 
-            DrawTabs(g, alpha);
+            if (Attached) DrawDots(g, alpha); else DrawTabs(g, alpha);
             g.TranslateTransform(0, Px(ContentTop));
             ActiveView.Draw(g, new SizeF(PillW, PillH - Px(ContentTop) - Px(PanelBottom)), alpha, _painter);
             g.TranslateTransform(0, -Px(ContentTop));
-            DrawTabTooltip(g, alpha);
+            if (!Attached) DrawTabTooltip(g, alpha);
+        }
+
+        /// <summary>
+        /// Pegada arriba: un puntito por vista abajo del panel (el actual alargado), como en el notch de Bloom.
+        /// Clic en un puntito va a esa vista; el nombre aparece junto a los puntitos al pasar el ratón.
+        /// </summary>
+        private void DrawDots(Graphics g, int alpha)
+        {
+            _tabRects.Clear();
+            _tabViews.Clear();
+            List<IslandView> available = AvailableViews();
+            if (available.Count < 2) return;
+            IslandView current = CurrentExpandedView();
+            float dot = Px(6), activeDot = Px(16), gap = Px(5);
+            float total = (available.Count - 1) * (dot + gap) + activeDot;
+            float x = (PillW - total) / 2, y = PillH - Px(PanelBottom) / 2 - dot / 2;
+            for (int i = 0; i < available.Count; i++)
+            {
+                bool active = available[i] == current;
+                float w = active ? activeDot : dot;
+                RectangleF shape = new RectangleF(x, y, w, dot);
+                int dotAlpha = active ? alpha : i == _hoveredTab ? alpha * 180 / 255 : alpha * 80 / 255;
+                IslandPainter.FillRounded(g, shape, dot / 2, Color.FromArgb(dotAlpha, Color.White));
+                _tabRects.Add(RectangleF.Inflate(shape, gap / 2, Px(8))); // Zona de clic más generosa que el puntito
+                _tabViews.Add(available[i]);
+                x += w + gap;
+            }
+            if (_hoveredTab >= 0 && _hoveredTab < _tabViews.Count && _tabViews[_hoveredTab] != current)
+            {
+                string name = _tabViews[_hoveredTab].TabName;
+                _painter.DrawText(g, name, _painter.Text11, IslandPainter.Fade(IslandPainter.Gray, alpha),
+                    new RectangleF(x + Px(6), y - Px(6), Px(140), dot + Px(12)), StringAlignment.Near);
+            }
         }
 
         /// <summary>
@@ -1055,6 +1141,7 @@ namespace StreeckSuite.Modules
                 SizeF size = TargetSize();
                 _width = size.Width;
                 _height = size.Height;
+                _radius = TargetRadius(size);
                 _contentOpacity = 1f;
                 using (Bitmap image = new Bitmap(PillW + 2 * ShadowPad, PillH + 2 * ShadowPad))
                 {
