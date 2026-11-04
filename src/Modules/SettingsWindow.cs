@@ -1131,6 +1131,12 @@ namespace StreeckSuite.Modules
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Aero acrílico", "100 % transparente", "Obsidiana", "Neón" }, (int)SuiteSettings.GlassStyle,
                 i => { SuiteSettings.GlassStyle = (SuiteSettings.GlassStyleKind)i; SuiteSettings.Save(); });
             DrawText(g, "Se aplica a la barra, el menú de inicio y la isla", _reg12, Gray, new RectangleF(InnerX, y + 92, InnerW, 16), StringAlignment.Near);
+
+            // Mini reproductor (sugerencia del mockup de la barra): con él, la isla de arriba no repite la música
+            y += 118 + 14;
+            DrawCard(g, y, 66);
+            DrawToggleRow(g, y + 4, "Mini reproductor en la barra", "Una isla más con la canción; la isla de arriba deja de mostrar música", SuiteSettings.TaskbarMiniPlayer,
+                () => { SuiteSettings.TaskbarMiniPlayer = !SuiteSettings.TaskbarMiniPlayer; SuiteSettings.Save(); });
         }
 
         #endregion

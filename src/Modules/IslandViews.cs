@@ -121,7 +121,7 @@ namespace StreeckSuite.Modules
 
         private static bool Busy
         {
-            get { return TimerService.IsActive || MediaService.Current.IsPlaying; }
+            get { return TimerService.IsActive || (MediaService.Current.IsPlaying && !SuiteSettings.MusicInTaskbar); }
         }
 
         public override SizeF BaseSize
@@ -189,7 +189,7 @@ namespace StreeckSuite.Modules
                 p.DrawRing(g, new RectangleF(left, midY - ringSize / 2, ringSize, ringSize), TimerService.Progress, TimeColors.Current, alpha, p.Px(3));
                 p.DrawText(g, remaining, p.TimeFont, IslandPainter.Fade(TimeColors.CurrentLight, alpha), new RectangleF(left + ringSize + p.Px(6), 0, textWidth + p.Px(4), size.Height), StringAlignment.Near);
             }
-            else if (media.IsPlaying)
+            else if (media.IsPlaying && !SuiteSettings.MusicInTaskbar) // Con el reproductor en la barra, aquí va la hora
             {
                 float bars = p.Px(22);
                 float titleWidth = Math.Min(maxWidth - bars - p.Px(8), g.MeasureString(media.Title, p.SmallFont).Width + p.Px(2));

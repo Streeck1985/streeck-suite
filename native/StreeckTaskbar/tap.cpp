@@ -31,6 +31,12 @@
 #include <winrt/Windows.UI.Xaml.Controls.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
+#include <winrt/Windows.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
+#include <winrt/Windows.UI.Text.h>
+#include <winrt/Windows.Media.Control.h>
+#include <winrt/Windows.Storage.Streams.h>
+#include <mutex>
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
@@ -69,6 +75,7 @@ struct Settings
     int Gap = 14;
     bool Edges = false;
     int Glass = Aero;
+    bool MiniPlayer = false;  // 4.ª isla con la música (sugerencia aprobada del mockup de la barra)
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -147,6 +154,7 @@ static void LoadSettings()
     g_settings.Gap = std::clamp(ToInt(values, L"separacion", 14), 0, 80);
     g_settings.Edges = ToInt(values, L"extremos", 0) == 1;
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
+    g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
 }
 
 static wux::UIElement ElementFrom(InstanceHandle handle)
@@ -317,6 +325,8 @@ static void StyleBackground(InstanceHandle handle)
     element.Opacity(g_settings.Active ? 0.0 : g_originalOpacity[handle]);
 }
 
+static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height);
+
 static void LayoutFrame(FrameState& state)
 {
     wuxc::Grid root = state.Root.get();
@@ -442,6 +452,12 @@ static void LayoutFrame(FrameState& state)
     for (int g = 0; g < 3; g++) islandWidth[g] = present[g] ? maxX[g] - minX[g] + 2 * pad : 0;
     for (Item& item : items) SetShift(item.Element, (float)shiftOf[item.Group]);
 
+    // Mini reproductor: a la derecha de la isla de las apps (solo en la barra principal)
+    if (!g_frames.empty() && g_frames[0].get() == &state && present[1])
+    {
+        PlacePlayer(root, maxX[1] + shiftOf[1] + pad + 14, top, islandHeight);
+    }
+
     // Firma de lo que hay que dibujar
     wchar_t signature[256];
     swprintf_s(signature, L"%d|%d|%d|%d|%d|%.0f|%.0f|%.0f,%.0f|%.0f,%.0f|%.0f,%.0f", g_settings.Active, g_settings.Format, g_settings.Gap,
@@ -503,6 +519,249 @@ static void LayoutFrame(FrameState& state)
         if (present[g]) AddIsland(canvas, minX[g] + shiftOf[g] - pad, top, islandWidth[g], islandHeight, islandHeight / 2);
     }
 }
+
+#pragma region Mini reproductor (4.ª isla)
+
+namespace wmc = winrt::Windows::Media::Control;
+
+// La música la lee un hilo aparte (Windows avisa de cambios); la isla se actualiza en el hilo de la barra
+static std::mutex g_mediaLock;
+static wmc::GlobalSystemMediaTransportControlsSessionManager g_mediaManager{ nullptr };
+static wmc::GlobalSystemMediaTransportControlsSession g_session{ nullptr };
+static winrt::weak_ref<wuxc::Canvas> g_playerCanvas;
+static winrt::weak_ref<wuxc::Border> g_playerIsland, g_playerArt;
+static winrt::weak_ref<wuxc::TextBlock> g_playerTitle, g_playerArtist;
+static winrt::weak_ref<wuxc::FontIcon> g_playerPlay;
+static bool g_hasMedia = false;
+static double g_playerX = -1;
+// Lo último que se supo de la canción: se aplica también cuando la isla se crea después
+static std::wstring g_lastTitle, g_lastArtist;
+static bool g_lastPlaying = false;
+static winrt::Windows::Storage::Streams::IRandomAccessStreamWithContentType g_lastThumbnail{ nullptr };
+
+static void ApplyMediaToPlayer()
+{
+    if (auto t = g_playerTitle.get()) t.Text(g_lastTitle);
+    if (auto a = g_playerArtist.get()) a.Text(g_lastArtist);
+    if (auto p = g_playerPlay.get()) p.Glyph(g_lastPlaying ? L"" : L"");
+    if (auto art = g_playerArt.get())
+    {
+        if (g_lastThumbnail)
+        {
+            wuxm::Imaging::BitmapImage image;
+            image.DecodePixelWidth(56);
+            g_lastThumbnail.Seek(0);
+            image.SetSourceAsync(g_lastThumbnail);
+            wuxm::ImageBrush brush;
+            brush.ImageSource(image);
+            brush.Stretch(wuxm::Stretch::UniformToFill);
+            art.Background(brush);
+        }
+    }
+}
+
+static wmc::GlobalSystemMediaTransportControlsSession CurrentSession()
+{
+    std::lock_guard<std::mutex> lock(g_mediaLock);
+    return g_session;
+}
+
+static wuxc::Button PlayerButton(const wchar_t* glyph, wuxc::FontIcon* iconOut)
+{
+    wuxc::Button button;
+    button.Background(wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 }));
+    button.BorderThickness(wux::Thickness{ 0, 0, 0, 0 });
+    button.Padding(wux::Thickness{ 6, 4, 6, 4 });
+    button.MinWidth(0);
+    button.MinHeight(0);
+    wuxc::FontIcon icon;
+    icon.Glyph(glyph);
+    icon.FontSize(13);
+    icon.Foreground(wuxm::SolidColorBrush(Color{ 255, 255, 255, 255 }));
+    button.Content(icon);
+    if (iconOut) *iconOut = icon;
+    return button;
+}
+
+// Crea la isla del reproductor (una vez) encima de la barra
+static wuxc::Canvas EnsurePlayer(wuxc::Grid const& root)
+{
+    wuxc::Canvas canvas = g_playerCanvas.get();
+    if (canvas) return canvas;
+    canvas = wuxc::Canvas();  // Sin fondo: solo la isla recibe clics
+    wuxc::Grid::SetRowSpan(canvas, 16);
+    wuxc::Grid::SetColumnSpan(canvas, 16);
+
+    wuxc::Border island;
+    island.CornerRadius(wux::CornerRadius{ 20, 20, 20, 20 });
+    island.Padding(wux::Thickness{ 6, 0, 4, 0 });
+    wuxc::StackPanel row;
+    row.Orientation(wuxc::Orientation::Horizontal);
+    row.VerticalAlignment(wux::VerticalAlignment::Center);
+
+    wuxc::Border art;
+    art.Width(28);
+    art.Height(28);
+    art.CornerRadius(wux::CornerRadius{ 7, 7, 7, 7 });
+    art.Background(wuxm::SolidColorBrush(Color{ 255, 124, 58, 237 }));
+    art.VerticalAlignment(wux::VerticalAlignment::Center);
+    row.Children().Append(art);
+
+    wuxc::StackPanel text;
+    text.Margin(wux::Thickness{ 8, 0, 6, 0 });
+    text.Width(120);
+    text.VerticalAlignment(wux::VerticalAlignment::Center);
+    wuxc::TextBlock title;
+    title.FontSize(12);
+    title.FontWeight(winrt::Windows::UI::Text::FontWeight{ 600 });
+    title.Foreground(wuxm::SolidColorBrush(Color{ 255, 255, 255, 255 }));
+    title.TextTrimming(wux::TextTrimming::CharacterEllipsis);
+    wuxc::TextBlock artist;
+    artist.FontSize(11);
+    artist.Foreground(wuxm::SolidColorBrush(Color{ 255, 154, 164, 181 }));
+    artist.TextTrimming(wux::TextTrimming::CharacterEllipsis);
+    text.Children().Append(title);
+    text.Children().Append(artist);
+    row.Children().Append(text);
+
+    wuxc::FontIcon playIcon{ nullptr };
+    wuxc::Button previous = PlayerButton(L"", nullptr);
+    wuxc::Button play = PlayerButton(L"", &playIcon);
+    wuxc::Button next = PlayerButton(L"", nullptr);
+    previous.Click([](auto&&, auto&&) { auto s = CurrentSession(); if (s) s.TrySkipPreviousAsync(); });
+    play.Click([](auto&&, auto&&) { auto s = CurrentSession(); if (s) s.TryTogglePlayPauseAsync(); });
+    next.Click([](auto&&, auto&&) { auto s = CurrentSession(); if (s) s.TrySkipNextAsync(); });
+    row.Children().Append(previous);
+    row.Children().Append(play);
+    row.Children().Append(next);
+    island.Child(row);
+    canvas.Children().Append(island);
+    root.Children().Append(canvas);  // Encima de todo
+
+    g_playerCanvas = canvas;
+    g_playerIsland = island;
+    g_playerArt = art;
+    g_playerTitle = title;
+    g_playerArtist = artist;
+    g_playerPlay = playIcon;
+    g_playerX = -1;
+    ApplyMediaToPlayer();
+    return canvas;
+}
+
+static void RemovePlayer(wuxc::Grid const& root)
+{
+    wuxc::Canvas canvas = g_playerCanvas.get();
+    if (!canvas) return;
+    uint32_t index;
+    if (root.Children().IndexOf(canvas, index)) root.Children().RemoveAt(index);
+    g_playerCanvas = nullptr;
+}
+
+// Coloca la isla del reproductor a la derecha de la de las apps (o la quita si no toca)
+static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height)
+{
+    bool wanted = g_settings.Active && g_settings.MiniPlayer && g_hasMedia && g_settings.Format != Capsule;
+    if (!wanted) { RemovePlayer(root); return; }
+    wuxc::Canvas canvas = EnsurePlayer(root);
+    wuxc::Border island = g_playerIsland.get();
+    if (!island) return;
+    island.Height(height);
+    island.Background(wuxm::SolidColorBrush(g_settings.Format == Full ? Color{ 0, 0, 0, 0 } : FillColor()));
+    island.BorderBrush(wuxm::SolidColorBrush(g_settings.Format == Full ? Color{ 0, 0, 0, 0 } : BorderColor()));
+    island.BorderThickness(wux::Thickness{ 1, 1, 1, 1 });
+    if (std::abs(g_playerX - x) > 1)
+    {
+        wuxc::Canvas::SetLeft(island, x);
+        wuxc::Canvas::SetTop(island, top);
+        g_playerX = x;
+    }
+}
+
+// Datos de la canción: se piden fuera del hilo de la barra y se aplican en él
+static void RefreshMedia()
+{
+    try
+    {
+        wmc::GlobalSystemMediaTransportControlsSession session = CurrentSession();
+        std::wstring title, artist;
+        bool playing = false;
+        winrt::Windows::Storage::Streams::IRandomAccessStreamWithContentType thumbnail{ nullptr };
+        if (session)
+        {
+            auto properties = session.TryGetMediaPropertiesAsync().get();
+            title = properties.Title();
+            artist = properties.Artist();
+            playing = session.GetPlaybackInfo().PlaybackStatus() == wmc::GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+            if (properties.Thumbnail())
+            {
+                try { thumbnail = properties.Thumbnail().OpenReadAsync().get(); } catch (...) { }
+            }
+        }
+        wux::UIElement anchor = g_anchor.get();
+        if (!anchor) return;
+        anchor.Dispatcher().RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, [session, title, artist, playing, thumbnail]
+        {
+            try
+            {
+                g_hasMedia = session != nullptr && !title.empty();
+                g_lastTitle = title;
+                g_lastArtist = artist;
+                g_lastPlaying = playing;
+                g_lastThumbnail = thumbnail;
+                ApplyMediaToPlayer();
+                for (auto& frame : g_frames) frame->Drawn.clear(); // Que la próxima pasada coloque o quite la isla
+                if (!g_frames.empty())
+                {
+                    auto first = g_frames[0];
+                    if (auto root = first->Root.get()) root.InvalidateArrange();
+                }
+            }
+            catch (...) { }
+        });
+    }
+    catch (...) { }
+}
+
+static void WatchSession(wmc::GlobalSystemMediaTransportControlsSession const& session)
+{
+    if (!session) return;
+    session.MediaPropertiesChanged([](auto&&, auto&&) { RefreshMedia(); });
+    session.PlaybackInfoChanged([](auto&&, auto&&) { RefreshMedia(); });
+}
+
+static void StartMedia()
+{
+    std::thread([]
+    {
+        try
+        {
+            winrt::init_apartment(winrt::apartment_type::multi_threaded);
+            auto manager = wmc::GlobalSystemMediaTransportControlsSessionManager::RequestAsync().get();
+            {
+                std::lock_guard<std::mutex> lock(g_mediaLock);
+                g_mediaManager = manager;
+                g_session = manager.GetCurrentSession();
+            }
+            WatchSession(CurrentSession());
+            manager.CurrentSessionChanged([](auto&& sender, auto&&)
+            {
+                auto current = sender.GetCurrentSession();
+                { std::lock_guard<std::mutex> lock(g_mediaLock); g_session = current; }
+                WatchSession(current);
+                RefreshMedia();
+            });
+            RefreshMedia();
+            Log(L"Mini reproductor conectado a la música de Windows");
+        }
+        catch (winrt::hresult_error const& error)
+        {
+            Log(L"Mini reproductor sin música: " + std::wstring(error.message()));
+        }
+    }).detach();
+}
+
+#pragma endregion
 
 static void SetupFrame(std::shared_ptr<FrameState> const& state)
 {
@@ -674,6 +933,7 @@ struct Tap : winrt::implements<Tap, IObjectWithSite>
                 Log(SUCCEEDED(hr) ? L"Conectado al árbol de la barra" : L"AdviseVisualTreeChange falló: " + std::to_wstring(hr));
             }).detach();
             std::thread(ListenForSettings).detach();
+            StartMedia();
             return S_OK;
         }
         catch (...)

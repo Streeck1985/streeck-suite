@@ -95,6 +95,7 @@ namespace StreeckSuite.Modules
                     "separacion=" + SuiteSettings.TaskbarGap,
                     "extremos=" + (SuiteSettings.TaskbarEdges ? 1 : 0),
                     "cristal=" + (int)SuiteSettings.GlassStyle,
+                    "miniplayer=" + (SuiteSettings.TaskbarMiniPlayer ? 1 : 0),
                 });
             }
             catch (Exception ex)
