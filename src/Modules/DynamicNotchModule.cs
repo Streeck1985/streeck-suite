@@ -1195,6 +1195,8 @@ namespace StreeckSuite.Modules
             System.IO.Directory.CreateDirectory(folder);
             List<KeyValuePair<string, Action>> states = new List<KeyValuePair<string, Action>>();
             states.Add(new KeyValuePair<string, Action>("compacta", () => { _mode = Mode.Compact; }));
+            states.Add(new KeyValuePair<string, Action>("compacta-ojitos", () => { SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; _mode = Mode.Compact; }));
+            states.Add(new KeyValuePair<string, Action>("compacta-widgets", () => { SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Widgets; _mode = Mode.Compact; }));
             // Música de ejemplo (con y sin letra), para revisar el diseño aunque no suene nada
             MediaInfo sample = new MediaInfo { Title = "Can't Stop", Artist = "Red Hot Chili Peppers", AppName = "Spotify", IsPlaying = true, IsAvailable = true,
                 Accent = Color.FromArgb(120, 140, 230), Position = TimeSpan.FromSeconds(31), Duration = TimeSpan.FromSeconds(269), PositionSampledAt = DateTime.Now };
