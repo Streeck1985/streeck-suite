@@ -14,6 +14,7 @@ namespace StreeckSuite.Core
     public static class SuiteSettings
     {
         public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly }
+        public enum IslandStyleKind { Attached, Floating }               // Pegada arriba (notch de Bloom) o flotante
         public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
         public enum AssistantEngineKind { Local, Gemini }
@@ -40,6 +41,7 @@ namespace StreeckSuite.Core
         public static int IslandSongPeekMs = 4000;      // 0..10000
         public static int IslandOpacityPercent = 100;   // 50..100
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
+        public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
         // Avisos (las apps silenciadas se guardan aparte: NotificationApps)
         public static bool NotificationsEnabled = true;
@@ -130,6 +132,8 @@ namespace StreeckSuite.Core
                 IslandSongPeekMs = ReadInt(values, "isla.cancionNuevaMs", IslandSongPeekMs, 0, 10000);
                 IslandOpacityPercent = ReadInt(values, "isla.opacidad", IslandOpacityPercent, 50, 100);
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
+                IslandStyleKind islandStyle;
+                if (values.TryGetValue("isla.estilo", out raw) && Enum.TryParse(raw, out islandStyle)) IslandStyle = islandStyle;
                 NotificationsEnabled = ReadBool(values, "avisos.activos", NotificationsEnabled);
                 NotificationDurationMs = ReadInt(values, "avisos.duracionMs", NotificationDurationMs, 1000, 10000);
                 CaptureDots = ReadBool(values, "avisos.puntosMicroCamara", CaptureDots);
@@ -205,6 +209,7 @@ namespace StreeckSuite.Core
                     "isla.cancionNuevaMs=" + IslandSongPeekMs,
                     "isla.opacidad=" + IslandOpacityPercent,
                     "isla.tamano=" + IslandScalePercent,
+                    "isla.estilo=" + IslandStyle,
                     "avisos.activos=" + (NotificationsEnabled ? 1 : 0),
                     "avisos.duracionMs=" + NotificationDurationMs,
                     "avisos.puntosMicroCamara=" + (CaptureDots ? 1 : 0),

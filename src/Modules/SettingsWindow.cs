@@ -591,6 +591,13 @@ namespace StreeckSuite.Modules
                 f => { SuiteSettings.IslandScalePercent = 70 + (int)Math.Round(f * 10) * 5; SuiteSettings.NotifyChanged(); });
             DrawInlineSlider(g, y + 44, "Opacidad", SuiteSettings.IslandOpacityPercent + " %", (SuiteSettings.IslandOpacityPercent - 50) / 50f,
                 f => { SuiteSettings.IslandOpacityPercent = 50 + (int)Math.Round(f * 50); SuiteSettings.NotifyChanged(); });
+
+            // Estilo (fase J1): pegada arriba como el notch de Bloom, o flotante como antes
+            y = 562;
+            DrawCard(g, y, 56);
+            DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y, 120, 56), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba (Bloom)", "Flotante" },
+                (int)SuiteSettings.IslandStyle, i => { SuiteSettings.IslandStyle = (SuiteSettings.IslandStyleKind)i; SuiteSettings.Save(); });
         }
 
         private static void SetTabShown(int index, bool shown)
