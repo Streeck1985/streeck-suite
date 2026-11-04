@@ -1324,10 +1324,18 @@ namespace StreeckSuite.Modules
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 300, y + 58, 300, 34), new[] { "Nada", "Crece", "Gira" }, SuiteSettings.StartIconHover,
                 i => { SuiteSettings.StartIconHover = i; SuiteSettings.Save(); });
 
+            // Qué abre el clic (el derecho siempre da el menú Win + X de Windows)
             y += 108 + 14;
+            DrawCard(g, y, 76);
+            DrawText(g, "Al darle clic abre", _semi14, TextColor, new RectangleF(InnerX, y + 4, 200, 40), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 300, y + 8, 300, 34), new[] { "Menú de Streeck", "Menú de Windows" },
+                SuiteSettings.StartButtonOpensSuite ? 0 : 1, i => { SuiteSettings.StartButtonOpensSuite = i == 0; SuiteSettings.Save(); });
+            DrawText(g, "El clic derecho sigue mostrando el menú de Windows (Win + X).", _reg12, Gray, new RectangleF(InnerX, y + 48, InnerW, 20), StringAlignment.Near);
+
+            y += 76 + 14;
             DrawCard(g, y, 64);
             string note = SuiteSettings.TaskbarEnabled
-                ? "Al darle clic sigue abriendo el menú de inicio. «Windows original» lo deja como siempre."
+                ? "«Windows original» deja el icono como siempre."
                 : "Activa «Islas en la barra de Windows» en Barra de tareas para ver el icono.";
             DrawText(g, note, _reg12, SuiteSettings.TaskbarEnabled ? Gray : Color.FromArgb(251, 191, 36), new RectangleF(InnerX, y + 8, InnerW, 20), StringAlignment.Near);
             DrawText(g, "«Tu imagen»: mejor un PNG cuadrado con fondo transparente (mínimo 64×64).", _reg12, Gray, new RectangleF(InnerX, y + 34, InnerW, 20), StringAlignment.Near);

@@ -47,6 +47,7 @@ namespace StreeckSuite.Core
         public static int StartIcon = 0;                // Botón de Inicio: 0 Windows, 1 Streeck, 2 Orbe, 3 Ojitos, 4 Destello, 5 Luna, 6 Tu imagen
         public static int StartIconSize = 100;          // 70..140 %
         public static int StartIconHover = 1;           // 0 nada, 1 crece, 2 gira
+        public static bool StartButtonOpensSuite = true; // El clic en el botón de Inicio abre el menú de Streeck
         public static int TaskbarSkin = 1;              // 0 Cristal, 1 Notch, 2 Dock, 3 Neón, 4 Fantasma, 5 Línea fina, 6 Aurora, 7 Aero 7, 8 Cristal líquido, 9 Gamer RGB
 
         /// <summary>
@@ -171,6 +172,7 @@ namespace StreeckSuite.Core
                 StartIcon = ReadInt(values, "barra.inicio.icono", StartIcon, 0, 6);
                 StartIconSize = ReadInt(values, "barra.inicio.tamano", StartIconSize, 70, 140);
                 StartIconHover = ReadInt(values, "barra.inicio.efecto", StartIconHover, 0, 2);
+                StartButtonOpensSuite = ReadBool(values, "barra.inicio.menu", StartButtonOpensSuite);
                 IslandIdleKind idle;
                 if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
                 EyesStyleKind eyesStyle;
@@ -269,6 +271,7 @@ namespace StreeckSuite.Core
                     "barra.inicio.icono=" + StartIcon,
                     "barra.inicio.tamano=" + StartIconSize,
                     "barra.inicio.efecto=" + StartIconHover,
+                    "barra.inicio.menu=" + (StartButtonOpensSuite ? 1 : 0),
                     "isla.cerrada=" + IslandIdle,
                     "ojos.estilo=" + EyesStyle,
                     "ojos.color=" + EyesColor,

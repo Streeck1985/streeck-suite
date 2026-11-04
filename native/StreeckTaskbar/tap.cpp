@@ -40,6 +40,7 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <shlwapi.h>
 #include <shcore.h>
+#include <cmath>
 #include <mutex>
 #include <algorithm>
 #include <cstdio>
@@ -87,6 +88,7 @@ struct Settings
     int StartSize = 100;                // 70..140 %
     int StartHover = 1;                 // 0 nada, 1 crece, 2 gira
     std::wstring StartFile;
+    bool StartOpensSuite = true;        // El clic en Inicio abre el menú de Streeck (no el de Windows)
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -107,6 +109,7 @@ struct FrameState
     bool Pending = false;
     // Icono de Inicio de esta barra
     winrt::weak_ref<wux::FrameworkElement> StartButton, StartHookedButton;
+    winrt::weak_ref<wuxc::Border> StartOverlay;  // Capa invisible sobre el botón: el clic abre el menú de Streeck
     std::wstring StartDrawn;
 };
 
@@ -175,6 +178,7 @@ static void LoadSettings()
     g_settings.StartHover = std::clamp(ToInt(values, L"inicio_efecto", 1), 0, 2);
     auto startFile = values.find(L"inicio_archivo");
     g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
+    g_settings.StartOpensSuite = ToInt(values, L"inicio_clic", 1) == 1;
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
     int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
     auto color = values.find(L"color");
@@ -1100,6 +1104,69 @@ static void HoverStartIcon(winrt::Windows::Foundation::IInspectable const& sende
     story.Begin();
 }
 
+// Clic en Inicio → menú de Streeck. Una capa transparente encima del botón recibe el clic y avisa a la suite por un
+// evento con nombre; el clic derecho manda Win + X para que siga saliendo el menú de Windows de siempre.
+static void PlaceStartOverlay(FrameState& state, wux::FrameworkElement const& button)
+{
+    wuxc::Grid root = state.Root.get();
+    if (!root) return;
+    wuxc::Border overlay = state.StartOverlay.get();
+    bool wanted = g_settings.Active && g_settings.StartOpensSuite && button && button.Visibility() == wux::Visibility::Visible;
+    if (!wanted)
+    {
+        if (overlay)
+        {
+            uint32_t index;
+            if (root.Children().IndexOf(overlay, index)) root.Children().RemoveAt(index);
+            state.StartOverlay = nullptr;
+        }
+        return;
+    }
+    if (!overlay)
+    {
+        overlay = wuxc::Border();
+        overlay.Name(L"StreeckStartClick");
+        overlay.Background(wuxm::SolidColorBrush(Argb(0, 0, 0, 0))); // Transparente pero recibe el ratón
+        overlay.HorizontalAlignment(wux::HorizontalAlignment::Left);
+        overlay.VerticalAlignment(wux::VerticalAlignment::Top);
+        wuxc::Grid::SetRowSpan(overlay, 16);
+        wuxc::Grid::SetColumnSpan(overlay, 16);
+        winrt::weak_ref<wux::FrameworkElement> weakButton = button;
+        overlay.Tapped([](auto&&, wux::Input::TappedRoutedEventArgs const& args)
+        {
+            static HANDLE click = CreateEventW(nullptr, FALSE, FALSE, L"Local\\StreeckSuite.StartClick");
+            SetEvent(click);
+            args.Handled(true);
+        });
+        overlay.RightTapped([](auto&&, wux::Input::RightTappedRoutedEventArgs const& args)
+        {
+            INPUT keys[4] = {};
+            WORD codes[4] = { VK_LWIN, 'X', 'X', VK_LWIN };
+            for (int i = 0; i < 4; i++)
+            {
+                keys[i].type = INPUT_KEYBOARD;
+                keys[i].ki.wVk = codes[i];
+                keys[i].ki.dwFlags = i >= 2 ? KEYEVENTF_KEYUP : 0;
+            }
+            SendInput(4, keys, sizeof(INPUT));
+            args.Handled(true);
+        });
+        overlay.PointerEntered([weakButton](auto&&, auto&&) { auto b = weakButton.get(); if (b) try { HoverStartIcon(b, true); } catch (...) { } });
+        overlay.PointerExited([weakButton](auto&&, auto&&) { auto b = weakButton.get(); if (b) try { HoverStartIcon(b, false); } catch (...) { } });
+        root.Children().Append(overlay);
+        state.StartOverlay = overlay;
+        Log(L"Clic de Inicio: abre el menú de Streeck");
+    }
+    // Encima del botón (Translation no la cuenta TransformToVisual: se suma a mano)
+    Rect r = button.TransformToVisual(root).TransformBounds(Rect{ 0, 0, (float)button.ActualWidth(), (float)button.ActualHeight() });
+    double left = r.X + button.Translation().x;
+    wux::Thickness margin = overlay.Margin();
+    if (std::abs(margin.Left - left) > 0.5 || std::abs(margin.Top - r.Y) > 0.5) overlay.Margin(wux::ThicknessHelper::FromLengths(left, r.Y, 0, 0));
+    double width = overlay.Width(), height = overlay.Height(); // NaN mientras no se fijan
+    if (std::isnan(width) || std::abs(width - r.Width) > 0.5) overlay.Width(r.Width);
+    if (std::isnan(height) || std::abs(height - r.Height) > 0.5) overlay.Height(r.Height);
+}
+
 static void ApplyStartIcon(FrameState& state)
 {
     wux::FrameworkElement repeater = state.Repeater.get();
@@ -1112,6 +1179,7 @@ static void ApplyStartIcon(FrameState& state)
         state.StartButton = button;
         state.StartDrawn.clear();
     }
+    PlaceStartOverlay(state, button);
     wux::FrameworkElement icon = FindByName(button, L"Icon");
     if (!icon) return;
     wuxc::Panel panel = wuxm::VisualTreeHelper::GetParent(icon).try_as<wuxc::Panel>();

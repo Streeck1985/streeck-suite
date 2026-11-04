@@ -85,6 +85,7 @@ namespace StreeckSuite.Modules
         public void Toggle()
         {
             if (Visible) { HideMenu(); return; }
+            if ((DateTime.Now - _hiddenAt).TotalMilliseconds < 350) return;
             Log.Info("[StartMenu] Abriendo el menú");
             _view = View.Home;
             _query = "";
@@ -107,7 +108,12 @@ namespace StreeckSuite.Modules
         {
             _fileTimer.Stop();
             Hide();
+            _hiddenAt = DateTime.Now;
         }
+
+        // Clic en el botón de Inicio con el menú abierto: el clic primero lo cierra (pierde el foco) y luego llega el
+        // aviso del botón; ese aviso no debe volver a abrirlo
+        private DateTime _hiddenAt = DateTime.MinValue;
 
         protected override void OnDeactivate(EventArgs e)
         {
