@@ -96,6 +96,9 @@ namespace StreeckSuite.Modules
                     "extremos=" + (SuiteSettings.TaskbarEdges ? 1 : 0),
                     "cristal=" + (int)SuiteSettings.GlassStyle,
                     "miniplayer=" + (SuiteSettings.TaskbarMiniPlayer ? 1 : 0),
+                    // Las islas de la barra imitan al notch: su color y su opacidad
+                    "color=" + SuiteSettings.IslandColor,
+                    "opacidad=" + SuiteSettings.IslandOpacityPercent,
                 });
             }
             catch (Exception ex)

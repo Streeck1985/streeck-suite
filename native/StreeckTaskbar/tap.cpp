@@ -76,6 +76,7 @@ struct Settings
     bool Edges = false;
     int Glass = Aero;
     bool MiniPlayer = false;  // 4.ª isla con la música (sugerencia aprobada del mockup de la barra)
+    Color IslandColor{ 219, 0, 0, 0 };  // Mismo color y opacidad que la isla de arriba (las islas de la barra la imitan)
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -155,6 +156,15 @@ static void LoadSettings()
     g_settings.Edges = ToInt(values, L"extremos", 0) == 1;
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
     g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
+    // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
+    int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
+    auto color = values.find(L"color");
+    unsigned int rgb = 0;
+    if (color != values.end() && color->second.size() == 7 && color->second[0] == L'#')
+    {
+        try { rgb = std::stoul(color->second.substr(1), nullptr, 16); } catch (...) { rgb = 0; }
+    }
+    g_settings.IslandColor = Color{ (uint8_t)(opacity * 255 / 100), (uint8_t)(rgb >> 16), (uint8_t)((rgb >> 8) & 0xFF), (uint8_t)(rgb & 0xFF) };
 }
 
 static wux::UIElement ElementFrom(InstanceHandle handle)
@@ -241,27 +251,16 @@ static Color Argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 
 #pragma region Dibujo de las islas
 
-// Colores del estilo de cristal global (los mismos de Glass.cs)
+// Las islas de la barra se ven igual que el notch: su color y opacidad (Ajustes → Isla) y sin contorno.
+// Solo el cristal Neón añade su halo azul, que es justo ese estilo.
 static Color FillColor()
 {
-    switch (g_settings.Glass)
-    {
-        case Transparent: return Argb(70, 18, 22, 32);
-        case Obsidian: return Argb(240, 6, 8, 12);
-        case Neon: return Argb(215, 14, 18, 28);
-        default: return Argb(225, 14, 18, 28);
-    }
+    return g_settings.IslandColor;
 }
 
 static Color BorderColor()
 {
-    switch (g_settings.Glass)
-    {
-        case Transparent: return Argb(25, 255, 255, 255);
-        case Obsidian: return Argb(22, 255, 255, 255);
-        case Neon: return Argb(210, 56, 189, 248);
-        default: return Argb(41, 255, 255, 255);
-    }
+    return g_settings.Glass == Neon ? Argb(210, 56, 189, 248) : Color{ 0, 0, 0, 0 };
 }
 
 static void AddRect(wuxc::Canvas const& canvas, double x, double y, double w, double h, double radius, Color fill, Color stroke, double thickness)
@@ -295,7 +294,7 @@ static void AddIsland(wuxc::Canvas const& canvas, double x, double y, double w, 
         AddRect(canvas, x - 2, y - 1, w + 4, h + 4, radius + 2, Argb(30, 0, 0, 0), Color{}, 0);
         AddRect(canvas, x - 1, y, w + 2, h + 2, radius + 1, Argb(45, 0, 0, 0), Color{}, 0);
     }
-    AddRect(canvas, x, y, w, h, radius, FillColor(), BorderColor(), g_settings.Glass == Neon ? 1.5 : 1.0);
+    AddRect(canvas, x, y, w, h, radius, FillColor(), BorderColor(), g_settings.Glass == Neon ? 1.5 : 0);
 }
 
 // Corre la bandeja con RenderTransform (los clics la siguen). El clima no se puede mover: se dibuja en una capa de
