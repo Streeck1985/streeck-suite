@@ -19,7 +19,7 @@ namespace StreeckSuite.Modules
         public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
-        private const float W = 800, H = 632, SideW = 210, ContentX = 238, ContentW = 534;
+        private const float W = 800, H = 680, SideW = 210, ContentX = 238, ContentW = 534;
         private const float ContentRight = ContentX + ContentW;
         private const float InnerX = ContentX + 16, InnerW = ContentW - 32;
 
@@ -589,15 +589,33 @@ namespace StreeckSuite.Modules
             DrawCard(g, y, 78);
             DrawInlineSlider(g, y + 12, "Tamaño", SuiteSettings.IslandScalePercent + " %", (SuiteSettings.IslandScalePercent - 70) / 50f,
                 f => { SuiteSettings.IslandScalePercent = 70 + (int)Math.Round(f * 10) * 5; SuiteSettings.NotifyChanged(); });
-            DrawInlineSlider(g, y + 44, "Opacidad", SuiteSettings.IslandOpacityPercent + " %", (SuiteSettings.IslandOpacityPercent - 50) / 50f,
-                f => { SuiteSettings.IslandOpacityPercent = 50 + (int)Math.Round(f * 50); SuiteSettings.NotifyChanged(); });
+            // Opacidad: solo el fondo (las letras siempre se ven completas)
+            DrawInlineSlider(g, y + 44, "Opacidad", SuiteSettings.IslandOpacityPercent + " %", (SuiteSettings.IslandOpacityPercent - 30) / 70f,
+                f => { SuiteSettings.IslandOpacityPercent = 30 + (int)Math.Round(f * 70); SuiteSettings.NotifyChanged(); });
 
-            // Estilo (fase J1): pegada arriba como el notch de Bloom, o flotante como antes
+            // Estilo (fase J1) y color del fondo, el mismo para los dos estilos
             y = 562;
-            DrawCard(g, y, 56);
+            DrawCard(g, y, 100);
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y, 120, 56), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba (Bloom)", "Flotante" },
                 (int)SuiteSettings.IslandStyle, i => { SuiteSettings.IslandStyle = (SuiteSettings.IslandStyleKind)i; SuiteSettings.Save(); });
+            DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 54, 120, 40), StringAlignment.Near);
+            string[] colors = { "#000000", "#1c1c1e", "#0f172a", "#1e1b4b", "#2e1065", "#052e16", "#3f0d12" };
+            const float swatch = 22, swatchGap = 10;
+            float sx = ContentRight - 16 - (colors.Length * (swatch + swatchGap) - swatchGap);
+            foreach (string hex in colors)
+            {
+                RectangleF circle = new RectangleF(sx, y + 63, swatch, swatch);
+                using (SolidBrush fill = new SolidBrush(ColorTranslator.FromHtml(hex))) g.FillEllipse(fill, circle);
+                using (Pen edge = new Pen(Color.FromArgb(60, 255, 255, 255), 1)) g.DrawEllipse(edge, circle); // Para ver el negro sobre el fondo oscuro
+                if (string.Equals(SuiteSettings.IslandColor, hex, StringComparison.OrdinalIgnoreCase))
+                {
+                    using (Pen ring = new Pen(Accent, 2f)) g.DrawEllipse(ring, RectangleF.Inflate(circle, 3, 3));
+                }
+                string picked = hex;
+                AddHit(circle, () => { SuiteSettings.IslandColor = picked; SuiteSettings.Save(); });
+                sx += swatch + swatchGap;
+            }
         }
 
         private static void SetTabShown(int index, bool shown)

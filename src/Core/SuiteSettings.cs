@@ -39,7 +39,8 @@ namespace StreeckSuite.Core
         public static bool IslandOpenOnHover = true;
         public static int IslandCloseDelayMs = 500;     // 0..3000
         public static int IslandSongPeekMs = 4000;      // 0..10000
-        public static int IslandOpacityPercent = 100;   // 50..100
+        public static int IslandOpacityPercent = 86;    // 30..100: opacidad del fondo de la isla (las letras no se transparentan)
+        public static string IslandColor = "#000000";   // Color de fondo de la isla (negro como el notch de Bloom)
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -130,7 +131,8 @@ namespace StreeckSuite.Core
                 IslandOpenOnHover = ReadBool(values, "isla.abrirAlPasar", IslandOpenOnHover);
                 IslandCloseDelayMs = ReadInt(values, "isla.cerrarTrasMs", IslandCloseDelayMs, 0, 3000);
                 IslandSongPeekMs = ReadInt(values, "isla.cancionNuevaMs", IslandSongPeekMs, 0, 10000);
-                IslandOpacityPercent = ReadInt(values, "isla.opacidad", IslandOpacityPercent, 50, 100);
+                IslandOpacityPercent = ReadInt(values, "isla.opacidad", IslandOpacityPercent, 30, 100);
+                if (values.TryGetValue("isla.color", out raw) && raw.Length > 0) IslandColor = raw;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
                 IslandStyleKind islandStyle;
                 if (values.TryGetValue("isla.estilo", out raw) && Enum.TryParse(raw, out islandStyle)) IslandStyle = islandStyle;
@@ -208,6 +210,7 @@ namespace StreeckSuite.Core
                     "isla.cerrarTrasMs=" + IslandCloseDelayMs,
                     "isla.cancionNuevaMs=" + IslandSongPeekMs,
                     "isla.opacidad=" + IslandOpacityPercent,
+                    "isla.color=" + IslandColor,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,
                     "avisos.activos=" + (NotificationsEnabled ? 1 : 0),
