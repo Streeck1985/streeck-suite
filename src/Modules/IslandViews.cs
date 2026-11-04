@@ -113,77 +113,163 @@ namespace StreeckSuite.Modules
         private string _batteryText;   // null si el equipo no tiene batería
         private DateTime _statusRefreshedAt = DateTime.MinValue;
 
+        // Isla cerrada (fase J6, mockup N2): Widgets (clima y CPU a la izquierda, RAM a la derecha) u Ojitos
+        private static bool Eyes
+        {
+            get { return SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes; }
+        }
+
+        private static bool Busy
+        {
+            get { return TimerService.IsActive || MediaService.Current.IsPlaying; }
+        }
+
         public override SizeF BaseSize
         {
-            get { return new SizeF(220, 38); }
+            get
+            {
+                if (!Eyes) return new SizeF(330, 34);
+                return Busy ? new SizeF(230, 34) : new SizeF(150, 34);
+            }
         }
 
         public override bool IsAnimated
         {
-            get { return true; } // Punto pulsante o ecualizador
+            get { return true; } // Ecualizador, parpadeo de los ojitos
         }
+
+        // CPU y RAM para los widgets: se miden cada 2 s en segundo plano
+        private static TelemetrySampler _sampler;
+        private static volatile TelemetrySampler.Snapshot _stats;
+        private static DateTime _statsAt = DateTime.MinValue;
+        private static bool _sampling;
+
+        // Ojitos: se duermen tras 60 s sin tocar el ratón ni el teclado y saludan al volver
+        private bool _wasAsleep;
+        private DateTime _wavedAt = DateTime.MinValue;
 
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             if ((DateTime.Now - _statusRefreshedAt).TotalSeconds >= 5) RefreshSystemStatus();
+            if (Eyes) DrawEyesMode(g, size, alpha, p);
+            else DrawWidgets(g, size, alpha, p);
+        }
 
+        private void DrawWidgets(Graphics g, SizeF size, int alpha, IslandPainter p)
+        {
+            SampleStats();
+            Color status = IslandPainter.Fade(IslandPainter.Secondary, alpha);
+            float x = p.Px(16), right = size.Width - p.Px(16);
+
+            // Izquierda: clima y CPU
+            WeatherService.Conditions weather = WeatherService.Shared.Current;
+            TelemetrySampler.Snapshot stats = _stats;
+            string left = (weather != null ? string.Format("{0:0}°", weather.TemperatureC) + "  " : "") + (stats != null ? string.Format("CPU {0:0} %", stats.CpuPercent) : "");
+            p.DrawText(g, left, p.SmallFont, status, new RectangleF(x, 0, p.Px(110), size.Height), StringAlignment.Near);
+
+            // Derecha: RAM (y los puntos de micrófono y cámara)
+            string ram = stats != null ? string.Format("RAM {0:0} %", stats.RamPercent) : "";
+            p.DrawText(g, ram, p.SmallFont, status, new RectangleF(right - p.Px(70), 0, p.Px(70), size.Height), StringAlignment.Far);
+            DrawCaptureDots(g, size, alpha, p, right - p.Px(76));
+
+            DrawCenter(g, size, alpha, p, p.Px(110));
+        }
+
+        // Centro de la píldora: tiempo en marcha, música sonando o la hora
+        private void DrawCenter(Graphics g, SizeF size, int alpha, IslandPainter p, float maxWidth)
+        {
             float midY = size.Height / 2f;
-            float x = p.Px(16);
-
-            float camera = p.Px(9);
-            using (SolidBrush lens = new SolidBrush(Color.FromArgb(alpha, 15, 23, 42)))
-            using (Pen ring = new Pen(Color.FromArgb(alpha * 160 / 255, IslandPainter.Sky), p.Px(1.2f)))
-            {
-                g.FillEllipse(lens, x, midY - camera / 2, camera, camera);
-                g.DrawEllipse(ring, x, midY - camera / 2, camera, camera);
-            }
-
-            p.DrawText(g, DateTime.Now.ToString("HH:mm"), p.TimeFont, IslandPainter.Fade(IslandPainter.Secondary, alpha),
-                new RectangleF(x + camera + p.Px(8), 0, p.Px(60), size.Height), StringAlignment.Near);
-
             MediaInfo media = MediaService.Current;
             if (TimerService.IsActive)
             {
-                // Tiempo en marcha (mockup D1): mini anillo y cuenta atrás en el centro
                 string remaining = TimerService.Format(TimerService.Remaining);
                 float textWidth = g.MeasureString(remaining, p.TimeFont).Width;
                 float ringSize = p.Px(16);
                 float left = size.Width / 2f - (ringSize + p.Px(6) + textWidth) / 2;
                 p.DrawRing(g, new RectangleF(left, midY - ringSize / 2, ringSize, ringSize), TimerService.Progress, TimeColors.Current, alpha, p.Px(3));
-                p.DrawText(g, remaining, p.TimeFont, IslandPainter.Fade(TimeColors.CurrentLight, alpha),
-                    new RectangleF(left + ringSize + p.Px(6), 0, textWidth + p.Px(4), size.Height), StringAlignment.Near);
+                p.DrawText(g, remaining, p.TimeFont, IslandPainter.Fade(TimeColors.CurrentLight, alpha), new RectangleF(left + ringSize + p.Px(6), 0, textWidth + p.Px(4), size.Height), StringAlignment.Near);
             }
             else if (media.IsPlaying)
             {
-                p.DrawBars(g, new RectangleF(size.Width / 2f - p.Px(14), midY - p.Px(8), p.Px(28), p.Px(16)), alpha, media.Accent, true);
+                float bars = p.Px(22);
+                float titleWidth = Math.Min(maxWidth - bars - p.Px(8), g.MeasureString(media.Title, p.SmallFont).Width + p.Px(2));
+                float left = size.Width / 2f - (bars + p.Px(8) + titleWidth) / 2;
+                p.DrawBars(g, new RectangleF(left, midY - p.Px(7), bars, p.Px(14)), alpha, media.Accent, true);
+                p.DrawText(g, media.Title, p.SmallFont, Color.FromArgb(alpha, Color.White), new RectangleF(left + bars + p.Px(8), 0, titleWidth, size.Height), StringAlignment.Near);
             }
             else
             {
-                // Punto de estado pulsante (ciclo de 2 s)
-                int pulse = (int)(alpha * (0.4 + 0.6 * (0.5 + 0.5 * Math.Sin(p.Seconds * Math.PI))));
-                float orb = p.Px(7);
-                using (SolidBrush glow = new SolidBrush(Color.FromArgb(pulse / 4, IslandPainter.Sky)))
-                using (SolidBrush dot = new SolidBrush(Color.FromArgb(pulse, IslandPainter.Sky)))
-                {
-                    g.FillEllipse(glow, size.Width / 2f - orb, midY - orb, orb * 2, orb * 2);
-                    g.FillEllipse(dot, size.Width / 2f - orb / 2, midY - orb / 2, orb, orb);
-                }
+                p.DrawText(g, DateTime.Now.ToString("HH:mm"), p.TimeFont, Color.FromArgb(alpha, Color.White), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
             }
+        }
 
-            Color status = IslandPainter.Fade(IslandPainter.Secondary, alpha);
-            float right = size.Width - p.Px(16);
-            if (_batteryText != null)
+        private void DrawEyesMode(Graphics g, SizeF size, int alpha, IslandPainter p)
+        {
+            if (Busy)
             {
-                p.DrawText(g, _batteryText, p.SmallFont, status, new RectangleF(right - p.Px(30), 0, p.Px(30), size.Height), StringAlignment.Far);
-                right -= p.Px(32);
-                p.DrawText(g, IslandPainter.GlyphBattery, p.IconFont, status, new RectangleF(right - p.Px(16), 0, p.Px(16), size.Height), StringAlignment.Far);
-                right -= p.Px(22);
+                DrawCenter(g, size, alpha, p, size.Width - p.Px(32));
+                return;
             }
-            p.DrawText(g, _networkGlyph, p.IconFont, status, new RectangleF(right - p.Px(16), 0, p.Px(16), size.Height), StringAlignment.Far);
-            right -= p.Px(24);
+            bool asleep = IdleSeconds() >= 60;
+            if (_wasAsleep && !asleep) _wavedAt = DateTime.Now; // Volviste: saluda
+            _wasAsleep = asleep;
+            bool waving = (DateTime.Now - _wavedAt).TotalSeconds < 1.6;
 
-            // Puntos de micrófono (naranja) y cámara (verde) mientras alguna app los usa (mockup C2)
+            float eyeW = p.Px(11), eyeH = p.Px(14), gap = p.Px(14);
+            // Parpadeo de 140 ms cada 4 s
+            bool blink = !asleep && DateTime.Now.TimeOfDay.TotalMilliseconds % 4000 < 140;
+            float height = asleep || blink ? p.Px(3) : eyeH;
+            float total = 2 * eyeW + gap + (waving ? p.Px(26) : 0);
+            float x = (size.Width - total) / 2, y = (size.Height - height) / 2;
+            using (SolidBrush white = new SolidBrush(Color.FromArgb(alpha, Color.White)))
+            {
+                IslandPainter.FillRounded(g, new RectangleF(x, y, eyeW, height), Math.Min(eyeW, height) / 2, Color.FromArgb(alpha, Color.White));
+                IslandPainter.FillRounded(g, new RectangleF(x + eyeW + gap, y, eyeW, height), Math.Min(eyeW, height) / 2, Color.FromArgb(alpha, Color.White));
+            }
+            if (asleep) p.DrawText(g, "z", p.SmallFont, IslandPainter.Fade(IslandPainter.Gray, alpha), new RectangleF(x + total + p.Px(4), p.Px(2), p.Px(14), size.Height / 2), StringAlignment.Near);
+            if (waving) p.DrawText(g, "👋", p.EmojiFont, Color.FromArgb(alpha, Color.White), new RectangleF(x + 2 * eyeW + gap + p.Px(6), 0, p.Px(22), size.Height), StringAlignment.Center);
+        }
+
+        private static void SampleStats()
+        {
+            if (_sampling || (DateTime.Now - _statsAt).TotalSeconds < 2) return;
+            _sampling = true;
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    if (_sampler == null) _sampler = new TelemetrySampler();
+                    _stats = _sampler.Sample();
+                }
+                catch (Exception) { }
+                _statsAt = DateTime.Now;
+                _sampling = false;
+            });
+        }
+
+        // Segundos sin tocar el ratón ni el teclado
+        private static double IdleSeconds()
+        {
+            LASTINPUTINFO info = new LASTINPUTINFO();
+            info.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));
+            if (!GetLastInputInfo(ref info)) return 0;
+            return (unchecked((uint)Environment.TickCount) - info.dwTime) / 1000.0;
+        }
+
+        private struct LASTINPUTINFO
+        {
+            public uint cbSize;
+            public uint dwTime;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
+        // Puntos de micrófono (naranja) y cámara (verde) mientras alguna app los usa (mockup C2)
+        private static void DrawCaptureDots(Graphics g, SizeF size, int alpha, IslandPainter p, float right)
+        {
             if (!SuiteSettings.CaptureDots) return;
+            float midY = size.Height / 2f;
             float dotSize = p.Px(7);
             Color[] dots =
             {

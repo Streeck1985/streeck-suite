@@ -43,6 +43,8 @@ namespace StreeckSuite.Core
         public static string IslandColor = "#000000";   // Color de fondo de la isla (negro como el notch de Bloom)
         public static bool DoNotDisturb = false;        // Centro de control: la isla no muestra avisos de apps
         public static bool HideWindowsVolume = true;    // Esconde el aviso de volumen de Windows (la isla muestra el suyo)
+        public enum IslandIdleKind { Widgets, Eyes }
+        public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -137,6 +139,8 @@ namespace StreeckSuite.Core
                 if (values.TryGetValue("isla.color", out raw) && raw.Length > 0) IslandColor = raw;
                 DoNotDisturb = ReadBool(values, "isla.nomolestar", DoNotDisturb);
                 HideWindowsVolume = ReadBool(values, "isla.ocultarvolumenwindows", HideWindowsVolume);
+                IslandIdleKind idle;
+                if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
                 IslandStyleKind islandStyle;
                 if (values.TryGetValue("isla.estilo", out raw) && Enum.TryParse(raw, out islandStyle)) IslandStyle = islandStyle;
@@ -217,6 +221,7 @@ namespace StreeckSuite.Core
                     "isla.color=" + IslandColor,
                     "isla.nomolestar=" + (DoNotDisturb ? 1 : 0),
                     "isla.ocultarvolumenwindows=" + (HideWindowsVolume ? 1 : 0),
+                    "isla.cerrada=" + IslandIdle,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,
                     "avisos.activos=" + (NotificationsEnabled ? 1 : 0),
