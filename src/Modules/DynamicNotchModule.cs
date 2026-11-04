@@ -673,6 +673,21 @@ namespace StreeckSuite.Modules
             _shownView.OnShown();
         }
 
+        /// <summary>
+        /// Fondo de la isla en los dos estilos: el color y la opacidad elegidos en Ajustes → Isla (negro 86 % por defecto,
+        /// como el notch de Bloom). Ya no depende del estilo de cristal de la barra.
+        /// </summary>
+        private static Color IslandFill
+        {
+            get
+            {
+                Color color;
+                try { color = ColorTranslator.FromHtml(SuiteSettings.IslandColor); }
+                catch (Exception) { color = Color.Black; }
+                return Color.FromArgb(SuiteSettings.IslandOpacityPercent * 255 / 100, color);
+            }
+        }
+
         // Esquinas: panel y avisos grandes con radio fijo (22 px pegada arriba, como Bloom); compacta, píldora
         private float TargetRadius(SizeF target)
         {
@@ -979,7 +994,7 @@ namespace StreeckSuite.Modules
 
         protected override byte SurfaceAlpha
         {
-            get { return (byte)(SuiteSettings.IslandOpacityPercent * 255 / 100); }
+            get { return 255; } // La opacidad del panel solo transparenta el fondo (ver IslandFill), nunca las letras
         }
 
         protected override void DrawSurface(Graphics g)
@@ -997,8 +1012,7 @@ namespace StreeckSuite.Modules
             bounds.Offset(-ShadowPad, -ShadowPad);
 
             Color? viewBorder = _mode == Mode.Tucked ? null : ActiveView.BorderColor;
-            // Pegada arriba: negro del notch de Bloom (86 %), salvo que el estilo de cristal pida más opacidad
-            Color fillColor = Attached ? Color.FromArgb(Math.Max((int)Glass.Fill.A, 220), 0, 0, 0) : Glass.FillAtLeast(IslandPainter.Background.A);
+            Color fillColor = IslandFill;
             using (GraphicsPath path = Attached ? NotchPath(bounds, radius, true) : IslandPainter.RoundedRect(bounds, radius))
             using (GraphicsPath outline = Attached ? NotchPath(bounds, radius, false) : IslandPainter.RoundedRect(bounds, radius))
             using (SolidBrush fill = new SolidBrush(fillColor))
