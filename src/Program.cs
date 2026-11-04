@@ -87,6 +87,39 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --preview-clock <carpeta>: el reloj sobre tu fondo actual,
+            // clásico y estirado con tres fuentes (no toca reloj.ini)
+            if (args != null && args.Length >= 2 && args[0] == "--preview-clock")
+            {
+                NativeMethods.SetProcessDPIAware();
+                System.IO.Directory.CreateDirectory(args[1]);
+                System.Drawing.Size screen = Screen.PrimaryScreen.Bounds.Size;
+                using (DepthClockLayers layers = DepthClockLayers.Analyze(WallpaperInfo.GetCurrentPath(), screen))
+                {
+                    ClockSettings saved = ClockSettings.Load();
+                    var cases = new[]
+                    {
+                        new { Name = "clasico", Style = ClockStyle.Apple, Font = saved.FontFamily, Weight = 2, Color = "#ffffff" },
+                        new { Name = "estirado-segoe", Style = ClockStyle.Samsung, Font = "Segoe UI Variable Display", Weight = 2, Color = "#ffffff" },
+                        new { Name = "estirado-bahnschrift", Style = ClockStyle.Samsung, Font = "Bahnschrift", Weight = 1, Color = "#ffd666" },
+                        new { Name = "estirado-georgia", Style = ClockStyle.Samsung, Font = "Georgia", Weight = 1, Color = "#ffebf0" },
+                    };
+                    foreach (var c in cases)
+                    {
+                        ClockSettings s = saved.Clone();
+                        s.Style = c.Style; s.FontFamily = c.Font; s.SamsungWeight = c.Weight; s.SamsungColor = c.Color;
+                        if (layers.Foreground != null) layers.Foreground.Dispose();
+                        layers.Foreground = layers.ComposeForeground(s);
+                        using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(screen.Width, screen.Height))
+                        {
+                            using (System.Drawing.Graphics g = System.Drawing.Graphics.FromImage(bitmap)) DesktopClockForm.PaintClock(g, screen, s, layers, null, new DateTime(2026, 11, 3, 19, 44, 7));
+                            bitmap.Save(System.IO.Path.Combine(args[1], "reloj-" + c.Name + ".png"));
+                        }
+                    }
+                }
+                return;
+            }
+
             // Herramienta de desarrollo: StreeckSuite.exe --preview-start <carpeta>
             if (args != null && args.Length >= 2 && args[0] == "--preview-start")
             {

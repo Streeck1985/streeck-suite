@@ -170,7 +170,8 @@ namespace StreeckSuite.Modules
             // La zona de los dígitos (y por tanto el recorte) depende de la posición, el tamaño, la fuente y los segundos
             bool cutChanged = settings.Mode != _settings.Mode || settings.CenterX != _settings.CenterX
                               || settings.Top != _settings.Top || settings.Size != _settings.Size
-                              || settings.FontFamily != _settings.FontFamily || settings.ShowSeconds != _settings.ShowSeconds;
+                              || settings.FontFamily != _settings.FontFamily || settings.ShowSeconds != _settings.ShowSeconds
+                              || settings.Style != _settings.Style;
             bool enabledChanged = settings.Enabled != _settings.Enabled;
             _settings = settings;
             _settings.Save();

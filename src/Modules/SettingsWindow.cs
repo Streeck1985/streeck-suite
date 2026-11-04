@@ -1167,38 +1167,43 @@ namespace StreeckSuite.Modules
         private void DrawClock(Graphics g)
         {
             DepthClockModule clock = DepthClockModule.Current;
-            if (clock == null)
-            {
-                DrawTitle(g, "Reloj 3D");
-                DrawText(g, "El reloj 3D no está en marcha.", _reg13, Gray, new RectangleF(ContentX, 70, ContentW, 20), StringAlignment.Near);
-                return;
-            }
-            ClockSettings s = clock.CurrentSettings;
+            ClockSettings s = clock != null ? clock.CurrentSettings : ClockSettings.Load();
 
             DrawTitle(g, "Reloj 3D");
             // A la izquierda del botón de cerrar (que ocupa la esquina superior derecha)
             DrawToggle(g, W - 44 - 12 - 44, 25, s.Enabled, false, () => ChangeClock(c => c.Enabled = !c.Enabled));
 
-            float y = 66;
+            // Estilo: clásico (el sujeto pasa por delante) o estirado (estilo Samsung, mockup R1)
+            bool stretched = s.Style == ClockStyle.Samsung;
+            float y = 62;
+            DrawCard(g, y, 66);
+            DrawText(g, "Estilo", _semi13, TextColor, new RectangleF(InnerX, y + 8, 200, 18), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(InnerX, y + 28, InnerW, 30), new[] { "Clásico (detrás del sujeto)", "Estirado (estilo Samsung)" },
+                (int)s.Style, i => ChangeClock(c => c.Style = (ClockStyle)i));
+
+            // Posición y tamaño (el estirado suma cuánto puede crecer un número)
+            y = 136;
             DrawCard(g, y, 60);
-            float columnW = (InnerW - 24) / 3;
-            string[] labels = { "Horizontal", "Vertical", "Tamaño" };
-            float[] fractions = { s.CenterX, s.Top / 0.8f, (s.Size - 0.15f) / 0.65f };
+            string[] labels = stretched ? new[] { "Horizontal", "Vertical", "Tamaño", "Estiramiento" } : new[] { "Horizontal", "Vertical", "Tamaño" };
+            float[] fractions = { s.CenterX, s.Top / 0.8f, (s.Size - 0.15f) / 0.65f, (s.SamsungMaxStretch - 0.25f) / 0.65f };
             Action<float>[] setters =
             {
                 f => ChangeClock(c => c.CenterX = f),
                 f => ChangeClock(c => c.Top = f * 0.8f),
-                f => ChangeClock(c => c.Size = 0.15f + f * 0.65f)
+                f => ChangeClock(c => c.Size = 0.15f + f * 0.65f),
+                f => ChangeClock(c => c.SamsungMaxStretch = 0.25f + f * 0.65f)
             };
-            for (int i = 0; i < 3; i++)
+            float columnW = (InnerW - 12 * (labels.Length - 1)) / labels.Length;
+            for (int i = 0; i < labels.Length; i++)
             {
                 float x = InnerX + i * (columnW + 12);
                 DrawText(g, labels[i], _semi13, TextColor, new RectangleF(x, y + 14, columnW, 18), StringAlignment.Near);
                 DrawSlider(g, new RectangleF(x, y + 40, columnW, 6), fractions[i], setters[i], null);
             }
 
-            y = 140;
-            DrawCard(g, y, 204);
+            // Fuente (los dos estilos), grosor y color (estirado) y lo que acompaña a la hora
+            y = 204;
+            DrawCard(g, y, stretched ? 296 : 204);
             float row = y + 4;
             DrawText(g, "Fuente", _semi14, TextColor, new RectangleF(InnerX, row, 200, 50), StringAlignment.Near);
             RectangleF combo = new RectangleF(ContentRight - 16 - 220, row + 9, 220, 32);
@@ -1212,8 +1217,35 @@ namespace StreeckSuite.Modules
             }
             AddHit(combo, () => ShowFontPicker(combo, s.FontFamily));
             DrawRowDivider(g, row + 50);
-
             row += 50;
+
+            if (stretched)
+            {
+                DrawText(g, "Grosor", _semi14, TextColor, new RectangleF(InnerX, row, 200, 46), StringAlignment.Near);
+                DrawSegmented(g, new RectangleF(ContentRight - 16 - 240, row + 8, 240, 30), new[] { "Fino", "Normal", "Grueso" }, s.SamsungWeight,
+                    i => ChangeClock(c => c.SamsungWeight = i));
+                DrawRowDivider(g, row + 46);
+                row += 46;
+
+                DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, row, 200, 46), StringAlignment.Near);
+                string[] colors = { "#ffffff", "#ffd666", "#ffebf0", "#26c6da", "#a78bfa" };
+                const float swatch = 22, swatchGap = 12;
+                float sx = ContentRight - 16 - (colors.Length * (swatch + swatchGap) - swatchGap);
+                foreach (string hex in colors)
+                {
+                    RectangleF circle = new RectangleF(sx, row + 12, swatch, swatch);
+                    using (SolidBrush fill = new SolidBrush(ColorTranslator.FromHtml(hex))) g.FillEllipse(fill, circle);
+                    if (string.Equals(s.SamsungColor, hex, StringComparison.OrdinalIgnoreCase))
+                    {
+                        using (Pen ring = new Pen(Accent, 2f)) g.DrawEllipse(ring, RectangleF.Inflate(circle, 3, 3));
+                    }
+                    string picked = hex;
+                    AddHit(circle, () => ChangeClock(c => c.SamsungColor = picked));
+                    sx += swatch + swatchGap;
+                }
+                DrawRowDivider(g, row + 46);
+                row += 46;
+            }
             DrawToggleRow(g, row, "Fecha encima de la hora", null, s.ShowDate, () => ChangeClock(c => c.ShowDate = !c.ShowDate));
             DrawRowDivider(g, row + 44);
             row += 44;
@@ -1223,16 +1255,29 @@ namespace StreeckSuite.Modules
             DrawToggleRow(g, row, "Clima debajo de la hora", "Usa tu ubicación aproximada por IP", s.ShowWeather,
                 () => ChangeClock(c => c.ShowWeather = !c.ShowWeather));
 
-            y = 358;
-            DrawCard(g, y, 124);
-            DrawText(g, "Qué pasa por delante de la hora", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Automático", "Solo el sujeto", "Todo lo cercano" },
-                (int)s.Mode, i => ChangeClock(c => c.Mode = (OcclusionMode)i));
-            bool? subject = clock.SubjectFound;
-            string status = subject == null ? "Analizando tu fondo…"
-                : subject.Value ? "La IA encontró un sujeto principal en tu fondo."
-                : "Tu fondo no tiene un sujeto claro: se usa la profundidad.";
-            DrawText(g, status, _reg12, Gray, new RectangleF(InnerX, y + 94, InnerW, 16), StringAlignment.Near);
+            // Silueta (estirado) o qué pasa por delante de la hora (clásico)
+            y = stretched ? 512 : 416;
+            bool? subject = clock != null ? clock.SubjectFound : (bool?)null;
+            if (stretched)
+            {
+                DrawCard(g, y, 62);
+                DrawText(g, "Silueta de tu fondo", _semi14, TextColor, new RectangleF(InnerX, y + 10, 400, 20), StringAlignment.Near);
+                string status = subject == null ? "Analizando tu fondo…"
+                    : subject.Value ? "La IA detectó el sujeto: cada número se estira hasta 12 px antes de su silueta."
+                    : "Tu fondo no tiene un sujeto claro: los números se detienen en lo cercano.";
+                DrawText(g, status, _reg12, Gray, new RectangleF(InnerX, y + 34, InnerW, 18), StringAlignment.Near);
+            }
+            else
+            {
+                DrawCard(g, y, 124);
+                DrawText(g, "Qué pasa por delante de la hora", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
+                DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Automático", "Solo el sujeto", "Todo lo cercano" },
+                    (int)s.Mode, i => ChangeClock(c => c.Mode = (OcclusionMode)i));
+                string status = subject == null ? "Analizando tu fondo…"
+                    : subject.Value ? "La IA encontró un sujeto principal en tu fondo."
+                    : "Tu fondo no tiene un sujeto claro: se usa la profundidad.";
+                DrawText(g, status, _reg12, Gray, new RectangleF(InnerX, y + 94, InnerW, 16), StringAlignment.Near);
+            }
         }
 
         // Cada cambio parte de una copia nueva: el módulo compara con sus ajustes anteriores para saber qué recalcular

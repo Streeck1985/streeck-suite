@@ -71,9 +71,9 @@ namespace StreeckSuite.Modules
         private void OnClockTick()
         {
             DateTime now = DateTime.Now;
-            if (now.Second == 0 || !_settings.ShowSeconds)
+            if (now.Second == 0 || !_settings.ShowSeconds || _settings.Style == ClockStyle.Samsung)
             {
-                Invalidate(); // Cambio de minuto: también puede cambiar la fecha
+                Invalidate(); // Cambio de minuto o modo Samsung: redibujar el área completa
             }
             else
             {
@@ -246,36 +246,49 @@ namespace StreeckSuite.Modules
                 return;
             }
 
-            Size screen = ClientSize;
+            PaintClock(g, ClientSize, _settings, _layers, _weather, DateTime.Now);
+        }
+
+        /// <summary>
+        /// Fondo, hora (clásica o estirada) y primer plano. También lo usa la vista previa --preview-clock.
+        /// </summary>
+        internal static void PaintClock(Graphics g, Size screen, ClockSettings settings, DepthClockLayers layers, WeatherService.Conditions weather, DateTime now)
+        {
             g.CompositingQuality = CompositingQuality.HighSpeed;
             g.InterpolationMode = InterpolationMode.NearestNeighbor;
-            g.DrawImageUnscaled(_layers.Background, 0, 0);
+            g.DrawImageUnscaled(layers.Background, 0, 0);
 
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
-            DateTime now = DateTime.Now;
 
-            RectangleF ink;
-            using (GraphicsPath digits = DepthClockLayout.BuildDigitsPath(screen, _settings, now.ToString(DepthClockLayout.TimeFormat(_settings)), out ink))
-            using (SolidBrush white = new SolidBrush(Color.FromArgb(240, 255, 255, 255)))
+            if (settings.Style == ClockStyle.Samsung)
             {
-                g.FillPath(white, digits);
+                SamsungClockRenderer.Draw(g, screen, settings, layers, now, Spanish, weather);
+            }
+            else
+            {
+                RectangleF ink;
+                using (GraphicsPath digits = DepthClockLayout.BuildDigitsPath(screen, settings, now.ToString(DepthClockLayout.TimeFormat(settings)), out ink))
+                using (SolidBrush white = new SolidBrush(Color.FromArgb(240, 255, 255, 255)))
+                {
+                    g.FillPath(white, digits);
+                }
+
+                float captionFont = DepthClockLayout.CaptionFontPx(screen, settings);
+                float gap = DepthClockLayout.CaptionGapPx(screen, settings);
+                float centerX = settings.CenterX * screen.Width;
+                if (settings.ShowDate)
+                {
+                    string date = now.ToString("dddd, d 'de' MMMM", Spanish).ToUpper(Spanish);
+                    DrawSpacedCaption(g, date, captionFont, centerX, ink.Top - gap);
+                }
+                if (settings.ShowWeather && weather != null)
+                {
+                    DrawWeatherPill(g, weather, captionFont, centerX, ink.Bottom + gap);
+                }
             }
 
-            float captionFont = DepthClockLayout.CaptionFontPx(screen, _settings);
-            float gap = DepthClockLayout.CaptionGapPx(screen, _settings);
-            float centerX = _settings.CenterX * screen.Width;
-            if (_settings.ShowDate)
-            {
-                string date = now.ToString("dddd, d 'de' MMMM", Spanish).ToUpper(Spanish);
-                DrawSpacedCaption(g, date, captionFont, centerX, ink.Top - gap);
-            }
-            if (_settings.ShowWeather && _weather != null)
-            {
-                DrawWeatherPill(g, _weather, captionFont, centerX, ink.Bottom + gap);
-            }
-
-            if (_layers.Foreground != null) g.DrawImageUnscaled(_layers.Foreground, 0, 0);
+            if (layers.Foreground != null) g.DrawImageUnscaled(layers.Foreground, 0, 0);
         }
 
         /// <summary>
@@ -323,7 +336,7 @@ namespace StreeckSuite.Modules
         /// <summary>
         /// Píldora de cristal con el clima ("⛅ 24°C • Despejado"), centrada en <paramref name="centerX"/>.
         /// </summary>
-        private static void DrawWeatherPill(Graphics g, WeatherService.Conditions weather, float fontPx, float centerX, float top)
+        internal static void DrawWeatherPill(Graphics g, WeatherService.Conditions weather, float fontPx, float centerX, float top)
         {
             string text = string.Format("{0:0}°C • {1}", weather.TemperatureC, weather.Description);
             using (FontFamily family = DepthClockLayout.ResolveFamily(ClockSettings.DefaultFontFamily))
