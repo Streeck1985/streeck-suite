@@ -289,6 +289,7 @@ namespace StreeckSuite.Modules
                         if (_settings.Enabled)
                         {
                             ShowLayers(layers);
+                            System.Threading.ThreadPool.QueueUserWorkItem(__ => MemoryTrim.Now()); // El análisis deja mucha memoria temporal
                             _eventBus.Publish(Events.NotchShowMessage, "🕒 Reloj 3D adaptado a tu fondo");
                         }
                         else
