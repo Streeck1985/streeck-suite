@@ -44,6 +44,7 @@ namespace StreeckSuite.Core
         public static bool DoNotDisturb = false;        // Centro de control: la isla no muestra avisos de apps
         public static bool HideWindowsVolume = true;    // Esconde el aviso de volumen de Windows (la isla muestra el suyo)
         public static bool TaskbarMiniPlayer = true;    // 4.ª isla en la barra con la música (entonces la isla de arriba no la repite)
+        public static int TaskbarSkin = 1;              // 0 Cristal, 1 Notch, 2 Dock, 3 Neón, 4 Fantasma, 5 Línea fina, 6 Aurora, 7 Aero 7, 8 Cristal líquido, 9 Gamer RGB
 
         /// <summary>
         /// La música se muestra en la barra de tareas: la isla de arriba no la repite.
@@ -149,6 +150,7 @@ namespace StreeckSuite.Core
                 DoNotDisturb = ReadBool(values, "isla.nomolestar", DoNotDisturb);
                 HideWindowsVolume = ReadBool(values, "isla.ocultarvolumenwindows", HideWindowsVolume);
                 TaskbarMiniPlayer = ReadBool(values, "barra.miniplayer", TaskbarMiniPlayer);
+                TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 9);
                 IslandIdleKind idle;
                 if (values.TryGetValue("isla.cerrada", out raw) && Enum.TryParse(raw, out idle)) IslandIdle = idle;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
@@ -232,6 +234,7 @@ namespace StreeckSuite.Core
                     "isla.nomolestar=" + (DoNotDisturb ? 1 : 0),
                     "isla.ocultarvolumenwindows=" + (HideWindowsVolume ? 1 : 0),
                     "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
+                    "barra.skin=" + TaskbarSkin,
                     "isla.cerrada=" + IslandIdle,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,

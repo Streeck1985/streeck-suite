@@ -32,6 +32,7 @@
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.UI.Xaml.Media.Animation.h>
 #include <winrt/Windows.UI.Xaml.Controls.Primitives.h>
 #include <winrt/Windows.UI.Text.h>
 #include <winrt/Windows.Media.Control.h>
@@ -76,7 +77,8 @@ struct Settings
     bool Edges = false;
     int Glass = Aero;
     bool MiniPlayer = false;  // 4.ª isla con la música (sugerencia aprobada del mockup de la barra)
-    Color IslandColor{ 219, 0, 0, 0 };  // Mismo color y opacidad que la isla de arriba (las islas de la barra la imitan)
+    Color IslandColor{ 219, 0, 0, 0 };  // Mismo color y opacidad que la isla de arriba (para el skin Notch)
+    int Skin = 1;                       // Skin de la barra (ver enum Skin); Notch por defecto
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -156,6 +158,7 @@ static void LoadSettings()
     g_settings.Edges = ToInt(values, L"extremos", 0) == 1;
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
     g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
+    g_settings.Skin = std::clamp(ToInt(values, L"skin", 1), 0, 9);
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
     int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
     auto color = values.find(L"color");
@@ -251,16 +254,98 @@ static Color Argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 
 #pragma region Dibujo de las islas
 
-// Las islas de la barra se ven igual que el notch: su color y opacidad (Ajustes → Isla) y sin contorno.
-// Solo el cristal Neón añade su halo azul, que es justo ese estilo.
-static Color FillColor()
+// Skins de la barra (galería aprobada por el usuario): Cristal, Notch, Dock, Neón, Fantasma, Línea fina, Aurora,
+// Aero 7, Cristal líquido y Gamer RGB. Grupo: 0 clima, 1 apps, 2 bandeja, 3 mini reproductor.
+enum Skin { SkinGlass = 0, SkinNotch, SkinDock, SkinNeon, SkinGhost, SkinLine, SkinAurora, SkinAero7, SkinLiquid, SkinRgb };
+
+static std::vector<wuxm::Animation::Storyboard> g_animations;  // Bordes RGB en marcha (se paran al redibujar)
+
+static wuxm::LinearGradientBrush Gradient(std::initializer_list<std::pair<double, Color>> stops, bool vertical)
 {
-    return g_settings.IslandColor;
+    wuxm::LinearGradientBrush brush;
+    brush.StartPoint(winrt::Windows::Foundation::Point{ 0, 0 });
+    brush.EndPoint(vertical ? winrt::Windows::Foundation::Point{ 0, 1 } : winrt::Windows::Foundation::Point{ 1, 1 });
+    for (auto& stop : stops)
+    {
+        wuxm::GradientStop s;
+        s.Offset(stop.first);
+        s.Color(stop.second);
+        brush.GradientStops().Append(s);
+    }
+    return brush;
 }
 
-static Color BorderColor()
+// Arcoíris que gira (Gamer RGB): la animación la hace el compositor de Windows, casi sin gasto
+static wuxm::Brush RainbowBrush()
 {
-    return g_settings.Glass == Neon ? Argb(210, 56, 189, 248) : Color{ 0, 0, 0, 0 };
+    wuxm::LinearGradientBrush brush = Gradient({ { 0.0, Argb(255, 255, 0, 76) }, { 0.2, Argb(255, 255, 184, 0) }, { 0.4, Argb(255, 61, 255, 110) },
+        { 0.6, Argb(255, 0, 194, 255) }, { 0.8, Argb(255, 157, 77, 255) }, { 1.0, Argb(255, 255, 0, 76) } }, false);
+    wuxm::RotateTransform rotate;
+    rotate.CenterX(0.5);
+    rotate.CenterY(0.5);
+    brush.RelativeTransform(rotate);
+    wuxm::Animation::DoubleAnimation spin;
+    spin.From(0.0);
+    spin.To(360.0);
+    spin.Duration(wux::DurationHelper::FromTimeSpan(std::chrono::seconds(4)));
+    spin.RepeatBehavior(wuxm::Animation::RepeatBehaviorHelper::Forever());
+    wuxm::Animation::Storyboard story;
+    wuxm::Animation::Storyboard::SetTarget(spin, rotate);
+    wuxm::Animation::Storyboard::SetTargetProperty(spin, L"Angle");
+    story.Children().Append(spin);
+    story.Begin();
+    g_animations.push_back(story);
+    return brush;
+}
+
+// Relleno de cada skin (el mini reproductor también lo usa)
+static wuxm::Brush IslandFill(int group)
+{
+    switch (g_settings.Skin)
+    {
+        case SkinNotch: return wuxm::SolidColorBrush(g_settings.IslandColor);
+        case SkinDock: return wuxm::SolidColorBrush(Argb(150, 28, 30, 38));
+        case SkinNeon: case SkinRgb: return wuxm::SolidColorBrush(Argb(225, 8, 10, 20));
+        case SkinGhost: return wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 });
+        case SkinLine: return wuxm::SolidColorBrush(Argb(225, 10, 12, 18));
+        case SkinAurora:
+            return group % 2 == 1 ? Gradient({ { 0, Argb(220, 124, 58, 237) }, { 1, Argb(220, 236, 72, 153) } }, false)
+                                  : Gradient({ { 0, Argb(230, 30, 41, 59) }, { 1, Argb(220, 76, 29, 149) } }, false);
+        case SkinAero7:
+            return Gradient({ { 0, Argb(97, 255, 255, 255) }, { 0.48, Argb(20, 255, 255, 255) }, { 0.52, Argb(140, 20, 40, 80) }, { 1, Argb(190, 20, 40, 80) } }, true);
+        case SkinLiquid: return wuxm::SolidColorBrush(Argb(26, 255, 255, 255));
+        default: return wuxm::SolidColorBrush(Argb(210, 14, 18, 28)); // Cristal
+    }
+}
+
+static wuxm::Brush IslandStroke(int group)
+{
+    switch (g_settings.Skin)
+    {
+        case SkinGlass: return wuxm::SolidColorBrush(Argb(41, 255, 255, 255));
+        case SkinNeon: return wuxm::SolidColorBrush(group == 3 ? Argb(220, 244, 114, 182) : Argb(220, 56, 189, 248));
+        case SkinAero7: return wuxm::SolidColorBrush(Argb(140, 255, 255, 255));
+        case SkinLiquid: return wuxm::SolidColorBrush(Argb(72, 255, 255, 255));
+        case SkinDock: return wuxm::SolidColorBrush(Argb(50, 255, 255, 255));
+        case SkinRgb: return RainbowBrush();
+        default: return wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 });
+    }
+}
+
+static double StrokeWidth()
+{
+    switch (g_settings.Skin)
+    {
+        case SkinNeon: return 1.5;
+        case SkinRgb: return 2;
+        case SkinGlass: case SkinAero7: case SkinLiquid: case SkinDock: return 1;
+        default: return 0;
+    }
+}
+
+static double IslandRadius(double height)
+{
+    return g_settings.Skin == SkinAero7 ? 10 : height / 2;
 }
 
 static void AddRect(wuxc::Canvas const& canvas, double x, double y, double w, double h, double radius, Color fill, Color stroke, double thickness)
@@ -281,20 +366,86 @@ static void AddRect(wuxc::Canvas const& canvas, double x, double y, double w, do
     canvas.Children().Append(rect);
 }
 
-// Isla con su sombra (o halo azul en Neón), relleno y borde
-static void AddIsland(wuxc::Canvas const& canvas, double x, double y, double w, double h, double radius)
+// Notch: pegada al borde de abajo, esquinas de arriba redondeadas y orejitas cóncavas abajo (espejo del notch de arriba)
+static void AddNotchShape(wuxc::Canvas const& canvas, double x, double y, double w, double bottom, double radius, wuxm::Brush const& fill)
 {
-    if (g_settings.Glass == Neon)
+    using winrt::Windows::Foundation::Point;
+    using winrt::Windows::Foundation::Size;
+    double ear = 9, r = std::min(radius, (bottom - y) / 2);
+    wuxm::PathFigure figure;
+    figure.StartPoint(Point{ (float)(x - ear), (float)bottom });
+    figure.IsClosed(true);
+    auto arc = [&](double px, double py, double size, wuxm::SweepDirection dir)
     {
-        AddRect(canvas, x - 3, y - 3, w + 6, h + 6, radius + 3, Argb(28, 56, 189, 248), Color{}, 0);
-        AddRect(canvas, x - 1.5, y - 1.5, w + 3, h + 3, radius + 1.5, Argb(50, 56, 189, 248), Color{}, 0);
+        wuxm::ArcSegment segment;
+        segment.Point(Point{ (float)px, (float)py });
+        segment.Size(Size{ (float)size, (float)size });
+        segment.SweepDirection(dir);
+        figure.Segments().Append(segment);
+    };
+    auto line = [&](double px, double py)
+    {
+        wuxm::LineSegment segment;
+        segment.Point(Point{ (float)px, (float)py });
+        figure.Segments().Append(segment);
+    };
+    arc(x, bottom - ear, ear, wuxm::SweepDirection::Counterclockwise);
+    line(x, y + r);
+    arc(x + r, y, r, wuxm::SweepDirection::Clockwise);
+    line(x + w - r, y);
+    arc(x + w, y + r, r, wuxm::SweepDirection::Clockwise);
+    line(x + w, bottom - ear);
+    arc(x + w + ear, bottom, ear, wuxm::SweepDirection::Counterclockwise);
+    wuxm::PathGeometry geometry;
+    geometry.Figures().Append(figure);
+    wuxs::Path path;
+    path.Data(geometry);
+    path.Fill(fill);
+    canvas.Children().Append(path);
+}
+
+// Una isla con el skin elegido
+static void AddIsland(wuxc::Canvas const& canvas, double x, double y, double w, double h, int group, double barHeight)
+{
+    int skin = g_settings.Skin;
+    if (skin == SkinGhost) return;                    // Solo los iconos
+    if (skin == SkinDock && group != 1) return;       // Solo la píldora de las apps
+    double radius = IslandRadius(h);
+    if (skin == SkinNotch)
+    {
+        AddNotchShape(canvas, x, y + 2, w, barHeight + 1, 18, IslandFill(group));
+        return;
     }
-    else if (g_settings.Glass != Transparent)
+    if (skin == SkinGlass || skin == SkinAero7 || skin == SkinAurora || skin == SkinDock)
     {
-        AddRect(canvas, x - 2, y - 1, w + 4, h + 4, radius + 2, Argb(30, 0, 0, 0), Color{}, 0);
+        AddRect(canvas, x - 2, y - 1, w + 4, h + 4, radius + 2, Argb(30, 0, 0, 0), Color{}, 0);   // Sombra suave
         AddRect(canvas, x - 1, y, w + 2, h + 2, radius + 1, Argb(45, 0, 0, 0), Color{}, 0);
     }
-    AddRect(canvas, x, y, w, h, radius, FillColor(), BorderColor(), g_settings.Glass == Neon ? 1.5 : 0);
+    if (skin == SkinNeon)
+    {
+        Color glow = group == 3 ? Argb(255, 244, 114, 182) : Argb(255, 56, 189, 248);
+        AddRect(canvas, x - 3, y - 3, w + 6, h + 6, radius + 3, Color{ 28, glow.R, glow.G, glow.B }, Color{}, 0);
+        AddRect(canvas, x - 1.5, y - 1.5, w + 3, h + 3, radius + 1.5, Color{ 50, glow.R, glow.G, glow.B }, Color{}, 0);
+    }
+    wuxs::Rectangle rect;
+    rect.Width(std::max(0.0, w));
+    rect.Height(std::max(0.0, h));
+    rect.RadiusX(radius);
+    rect.RadiusY(radius);
+    rect.Fill(IslandFill(group));
+    double stroke = StrokeWidth();
+    if (stroke > 0)
+    {
+        rect.Stroke(IslandStroke(group));
+        rect.StrokeThickness(stroke);
+    }
+    wuxc::Canvas::SetLeft(rect, x);
+    wuxc::Canvas::SetTop(rect, y);
+    canvas.Children().Append(rect);
+    if (skin == SkinLiquid) // Reflejo fino arriba
+    {
+        AddRect(canvas, x + radius * 0.6, y + 1.5, std::max(0.0, w - radius * 1.2), 1.2, 0.6, Argb(150, 255, 255, 255), Color{}, 0);
+    }
 }
 
 // Corre la bandeja con RenderTransform (los clics la siguen). El clima no se puede mover: se dibuja en una capa de
@@ -459,8 +610,8 @@ static void LayoutFrame(FrameState& state)
 
     // Firma de lo que hay que dibujar
     wchar_t signature[256];
-    swprintf_s(signature, L"%d|%d|%d|%d|%d|%.0f|%.0f|%.0f,%.0f|%.0f,%.0f|%.0f,%.0f", g_settings.Active, g_settings.Format, g_settings.Gap,
-        g_settings.Edges, g_settings.Glass, width, height, minX[0] + shiftOf[0], islandWidth[0], minX[1] + shiftOf[1], islandWidth[1],
+    swprintf_s(signature, L"%d|%d|%d|%d|%d|%x|%.0f|%.0f|%.0f,%.0f|%.0f,%.0f|%.0f,%.0f", g_settings.Active, g_settings.Format, g_settings.Gap,
+        g_settings.Edges, g_settings.Skin, *(uint32_t*)&g_settings.IslandColor, width, height, minX[0] + shiftOf[0], islandWidth[0], minX[1] + shiftOf[1], islandWidth[1],
         minX[2] + shiftOf[2], islandWidth[2]);
     if (state.Drawn == signature) return;
     state.Drawn = signature;
@@ -487,11 +638,27 @@ static void LayoutFrame(FrameState& state)
         state.Canvas = canvas;
     }
     canvas.Children().Clear();
+    for (auto& story : g_animations) story.Stop();  // Los bordes RGB anteriores ya no se ven
+    g_animations.clear();
 
-    if (g_settings.Format == Full)
+    // Completa o Línea fina: una barra de lado a lado (Línea fina: delgada y con divisiones entre los grupos)
+    if (g_settings.Format == Full || g_settings.Skin == SkinLine)
     {
-        AddRect(canvas, 0, 0, width, height, 0, FillColor(), Color{}, 0);
-        AddRect(canvas, 0, 0, width, 1, 0, BorderColor(), Color{}, 0);
+        wuxs::Rectangle bar;
+        bar.Width(width);
+        bar.Height(height);
+        bar.Fill(g_settings.Skin == SkinGhost ? wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 }) : IslandFill(1));
+        canvas.Children().Append(bar);
+        AddRect(canvas, 0, 0, width, 1, 0, Argb(30, 255, 255, 255), Color{}, 0);
+        if (g_settings.Skin == SkinLine)
+        {
+            for (int g = 0; g < 3; g++)
+            {
+                if (!present[g] || g == 2) continue;
+                AddRect(canvas, maxX[g] + shiftOf[g] + pad, 10, 1, height - 20, 0, Argb(30, 255, 255, 255), Color{}, 0);
+                if (present[g + 1]) AddRect(canvas, minX[g + 1] + shiftOf[g + 1] - pad, 10, 1, height - 20, 0, Argb(30, 255, 255, 255), Color{}, 0);
+            }
+        }
         return;
     }
     if (g_settings.Format == Capsule)
@@ -504,7 +671,7 @@ static void LayoutFrame(FrameState& state)
             right = std::max(right, maxX[g] + shiftOf[g] + pad);
         }
         if (left >= right) return;
-        AddIsland(canvas, left, top, right - left, islandHeight, islandHeight / 2);
+        AddIsland(canvas, left, top, right - left, islandHeight, 1, height);
         for (int g = 0; g < 2; g++)
         {
             if (!present[g] || !present[g + 1]) continue;
@@ -515,7 +682,7 @@ static void LayoutFrame(FrameState& state)
     }
     for (int g = 0; g < 3; g++)
     {
-        if (present[g]) AddIsland(canvas, minX[g] + shiftOf[g] - pad, top, islandWidth[g], islandHeight, islandHeight / 2);
+        if (present[g]) AddIsland(canvas, minX[g] + shiftOf[g] - pad, top, islandWidth[g], islandHeight, g, height);
     }
 }
 
@@ -658,21 +825,40 @@ static void RemovePlayer(wuxc::Grid const& root)
 }
 
 // Coloca la isla del reproductor a la derecha de la de las apps (o la quita si no toca)
+static std::wstring g_playerStyle;  // Skin y color con los que se pintó el reproductor (para no repintarlo en cada pasada)
+
 static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height)
 {
     bool wanted = g_settings.Active && g_settings.MiniPlayer && g_hasMedia && g_settings.Format != Capsule;
-    if (!wanted) { RemovePlayer(root); return; }
-    wuxc::Canvas canvas = EnsurePlayer(root);
+    if (!wanted) { RemovePlayer(root); g_playerStyle.clear(); return; }
+    bool created = !g_playerCanvas.get();
+    EnsurePlayer(root);
     wuxc::Border island = g_playerIsland.get();
     if (!island) return;
-    island.Height(height);
-    island.Background(wuxm::SolidColorBrush(g_settings.Format == Full ? Color{ 0, 0, 0, 0 } : FillColor()));
-    island.BorderBrush(wuxm::SolidColorBrush(g_settings.Format == Full ? Color{ 0, 0, 0, 0 } : BorderColor()));
-    island.BorderThickness(wux::Thickness{ 1, 1, 1, 1 });
+
+    // El reproductor lleva el mismo skin que las islas (en Completa y Línea fina va sin fondo, dentro de la barra)
+    wchar_t style[64];
+    swprintf_s(style, L"%d|%d|%x|%.0f", g_settings.Skin, g_settings.Format, *(uint32_t*)&g_settings.IslandColor, height);
+    if (created || g_playerStyle != style)
+    {
+        g_playerStyle = style;
+        bool inline_ = g_settings.Format == Full || g_settings.Skin == SkinLine || g_settings.Skin == SkinGhost;
+        bool notch = g_settings.Skin == SkinNotch && !inline_;
+        double barHeight = root.ActualHeight();
+        island.Height(notch ? barHeight - top - 1 : height);
+        island.CornerRadius(notch ? wux::CornerRadius{ 18, 18, 0, 0 }
+            : g_settings.Skin == SkinAero7 ? wux::CornerRadius{ 10, 10, 10, 10 } : wux::CornerRadius{ height / 2, height / 2, height / 2, height / 2 });
+        island.Background(inline_ ? wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 }) : IslandFill(3));
+        double stroke = inline_ || notch ? 0 : StrokeWidth();
+        island.BorderThickness(wux::Thickness{ stroke, stroke, stroke, stroke });
+        if (stroke > 0) island.BorderBrush(IslandStroke(3));
+        g_playerX = -1;
+    }
     if (std::abs(g_playerX - x) > 1)
     {
+        bool notch = g_settings.Skin == SkinNotch && g_settings.Format != Full;
         wuxc::Canvas::SetLeft(island, x);
-        wuxc::Canvas::SetTop(island, top);
+        wuxc::Canvas::SetTop(island, notch ? top + 2 : top);
         g_playerX = x;
     }
 }
