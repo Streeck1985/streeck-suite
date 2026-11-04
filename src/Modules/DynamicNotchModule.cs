@@ -1005,7 +1005,8 @@ namespace StreeckSuite.Modules
             using (Pen pen = new Pen(viewBorder ?? Glass.Border, 1))
             {
                 g.FillPath(fill, path);
-                g.DrawPath(pen, outline);
+                // Pegada arriba no lleva contorno (como el mockup y Bloom), salvo el halo del estilo Neón
+                if (!Attached || SuiteSettings.GlassStyle == SuiteSettings.GlassStyleKind.Neon) g.DrawPath(pen, outline);
             }
 
             if (_mode == Mode.Tucked) return; // Solo la rayita, sin contenido
