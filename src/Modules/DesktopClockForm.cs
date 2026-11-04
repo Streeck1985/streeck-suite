@@ -246,8 +246,20 @@ namespace StreeckSuite.Modules
                 return;
             }
 
-            PaintClock(g, ClientSize, _settings, _layers, _weather, DateTime.Now);
+            // Un error al pintar no debe dejar la X roja de Windows Forms (que ya no vuelve a pintar): se registra
+            // y se muestra al menos el fondo
+            try
+            {
+                PaintClock(g, ClientSize, _settings, _layers, _weather, DateTime.Now);
+            }
+            catch (Exception ex)
+            {
+                if (!_paintErrorLogged) { Log.Error("[DesktopClockForm] Error al pintar el reloj ({0}): {1}", _settings.Style, ex); _paintErrorLogged = true; }
+                try { g.DrawImageUnscaled(_layers.Background, 0, 0); } catch (Exception) { g.Clear(Color.Black); }
+            }
         }
+
+        private bool _paintErrorLogged;
 
         /// <summary>
         /// Fondo, hora (clásica o estirada) y primer plano. También lo usa la vista previa --preview-clock.

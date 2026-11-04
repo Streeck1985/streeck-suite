@@ -109,10 +109,25 @@ namespace StreeckSuite
                     System.IO.File.WriteAllText(System.IO.Path.Combine(args[1], "profundidad.txt"), probe.ToString());
 
                     // El reloj del usuario a varias alturas (como mover el deslizador Vertical)
-                    foreach (float top in new[] { 0.05f, 0.15f, 0.25f, 0.35f })
+                    foreach (float top in new[] { 0f, 0.02f, 0.05f, 0.15f, 0.25f, 0.35f, 0.6f, 0.8f })
+                    foreach (float size in new[] { saved.Size, 0.8f })
                     {
                         ClockSettings s = saved.Clone();
                         s.Top = top;
+                        s.Size = size;
+                        try
+                        {
+                            using (System.Drawing.Bitmap test = new System.Drawing.Bitmap(screen.Width, screen.Height))
+                            using (System.Drawing.Graphics tg = System.Drawing.Graphics.FromImage(test))
+                            {
+                                DesktopClockForm.PaintClock(tg, screen, s, layers, null, new DateTime(2026, 11, 3, 19, 44, 7));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.IO.File.AppendAllText(System.IO.Path.Combine(args[1], "errores.txt"), "arriba=" + top + " tamano=" + size + ": " + ex + "\r\n");
+                        }
+                        if (size != saved.Size) continue;
                         if (layers.Foreground != null) layers.Foreground.Dispose();
                         layers.Foreground = layers.ComposeForeground(s);
                         using (System.Drawing.Bitmap bitmap = new System.Drawing.Bitmap(screen.Width, screen.Height))
