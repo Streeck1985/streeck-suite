@@ -241,6 +241,9 @@ namespace StreeckSuite.Modules
             _settingsChanged = OnSettingsChanged;
             SuiteSettings.Changed += _settingsChanged;
             _audio = CreateAudioService();
+            // Teclas de volumen atrapadas (como Bloom): la isla muestra su aviso y Windows no dibuja el suyo
+            _volumeKeys = new VolumeKeysHook(_audio, (level, muted) => BeginInvokeSafe(() => ShowVolume(level, muted)));
+            _volumeKeys.Apply();
             // Como Bloom: el Centro de control va primero (fase J3)
             _views = new List<IslandView> { new ControlCenterView(_audio), _music };
             if (_audio != null) _views.Add(new AudioView(_audio));
@@ -347,9 +350,12 @@ namespace StreeckSuite.Modules
         /// <summary>
         /// Cambio en el panel de ajustes: el tamaño necesita fuentes nuevas; el resto se lee en cada fotograma.
         /// </summary>
+        private VolumeKeysHook _volumeKeys;
+
         private void OnSettingsChanged()
         {
             if (IsDisposed) return;
+            if (_volumeKeys != null) _volumeKeys.Apply();
             float scale = _dpiScale * SuiteSettings.IslandScalePercent / 100f;
             if (scale != _scale)
             {
@@ -1378,6 +1384,7 @@ namespace StreeckSuite.Modules
                 AgendaService.Updated -= _agendaUpdated;
                 BluetoothService.Connected -= _bluetoothConnected;
                 BluetoothService.LowBattery -= _bluetoothLow;
+                if (_volumeKeys != null) _volumeKeys.Dispose();
                 if (_audio != null) _audio.Dispose();
             }
             base.Dispose(disposing);
