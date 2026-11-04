@@ -922,7 +922,7 @@ namespace StreeckSuite.Modules
             if (springing) ApplyBounds();
 
             bool transitioning = springing || _contentOpacity < 1f;
-            if (transitioning || now.Second != _lastFullPaintSecond || (_mode != Mode.Tucked && ActiveView.IsAnimated))
+            if (transitioning || now.Second != _lastFullPaintSecond || (_mode != Mode.Tucked && (ActiveView.IsAnimated || IslandSkin.IsAnimated)))
             {
                 _lastFullPaintSecond = now.Second;
                 RenderSurface();
@@ -1123,16 +1123,11 @@ namespace StreeckSuite.Modules
             g.TranslateTransform(ShadowPad, ShadowPad);
             bounds.Offset(-ShadowPad, -ShadowPad);
 
-            Color? viewBorder = _mode == Mode.Tucked ? null : ActiveView.BorderColor;
-            Color fillColor = IslandFill;
+            // El mismo skin que la barra de tareas (con la barra apagada: el color y la opacidad del panel Isla)
             using (GraphicsPath path = Attached ? NotchPath(bounds, radius, true) : IslandPainter.RoundedRect(bounds, radius))
             using (GraphicsPath outline = Attached ? NotchPath(bounds, radius, false) : IslandPainter.RoundedRect(bounds, radius))
-            using (SolidBrush fill = new SolidBrush(fillColor))
-            using (Pen pen = new Pen(viewBorder ?? Glass.Border, 1))
             {
-                g.FillPath(fill, path);
-                // Sin contorno en ningún estilo (el usuario no lo quiere); solo el cristal Neón, que es justo ese halo
-                if (SuiteSettings.GlassStyle == SuiteSettings.GlassStyleKind.Neon) g.DrawPath(pen, outline);
+                IslandSkin.Paint(g, path, outline, bounds, IslandFill);
             }
 
             if (_mode == Mode.Tucked) return; // Solo la rayita, sin contenido
