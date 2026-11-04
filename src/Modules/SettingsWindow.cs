@@ -19,7 +19,7 @@ namespace StreeckSuite.Modules
         public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, Widgets, Clock }
 
         // Medidas del mockup (a 96 PPP)
-        private const float W = 800, H = 724, SideW = 210, ContentX = 238, ContentW = 534;
+        private const float W = 800, H = 768, SideW = 210, ContentX = 238, ContentW = 534;
         private const float ContentRight = ContentX + ContentW;
         private const float InnerX = ContentX + 16, InnerW = ContentW - 32;
 
@@ -595,7 +595,11 @@ namespace StreeckSuite.Modules
 
             // Estilo (fase J1) y color del fondo, el mismo para los dos estilos
             y = 562;
-            DrawCard(g, y, 144);
+            DrawCard(g, y, 188);
+            // Varios monitores: la isla en el principal o en el del ratón
+            DrawText(g, "Monitor", _semi14, TextColor, new RectangleF(InnerX, y + 142, 120, 40), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 145, 330, 34), new[] { "Principal", "Donde esté el ratón" },
+                (int)SuiteSettings.IslandMonitor, i => { SuiteSettings.IslandMonitor = (SuiteSettings.IslandMonitorKind)i; SuiteSettings.Save(); });
             // Isla cerrada (fase J6): widgets a los lados u ojitos
             DrawText(g, "Cerrada", _semi14, TextColor, new RectangleF(InnerX, y + 98, 120, 40), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 101, 330, 34), new[] { "Widgets", "Ojitos" },
