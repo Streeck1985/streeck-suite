@@ -26,6 +26,10 @@ $RefArg = "/reference:System.dll,System.Core.dll,System.Data.dll,System.Drawing.
 $SpeechDll = Get-ChildItem "$env:windir\Microsoft.NET\assembly\GAC_MSIL\System.Speech" -Recurse -Filter "System.Speech.dll" | Where-Object { $_.FullName -match "v4\.0" } | Select-Object -First 1 -ExpandProperty FullName
 $RefArg += ",$SpeechDll"
 
+# UI Automation (iconos de la bandeja en el Centro de control): viene con WPF
+$WpfDir = "$env:windir\Microsoft.NET\Framework64\v4.0.30319\WPF"
+$RefArg += ",$WpfDir\UIAutomationClient.dll,$WpfDir\UIAutomationTypes.dll,$WpfDir\WindowsBase.dll"
+
 # Windows ML (reloj 3D): metadatos WinRT que trae Windows y las fachadas de .NET para usarlos desde C#
 $FrameworkDir = Split-Path $Compiler
 $WinMetadata = "$env:SystemRoot\System32\WinMetadata"

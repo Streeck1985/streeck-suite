@@ -50,7 +50,7 @@ namespace StreeckSuite.Modules
         {
             get
             {
-                if (_page == Page.Main) return new SizeF(380, 134);
+                if (_page == Page.Main) return new SizeF(380, TrayIconsService.Apps.Count > 0 ? 182 : 134);
                 int rows = _page == Page.Wifi ? SystemControls.Networks.Count : _paired.Count;
                 return new SizeF(380, 34 + Math.Max(1, Math.Min(MaxRows, rows)) * RowHeight);
             }
@@ -122,6 +122,36 @@ namespace StreeckSuite.Modules
                 p.DrawText(g, "No hay micrófono conectado", p.Text11, IslandPainter.Fade(IslandPainter.Gray, alpha),
                     new RectangleF(x + p.Px(30), y, width - p.Px(30), _micRow.Height), StringAlignment.Near);
             }
+
+            // Iconos de la bandeja de Windows (fase J3b): clic abre la app, clic derecho muestra su menú
+            _trayHits.Clear();
+            List<TrayIconsService.TrayApp> apps = TrayIconsService.Apps;
+            if (apps.Count == 0) return;
+            y += p.Px(36);
+            using (Pen line = new Pen(Color.FromArgb(alpha * 20 / 255, Color.White), 1)) g.DrawLine(line, x, y, x + width, y);
+            y += p.Px(10);
+            float icon = p.Px(30), iconGap = p.Px(6);
+            int fit = Math.Max(1, (int)((width + iconGap) / (icon + iconGap)));
+            for (int i = 0; i < Math.Min(fit, apps.Count); i++)
+            {
+                RectangleF cell = new RectangleF(x + i * (icon + iconGap), y, icon, icon);
+                IslandPainter.FillRounded(g, cell, p.Px(9), Color.FromArgb(alpha * 22 / 255, Color.White));
+                if (apps[i].Icon != null) g.DrawImage(apps[i].Icon, RectangleF.Inflate(cell, -p.Px(6), -p.Px(6)));
+                else p.DrawText(g, apps[i].Name.Substring(0, 1), p.Bold12, Color.FromArgb(alpha, Color.White), cell, StringAlignment.Center);
+                _trayHits.Add(new KeyValuePair<RectangleF, TrayIconsService.TrayApp>(cell, apps[i]));
+            }
+        }
+
+        private readonly List<KeyValuePair<RectangleF, TrayIconsService.TrayApp>> _trayHits = new List<KeyValuePair<RectangleF, TrayIconsService.TrayApp>>();
+
+        public override bool OnRightClick(PointF point)
+        {
+            if (_page != Page.Main) return false;
+            foreach (KeyValuePair<RectangleF, TrayIconsService.TrayApp> hit in _trayHits)
+            {
+                if (hit.Key.Contains(point)) { TrayIconsService.Click(hit.Value, true); return true; }
+            }
+            return false;
         }
 
         // Botón con icono, nombre y estado; con flechita a la derecha si se puede elegir. Devuelve la zona de la flechita.
@@ -263,6 +293,10 @@ namespace StreeckSuite.Modules
                 return true;
             }
 
+            foreach (KeyValuePair<RectangleF, TrayIconsService.TrayApp> hit in _trayHits)
+            {
+                if (hit.Key.Contains(point)) { TrayIconsService.Click(hit.Value, false); return true; }
+            }
             if (_wifiChevron.Contains(point)) { _page = Page.Wifi; SystemControls.ScanWifi(); return true; }
             if (_bluetoothChevron.Contains(point)) { _page = Page.Bluetooth; RefreshPaired(true); return true; }
             if (_wifiTile.Contains(point)) { SystemControls.ToggleWifi(); return true; }

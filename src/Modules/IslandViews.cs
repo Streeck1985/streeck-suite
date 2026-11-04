@@ -81,6 +81,14 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
+        /// Clic derecho en coordenadas de la vista (p. ej. el menú de un icono de la bandeja). true si lo usó.
+        /// </summary>
+        public virtual bool OnRightClick(PointF point)
+        {
+            return false;
+        }
+
+        /// <summary>
         /// Rueda sobre la vista. Devuelve true si la usó; si no, la rueda cambia de pestaña.
         /// </summary>
         public virtual bool OnWheel(PointF point, int delta)
