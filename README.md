@@ -41,11 +41,22 @@ Cuando la isla está cerrada puede mostrar unos ojitos que te siguen con la mira
 
 9 estilos (Actual, Con pupila, Anime, Gato, Robot, Puntitos, Pixel, Visor LED y Cíclope), 5 colores, cejas, boquita y rubor.
 
+Con música sonando, la carita se pone feliz junto al ecualizador:
+
+<p align="center"><img src="imagenes/isla-carita-musica.png" width="420" alt="Carita feliz con música"></p>
+
 ## Barra de tareas con skins
 
 Le pone skin a **la barra real de Windows** (no es una barra falsa): islas a los extremos, 10 skins y un mini reproductor. Funciona en varios monitores.
 
 <p align="center"><img src="imagenes/barra.png" alt="Barra de tareas con skin"></p>
+
+### Icono del botón de Inicio
+
+Cambia el logo de Windows por el logo Streeck, un orbe, unos ojitos que parpadean, una luna, un destello o tu propia imagen. Al darle clic abre el menú de Streeck.
+
+<p align="center"><img src="imagenes/boton-inicio.png" width="700" alt="Botón de Inicio con ojitos"></p>
+<p align="center"><img src="imagenes/panel-boton-inicio.png" width="400" alt="Ajustes del botón de Inicio"></p>
 
 ## Panel de ajustes
 
