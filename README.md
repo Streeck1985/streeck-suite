@@ -64,6 +64,7 @@ Todo se configura desde un panel propio en español.
 
 - **Reloj 3D** sobre tu fondo de pantalla: detrás del sujeto o con contorno, con la fuente que quieras.
 - **Menú de inicio y búsqueda** propios, con asistente de IA (local o Gemini).
+- **Icono del botón de Inicio** a tu gusto: logo Streeck, orbe, ojitos que parpadean, luna, destello o tu propia imagen.
 - **Modo privacidad** con desenfoque (Ctrl + Alt + P).
 - **Bandeja de archivos**, widgets, tareas y recordatorios.
 - **Se actualiza sola**: revisa este repositorio y la isla te avisa cuando hay versión nueva.
