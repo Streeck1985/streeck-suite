@@ -97,13 +97,14 @@ namespace StreeckSuite.Modules
             public float LookX, LookY;
             public double Ms;     // Reloj de las animaciones cíclicas
             public int Alpha;
+            public bool Compact;  // Pequeños junto a la música o el tiempo: sin adornos a los lados (no caben)
         }
 
         /// <summary>
         /// Dibuja los ojitos centrados en center. unit: píxeles por unidad del mockup. ambient: el estado de fondo
         /// (música, sin internet, temporizador). idleSeconds: tiempo sin tocar ratón ni teclado.
         /// </summary>
-        public static void Draw(Graphics g, PointF center, float unit, int alpha, Mood ambient, double idleSeconds)
+        public static void Draw(Graphics g, PointF center, float unit, int alpha, Mood ambient, double idleSeconds, bool compact = false)
         {
             DateTime now = DateTime.Now;
             bool resumed = _lastFrame == DateTime.MinValue || (now - _lastFrame).TotalSeconds > 0.5;
@@ -158,7 +159,7 @@ namespace StreeckSuite.Modules
                 }
             }
 
-            Frame f = new Frame { Alpha = alpha, Ms = now.TimeOfDay.TotalMilliseconds, Open = 1, Phase = 0 };
+            Frame f = new Frame { Alpha = alpha, Ms = now.TimeOfDay.TotalMilliseconds, Open = 1, Phase = 0, Compact = compact };
             bool hovering = IslandRect.Width > 0 && IslandRect.Contains(cursor);
             if (tempActive)
             {
@@ -306,7 +307,7 @@ namespace StreeckSuite.Modules
                 }
 
                 // Rubor
-                if (SuiteSettings.EyesBlush && (mood == Mood.Happy || mood == Mood.Love || mood == Mood.Laugh || mood == Mood.Wink))
+                if (SuiteSettings.EyesBlush && !f.Compact && (mood == Mood.Happy || mood == Mood.Love || mood == Mood.Laugh || mood == Mood.Wink))
                 {
                     float spread = cyclops ? 22 : 32;
                     using (SolidBrush blush = new SolidBrush(A(Pink, f, 0.45f)))
@@ -340,6 +341,7 @@ namespace StreeckSuite.Modules
                 }
 
                 // Adornos
+                if (f.Compact) return;
                 if (mood == Mood.Sleep)
                 {
                     for (int i = 0; i < 3; i++)
