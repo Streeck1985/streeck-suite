@@ -1,1 +1,1 @@
-namespace StreeckSetup { internal static class BuildInfo { public const string Version = "1.1.0"; } }
+namespace StreeckSetup { internal static class BuildInfo { public const string Version = "1.2.0"; } }
