@@ -220,8 +220,10 @@ namespace StreeckSuite.Modules
             if (Busy)
             {
                 IslandEyes.Mood busyMood = TimerService.IsActive ? IslandEyes.Mood.Focus : IslandEyes.Mood.Happy;
-                IslandEyes.Draw(g, new PointF(p.Px(40), size.Height / 2), unit * 0.8f, alpha, busyMood, idle);
-                float shift = p.Px(36);
+                // Los ojos ocupan ±26 unidades: van pegados a la izquierda y el resto empieza después, sin encimarse
+                float eyesUnit = unit * 0.8f;
+                IslandEyes.Draw(g, new PointF(p.Px(16) + 26 * eyesUnit, size.Height / 2), eyesUnit, alpha, busyMood, idle, true);
+                float shift = p.Px(16) + 52 * eyesUnit + p.Px(10);
                 GraphicsState state = g.Save();
                 g.TranslateTransform(shift, 0);
                 DrawCenter(g, new SizeF(size.Width - shift, size.Height), alpha, p, size.Width - shift - p.Px(32));
