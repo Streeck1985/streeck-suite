@@ -341,9 +341,10 @@ namespace StreeckSetup
 
             Report(0.25f, "Copiando archivos…");
             Directory.CreateDirectory(InstallDir);
+            bool oldBarLoaded = false;
             foreach (string old in Directory.GetFiles(InstallDir, "streeck_taskbar_*.dll"))
             {
-                try { File.Delete(old); } catch (Exception) { } // Si el Explorador aún la usa, se queda hasta reiniciar
+                try { File.Delete(old); } catch (Exception) { oldBarLoaded = true; } // El Explorador aún la usa
             }
             Assembly self = Assembly.GetExecutingAssembly();
             foreach (string name in self.GetManifestResourceNames())
@@ -354,6 +355,12 @@ namespace StreeckSetup
                 {
                     source.CopyTo(target);
                 }
+            }
+            // La barra vieja sigue cargada en el Explorador: se reinicia para que tome la nueva (parpadea un momento)
+            if (oldBarLoaded)
+            {
+                Report(0.45f, "Actualizando la barra de tareas…");
+                RestartExplorer();
             }
             string uninstaller = Path.Combine(InstallDir, "Desinstalar Streeck.exe");
             File.Copy(Application.ExecutablePath, uninstaller, true);
@@ -385,6 +392,17 @@ namespace StreeckSetup
             }
         }
 
+        private static void RestartExplorer()
+        {
+            foreach (Process explorer in Process.GetProcessesByName("explorer"))
+            {
+                try { explorer.Kill(); } catch (Exception) { }
+            }
+            Thread.Sleep(2500);
+            if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
+            Thread.Sleep(1500);
+        }
+
         private void Uninstall()
         {
             Report(0.1f, "Cerrando Streeck Suite y devolviendo la barra de Windows…");
@@ -392,12 +410,7 @@ namespace StreeckSetup
 
             // La DLL de la barra sigue cargada en el Explorador: reiniciarlo la suelta (la barra parpadea un momento)
             Report(0.35f, "Reiniciando el Explorador…");
-            foreach (Process explorer in Process.GetProcessesByName("explorer"))
-            {
-                try { explorer.Kill(); } catch (Exception) { }
-            }
-            Thread.Sleep(2500);
-            if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
+            RestartExplorer();
 
             Report(0.55f, "Quitando accesos directos e inicio con Windows…");
             using (RegistryKey run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
