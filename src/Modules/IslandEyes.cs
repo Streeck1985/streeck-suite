@@ -269,22 +269,32 @@ namespace StreeckSuite.Modules
                 float y = bob - (SuiteSettings.EyesMouth ? 3 : 0);
                 float left = -18 + tilt, right = 18 + tilt;
 
-                bool plain = mood == Mood.Idle || mood == Mood.Surprised || mood == Mood.Focus || mood == Mood.Sad || mood == Mood.Angry
-                             || mood == Mood.Wave || mood == Mood.Nod || mood == Mood.Whistle || mood == Mood.Stretch;
-                if (style == SuiteSettings.EyesStyleKind.Visor && plain) DrawVisor(g, y, tilt, f, color);
-                else if (cyclops)
+                // Cara del estilo (mockup «Caras de cada estilo»): cada estilo dibuja sus 8 caras en las unidades del
+                // mockup (ojos a ±15), que aquí se agrandan 1,2 veces para quedar a ±18 como antes
+                char face;
+                float open = f.Open;
+                switch (mood)
                 {
-                    GraphicsState one = g.Save();
-                    g.TranslateTransform(tilt, y);
-                    g.ScaleTransform(1.5f, 1.5f);
-                    DrawEye(g, 0, 0, 1, sq, f, color, style);
-                    g.Restore(one);
+                    case Mood.Happy: case Mood.Laugh: face = 'f'; break;
+                    case Mood.Surprised: face = 's'; break;
+                    case Mood.Sleep: face = 'd'; break;
+                    case Mood.Yawn: face = f.Phase > 0.15f && f.Phase < 0.85f ? 'd' : 'n'; break;
+                    case Mood.Dizzy: face = 'z'; break;
+                    case Mood.Love: face = 'a'; break;
+                    case Mood.Angry: face = 'e'; break;
+                    case Mood.Wink: face = 'w'; break;
+                    case Mood.Nod: face = f.Phase > 0.75f ? 's' : 'n'; break; // Despierta de golpe
+                    default: face = 'n'; break;
                 }
-                else
-                {
-                    DrawEye(g, left, y, -1, sq, f, color, style);
-                    DrawEye(g, right, y, 1, sq, f, color, style);
-                }
+                if (mood == Mood.Focus) open *= 0.5f;
+                else if (mood == Mood.Sad) open *= 0.8f;
+                else if (mood == Mood.Whistle) open *= 0.6f;
+                GraphicsState faceState = g.Save();
+                g.TranslateTransform(tilt, y);
+                if (sq > 0) g.ScaleTransform(1 + 0.3f * sq, 1 - 0.45f * sq); // Se estira
+                g.ScaleTransform(1.2f, 1.2f);
+                StyleFace(g, style, face, Math.Max(0.1f, open), f, color);
+                g.Restore(faceState);
 
                 // Cejas
                 if (SuiteSettings.EyesBrows && (mood == Mood.Angry || mood == Mood.Focus || mood == Mood.Sad || mood == Mood.Surprised))
@@ -377,136 +387,503 @@ namespace StreeckSuite.Modules
             using (SolidBrush brush = new SolidBrush(color)) g.DrawString(text, font, brush, x, y);
         }
 
-        private static void DrawEye(Graphics g, float cx, float cy, int side, float sq, Frame f, Color color, SuiteSettings.EyesStyleKind style)
+        #region Caras de cada estilo (unidades del mockup: ojos en x = ±15, centro en 0)
+
+        private const float EL = -15, ER = 15;
+        private static readonly Color Dark = Color.FromArgb(11, 11, 16);
+        private static readonly Color PinkHeart = Color.FromArgb(244, 114, 182);
+        private static readonly Color Rose = Color.FromArgb(251, 113, 133);
+        private static readonly Color Amber = Color.FromArgb(251, 191, 36);
+        private static readonly Color Yellow = Color.FromArgb(253, 224, 71);
+        private static readonly Color Red = Color.FromArgb(239, 68, 68);
+        private static readonly Color Cyan = Color.FromArgb(34, 211, 238);
+
+        // Contexto de dibujo de una cara
+        private class Face
         {
-            Mood mood = f.Mood;
-            float open = f.Open;
-            float w = 16 + 6 * sq, h = 20 * open * (1 - 0.45f * sq);
-            Color fill = A(color, f, 1), dark = A(Color.FromArgb(11, 11, 16), f, 1);
+            public Graphics G;
+            public Frame F;
+            public Color Eye;     // Color de los ojos que eligió el usuario
+            public float Open;    // Parpadeo (1 abierto)
+            public float LookX, LookY;
+            public double T;
+            public float Pulse { get { return 1 + 0.12f * (float)Math.Sin(T / 140); } }
 
-            // Formas de las emociones (iguales en todos los estilos)
-            if (mood == Mood.Happy || mood == Mood.Laugh)
+            public Color C(Color color, float opacity = 1) { return A(color, F, opacity); }
+
+            public void Ell(float x, float y, float rx, float ry, Color color)
             {
-                using (Pen pen = Stroke(fill, 4)) g.DrawArc(pen, cx - 8, cy - 4, 16, 16, 198, 144);
-                return;
+                if (rx <= 0 || ry <= 0) return;
+                using (SolidBrush b = new SolidBrush(C(color))) G.FillEllipse(b, x - rx, y - ry, 2 * rx, 2 * ry);
             }
-            if (mood == Mood.Love)
+            public void Dot(float x, float y, float r, Color color) { Ell(x, y, r, r, color); }
+            public void Ring(float x, float y, float rx, float ry, Color color, float w)
             {
-                DrawHeart(g, cx, cy, 1 + 0.12f * (float)Math.Sin(f.Ms / 120), A(Pink, f, 1));
-                return;
+                using (Pen p = Stroke(C(color), w)) G.DrawEllipse(p, x - rx, y - ry, 2 * rx, 2 * ry);
             }
-            if (mood == Mood.Dizzy)
+            public void RR(float x, float y, float w, float h, float r, Color color, float opacity = 1)
             {
-                List<PointF> spiral = new List<PointF>();
-                for (float a = 0; a < 12; a += 0.2f)
+                if (w <= 0 || h <= 0) return;
+                IslandPainter.FillRounded(G, new RectangleF(x, y, w, h), Math.Max(0.1f, Math.Min(r, Math.Min(w, h) / 2)), C(color, opacity));
+            }
+            public void Rect(float x, float y, float w, float h, Color color, float opacity = 1)
+            {
+                using (SolidBrush b = new SolidBrush(C(color, opacity))) G.FillRectangle(b, x, y, w, h);
+            }
+            public void Box(float x, float y, float w, float h, Color color, float width)
+            {
+                using (Pen p = Stroke(C(color), width)) G.DrawRectangle(p, x, y, w, h);
+            }
+            // Arco como en el mockup: de a0·π a a1·π (sentido de las agujas del reloj)
+            public void Arc(float x, float y, float r, float a0, float a1, float w, Color color, float opacity = 1)
+            {
+                using (Pen p = Stroke(C(color, opacity), w)) G.DrawArc(p, x - r, y - r, 2 * r, 2 * r, a0 * 180, (a1 - a0) * 180);
+            }
+            public void Line(float x1, float y1, float x2, float y2, float w, Color color)
+            {
+                using (Pen p = Stroke(C(color), w)) G.DrawLine(p, x1, y1, x2, y2);
+            }
+            public void Lines(float w, Color color, params float[] xy)
+            {
+                PointF[] points = new PointF[xy.Length / 2];
+                for (int i = 0; i < points.Length; i++) points[i] = new PointF(xy[2 * i], xy[2 * i + 1]);
+                using (Pen p = Stroke(C(color), w)) G.DrawLines(p, points);
+            }
+            public void Poly(Color color, params float[] xy)
+            {
+                PointF[] points = new PointF[xy.Length / 2];
+                for (int i = 0; i < points.Length; i++) points[i] = new PointF(xy[2 * i], xy[2 * i + 1]);
+                using (SolidBrush b = new SolidBrush(C(color))) G.FillPolygon(b, points);
+            }
+            public void Heart(float x, float y, float s, Color color) { DrawHeart(G, x, y, s, C(color)); }
+            public void Star(float x, float y, float r, Color color)
+            {
+                PointF[] points = new PointF[10];
+                for (int i = 0; i < 10; i++)
                 {
-                    float r = a * 0.8f;
-                    spiral.Add(new PointF(cx + (float)Math.Cos(a + f.Ms / 150) * r, cy + (float)Math.Sin(a + f.Ms / 150) * r));
+                    double a = -Math.PI / 2 + i * Math.PI / 5;
+                    float q = i % 2 == 1 ? r * 0.45f : r;
+                    points[i] = new PointF(x + (float)Math.Cos(a) * q, y + (float)Math.Sin(a) * q);
                 }
-                using (Pen pen = Stroke(fill, 2.5f)) g.DrawLines(pen, spiral.ToArray());
-                return;
+                using (SolidBrush b = new SolidBrush(C(color))) G.FillPolygon(b, points);
             }
-            if (mood == Mood.Wink && side > 0)
+            public void Spiral(float x, float y, Color color, bool square = false, float size = 1)
             {
-                using (Pen pen = Stroke(fill, 4)) g.DrawLine(pen, cx - 7, cy, cx + 7, cy);
-                return;
-            }
-            if (mood == Mood.Sleep)
-            {
-                using (Pen pen = Stroke(fill, 3.5f)) g.DrawArc(pen, cx - 7, cy - 9, 14, 14, 27, 126);
-                return;
-            }
-            if (mood == Mood.Yawn && f.Phase > 0.15f && f.Phase < 0.85f)
-            {
-                float d = side < 0 ? 1 : -1;
-                using (Pen pen = Stroke(fill, 3.5f))
+                List<PointF> points = new List<PointF>();
+                for (float a = 0; a < 11; a += 0.25f)
                 {
-                    g.DrawLines(pen, new[] { new PointF(cx - 6 * d, cy - 6), new PointF(cx + 5 * d, cy), new PointF(cx - 6 * d, cy + 6) });
+                    float r = a * 0.85f * size;
+                    float px = x + (float)Math.Cos(a + T / 140) * r, py = y + (float)Math.Sin(a + T / 140) * r;
+                    points.Add(square ? new PointF((float)Math.Round(px / 3) * 3, (float)Math.Round(py / 3) * 3) : new PointF(px, py));
                 }
-                return;
+                using (Pen p = Stroke(C(color), 2.2f)) G.DrawLines(p, points.ToArray());
             }
+            public void PixHeart(float x, float y, Color color)
+            {
+                string[] rows = { ".##.##.", "#######", "#######", ".#####.", "..###..", "...#..." };
+                for (int j = 0; j < rows.Length; j++)
+                    for (int i = 0; i < rows[j].Length; i++)
+                        if (rows[j][i] == '#') Rect(x - 10 + i * 3, y - 8 + j * 3, 2.6f, 2.6f, color);
+            }
+            // Brillo (Visor LED): dos halos y la luz
+            public void Glow(float x, float y, float w, float h, Color color, float opacity = 1)
+            {
+                RR(x - 4, y - 4, w + 8, h + 8, (h + 8) / 2, color, 0.15f * opacity);
+                RR(x - 2, y - 2, w + 4, h + 4, (h + 4) / 2, color, 0.3f * opacity);
+                RR(x, y, w, h, h / 2, color, opacity);
+            }
+            public void Spin(float x, float y, double radians, Action draw)
+            {
+                GraphicsState s = G.Save();
+                G.TranslateTransform(x, y);
+                G.RotateTransform((float)(radians * 180 / Math.PI));
+                draw();
+                G.Restore(s);
+            }
+            public void Both(Action<float, int> draw) { draw(EL, -1); draw(ER, 1); }
+        }
 
-            float hh = h;
-            if (mood == Mood.Surprised) hh = 26 * open;
-            else if (mood == Mood.Focus) hh = 10 * open;
-            else if (mood == Mood.Sad) hh = 16 * open;
-            else if (mood == Mood.Angry) hh = 13 * open;
-            else if (mood == Mood.Whistle) hh = 12 * open;
-            if (mood == Mood.Nod && f.Phase > 0.75f) hh = 26 * open; // Despierta de golpe
-            hh = Math.Max(3, hh);
-
+        private static void StyleFace(Graphics g, SuiteSettings.EyesStyleKind style, char face, float open, Frame f, Color eye)
+        {
+            Face c = new Face { G = g, F = f, Eye = eye, Open = open, LookX = f.LookX, LookY = f.LookY, T = f.Ms };
             switch (style)
             {
-                case SuiteSettings.EyesStyleKind.Actual:
-                    IslandPainter.FillRounded(g, new RectangleF(cx - w / 2 + f.LookX * 3, cy - hh / 2 + f.LookY * 2, w, hh), Math.Min(w, hh) / 2, fill);
-                    return;
-                case SuiteSettings.EyesStyleKind.Pixel:
-                    {
-                        int rows = Math.Max(1, (int)Math.Round(hh / 8));
-                        float shift = (float)Math.Round(f.LookX) * 4;
-                        using (SolidBrush brush = new SolidBrush(fill))
-                        {
-                            for (int i = -2; i < 2; i++)
-                                for (int j = -rows; j < rows; j++) g.FillRectangle(brush, cx + i * 4 + shift, cy + j * 4, 3.5f, 3.5f);
-                        }
-                        return;
-                    }
-                case SuiteSettings.EyesStyleKind.Dots:
-                    {
-                        float ry = Math.Max(1.5f, 5.5f * hh / 20);
-                        using (SolidBrush brush = new SolidBrush(fill)) g.FillEllipse(brush, cx + f.LookX * 4 - 5.5f, cy + f.LookY * 3 - ry, 11, 2 * ry);
-                        return;
-                    }
-                case SuiteSettings.EyesStyleKind.Cat:
-                    using (SolidBrush brush = new SolidBrush(fill)) g.FillEllipse(brush, cx - w / 2 - 2, cy - hh / 2, w + 4, hh);
-                    if (hh > 8)
-                    {
-                        float slit = mood == Mood.Surprised ? 4.5f : 1.8f;
-                        using (SolidBrush brush = new SolidBrush(dark)) g.FillEllipse(brush, cx + f.LookX * 4 - slit, cy + f.LookY * 2 - (hh / 2 - 2), 2 * slit, hh - 4);
-                    }
-                    return;
-                case SuiteSettings.EyesStyleKind.Robot:
-                    using (SolidBrush brush = new SolidBrush(fill)) g.FillRectangle(brush, cx - w / 2 - 1, cy - hh / 2, w + 2, hh);
-                    using (SolidBrush lines = new SolidBrush(A(Color.Black, f, 0.35f)))
-                    {
-                        for (float ly = cy - hh / 2 + 2; ly < cy + hh / 2; ly += 3) g.FillRectangle(lines, cx - w / 2 - 1, ly, w + 2, 1);
-                    }
-                    if (hh > 8)
-                    {
-                        using (SolidBrush brush = new SolidBrush(dark)) g.FillRectangle(brush, cx - 3 + f.LookX * 4, cy - 3 + f.LookY * (hh / 2 - 5), 6, 6);
-                    }
-                    return;
-            }
-
-            // Con pupila, Anime, Cíclope (y el Visor cuando hace una emoción con forma propia)
-            IslandPainter.FillRounded(g, new RectangleF(cx - w / 2, cy - hh / 2, w, hh), Math.Min(8, hh / 2), fill);
-            if (hh > 8)
-            {
-                float px = cx + f.LookX * 4, py = cy + f.LookY * (hh / 2 - 5);
-                IslandPainter.FillRounded(g, new RectangleF(px - 4, py - 5, 8, 10), 4, dark);
-                if (style == SuiteSettings.EyesStyleKind.Anime)
-                {
-                    using (SolidBrush shine = new SolidBrush(A(Color.White, f, 1)))
-                    {
-                        g.FillEllipse(shine, px + 1.5f - 1.8f, py - 2.5f - 1.8f, 3.6f, 3.6f);
-                        g.FillEllipse(shine, px - 1.5f - 1, py + 2.5f - 1, 2, 2);
-                    }
-                }
+                case SuiteSettings.EyesStyleKind.Pupil: Pupil(c, face); break;
+                case SuiteSettings.EyesStyleKind.Anime: Anime(c, face); break;
+                case SuiteSettings.EyesStyleKind.Cat: Cat(c, face); break;
+                case SuiteSettings.EyesStyleKind.Robot: Robot(c, face); break;
+                case SuiteSettings.EyesStyleKind.Dots: Dots(c, face); break;
+                case SuiteSettings.EyesStyleKind.Pixel: Pixel(c, face); break;
+                case SuiteSettings.EyesStyleKind.Visor: Visor(c, face); break;
+                case SuiteSettings.EyesStyleKind.Cyclops: Cyclops(c, face); break;
+                case SuiteSettings.EyesStyleKind.Hearts: Hearts(c, face); break;
+                case SuiteSettings.EyesStyleKind.Stars: Stars(c, face); break;
+                case SuiteSettings.EyesStyleKind.Glasses: Glasses(c, face); break;
+                case SuiteSettings.EyesStyleKind.Owl: Owl(c, face); break;
+                case SuiteSettings.EyesStyleKind.Sleepy: Sleepy(c, face); break;
+                case SuiteSettings.EyesStyleKind.Cyber: Cyber(c, face); break;
+                default: Actual(c, face); break;
             }
         }
 
-        private static void DrawVisor(Graphics g, float y, float tilt, Frame f, Color color)
+        private static void Actual(Face c, char face)
         {
-            Mood mood = f.Mood;
-            float baseH = mood == Mood.Surprised ? 18 : mood == Mood.Focus ? 7 : mood == Mood.Angry ? 9 : 13;
-            float hh = Math.Max(3, baseH * f.Open);
-            IslandPainter.FillRounded(g, new RectangleF(tilt - 32, y - hh / 2, 64, hh), hh / 2, A(color, f, 0.22f));
-            float x = tilt + f.LookX * 20;
-            // Brillo: dos halos y la luz
-            IslandPainter.FillRounded(g, new RectangleF(x - 14, y - hh / 2 - 4, 28, hh + 8), (hh + 8) / 2, A(color, f, 0.15f));
-            IslandPainter.FillRounded(g, new RectangleF(x - 11, y - hh / 2 - 2, 22, hh + 4), (hh + 4) / 2, A(color, f, 0.3f));
-            IslandPainter.FillRounded(g, new RectangleF(x - 9, y - hh / 2, 18, hh), hh / 2, A(color, f, 1));
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Arc(x, 4, 7, 1.1f, 1.9f, 3.5f, w)); break;
+                case 's': c.Both((x, s) => c.RR(x - 6, -12, 12, 22, 6, w)); break;
+                case 'd': c.Both((x, s) => c.Arc(x, -3, 6, 0.15f, 0.85f, 3, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => c.RR(x - 6, -4, 12, 11, 4, w)); break;
+                case 'w': c.RR(EL - 6, -8, 12, 16, 6, w); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, w); break;
+                default: c.Both((x, s) => c.RR(x - 6 + c.LookX * 2.5f, -8 * c.Open + c.LookY * 2, 12, 16 * c.Open, 6, w)); break;
+            }
         }
+
+        private static void Pupil(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => { c.Arc(x, 5, 8, 1.1f, 1.9f, 2.5f, w); c.Arc(x, 5, 4, 1.1f, 1.9f, 2.5f, w); }); break;
+                case 's': c.Both((x, s) => { c.Ring(x, 0, 8, 11, w, 3); c.Ring(x, 0, 4, 6, w, 2); }); break;
+                case 'd': c.Both((x, s) => { c.Arc(x, -5, 6, 0.05f, 0.95f, 3, w); c.Arc(x, -3, 6, 0.1f, 0.9f, 1.5f, w, 0.35f); }); break;
+                case 'z': c.Both((x, s) => { c.Ring(x, 0, 7, 9, w, 2); c.Spiral(x, 0, w, false, 0.6f); }); break;
+                case 'a': c.Both((x, s) => { c.Ring(x, 0, 7, 9, w, 3); c.Heart(x, 0, 0.6f * c.Pulse, PinkHeart); }); break;
+                case 'e': c.Both((x, s) => { c.Ring(x, 1, 7, 7, w, 3); c.Ell(x, 1, 3, 3, w); }); break;
+                case 'w': c.Ring(EL, 0, 7, 9, w, 3); c.Ell(EL, 0, 3, 4, w); c.Arc(ER, 5, 8, 1.1f, 1.9f, 2.5f, w); break;
+                default: c.Both((x, s) => { c.Ring(x, 0, 7, 9 * c.Open, w, 3); c.Ell(x + c.LookX * 3, c.LookY * 3, 3, 4 * c.Open, w); }); break;
+            }
+        }
+
+        private static void Anime(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => { c.Arc(x, 4, 7, 1.1f, 1.9f, 3, w); c.Line(x - 2, -6, x - 3, -9, 1.5f, w); c.Line(x + 2, -6, x + 3, -9, 1.5f, w); }); break;
+                case 's':
+                    c.Both((x, s) =>
+                    {
+                        c.Ell(x, 0, 9, 11, w); c.Dot(x, 1, 5, Dark); c.Dot(x + 2, -3, 1.8f, Color.White);
+                        for (int k = -1; k <= 1; k++) c.Line(x + k * 5, -11, x + k * 7, -15, 1.5f, w);
+                    });
+                    break;
+                case 'd': c.Both((x, s) => { c.Arc(x, -4, 7, 0.1f, 0.9f, 2.5f, w); for (int k = -1; k <= 1; k++) c.Line(x + k * 5, 2, x + k * 6, 5, 1.3f, w); }); break;
+                case 'z': c.Both((x, s) => { c.Spiral(x, 0, w); c.Line(x - 4, -11, x - 5, -14, 1.5f, w); c.Line(x + 4, -11, x + 5, -14, 1.5f, w); }); break;
+                case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.4f * c.Pulse, PinkHeart); c.Dot(x - 3, -3, 1.6f, Color.White); }); break;
+                case 'e': c.Both((x, s) => { c.Ell(x, 2, 8, 6, w); c.Dot(x, 3, 3.5f, Dark); }); break;
+                case 'w': c.Ell(EL, 0, 8, 9, w); c.Dot(EL, 1, 4.5f, Dark); c.Dot(EL + 2, -2, 1.6f, Color.White); c.Lines(3, w, ER - 7, -5, ER + 5, 0, ER - 7, 5); break;
+                default:
+                    c.Both((x, s) =>
+                    {
+                        c.Ell(x, 0, 8, 9 * c.Open, w);
+                        if (c.Open > 0.5f) { c.Dot(x + c.LookX * 3, 1 + c.LookY * 2, 4.5f, Dark); c.Dot(x + 2 + c.LookX * 3, -2 + c.LookY * 2, 1.6f, Color.White); }
+                    });
+                    break;
+            }
+        }
+
+        private static void Cat(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f':
+                    c.Both((x, s) =>
+                    {
+                        using (GraphicsPath arch = new GraphicsPath())
+                        using (Pen p = Stroke(c.C(w), 3.5f))
+                        {
+                            arch.AddLine(x - 6, 8, x - 6, -2);
+                            arch.AddArc(x - 6, -8, 12, 12, 180, 180);
+                            arch.AddLine(x + 6, -2, x + 6, 8);
+                            c.G.DrawPath(p, arch);
+                        }
+                    });
+                    break;
+                case 's': c.Both((x, s) => { c.Ring(x, 0, 7, 12, w, 2.5f); c.Ell(x, 0, 2, 7, w); }); break;
+                case 'd': c.Both((x, s) => { using (Pen p = Stroke(c.C(w), 4)) c.G.DrawBezier(p, x - 9, 0, x - 3, -2, x + 3, -2, x + 9, 0); }); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 160, () => c.Ell(0, 0, 2.5f, 10, w))); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => { c.Ell(x, 2, 8, 5, w); c.Ell(x, 2, 1.5f, 4, Dark); }); break;
+                case 'w': c.Ell(EL, 0, 6, 11, w); c.Lines(3, w, ER - 7, 3, ER, -4, ER + 7, 3); break;
+                default: c.Both((x, s) => { c.Ell(x + c.LookX * 1.5f, c.LookY, 6, 11 * c.Open, w); if (c.Open > 0.5f) c.Ell(x + c.LookX * 3, c.LookY * 2, 1.6f, 8 * c.Open, Dark); }); break;
+            }
+        }
+
+        private static void ScanRect(Face c, float x, float y, float w, float h)
+        {
+            c.Rect(x, y, w, h, c.Eye);
+            for (float ly = y + 2; ly < y + h; ly += 3) c.Rect(x, ly, w, 1, Color.Black, 0.45f);
+        }
+
+        private static void Robot(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f':
+                    c.Both((x, s) =>
+                    {
+                        for (int k = 0; k < 7; k++)
+                        {
+                            double a = Math.PI * (1.05 + k * 0.15);
+                            c.Line(x + (float)Math.Cos(a) * 5, 5 + (float)Math.Sin(a) * 5, x + (float)Math.Cos(a) * 10, 5 + (float)Math.Sin(a) * 10, 2.2f, w);
+                        }
+                    });
+                    break;
+                case 's': c.Both((x, s) => ScanRect(c, x - 8, -13, 16, 24)); break;
+                case 'd': c.Both((x, s) => { for (int k = 0; k < 4; k++) c.Rect(x - 9 + k * 5, -1 + (s < 0 ? k : 3 - k) * 1.5f, 5, 2.5f, w); }); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 200, () => { c.Box(-8, -8, 16, 16, w, 2); c.Box(-4, -4, 8, 8, w, 2); })); break;
+                case 'a': c.Both((x, s) => c.PixHeart(x, 1, PinkHeart)); break;
+                case 'e': c.Both((x, s) => c.Poly(w, x - 9, s < 0 ? -2 : -7, x + 9, s < 0 ? -7 : -2, x + 9, 7, x - 9, 7)); break;
+                case 'w': ScanRect(c, EL - 9, -8, 18, 16); c.Rect(ER - 9, -1, 18, 3, w); break;
+                default:
+                    c.Both((x, s) =>
+                    {
+                        float h = 16 * c.Open;
+                        ScanRect(c, x - 9, -h / 2, 18, h);
+                        if (c.Open > 0.5f) c.Rect(x - 3 + c.LookX * 4, -3 + c.LookY * 3, 6, 6, Dark);
+                    });
+                    break;
+            }
+        }
+
+        private static void Dots(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Arc(x, 3, 6, 1.1f, 1.9f, 2.5f, w)); break;
+                case 's': c.Dot(EL, 0, 6, w); c.Arc(ER, 2, 6, 1.1f, 1.9f, 2.5f, w); break;
+                case 'd': c.Both((x, s) => c.Arc(x, -3, 6, 0.15f, 0.85f, 2, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.6f)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 0.8f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => c.Dot(x, 2, 5, w)); break;
+                case 'w': c.Dot(EL, 0, 5, w); c.Rect(ER - 6, -1, 12, 2.5f, w); break;
+                default: c.Both((x, s) => c.Ell(x + c.LookX * 3, c.LookY * 2, 5, 5 * c.Open, w)); break;
+            }
+        }
+
+        private static void PixelGrid(Face c, float x, float top, int cols, int rows)
+        {
+            for (int i = 0; i < cols; i++)
+                for (int j = 0; j < rows; j++) c.Rect(x + i * 4, top + j * 4, 3.4f, 3.4f, c.Eye);
+        }
+
+        private static void Pixel(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => { int[,] cells = { { 0, 2 }, { 1, 1 }, { 2, 0 }, { 3, 1 }, { 4, 2 } }; for (int k = 0; k < 5; k++) c.Rect(x - 10 + cells[k, 0] * 4, -2 + cells[k, 1] * 4, 3.4f, 3.4f, w); }); break;
+                case 's': c.Both((x, s) => PixelGrid(c, x - 8, -12, 4, 6)); break;
+                case 'd': c.Both((x, s) => { for (int i = 0; i < 4; i++) c.Rect(x - 9 + i * 5, 0, 3.4f, 2.6f, w); }); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, true)); break;
+                case 'a': c.Both((x, s) => c.PixHeart(x, 1, PinkHeart)); break;
+                case 'e':
+                    c.Both((x, s) =>
+                    {
+                        for (int i = 0; i < 4; i++)
+                            for (int j = 0; j < 3; j++)
+                                if (!(j == 0 && ((s < 0 && i < 2) || (s > 0 && i > 1)))) c.Rect(x - 8 + i * 4, -4 + j * 4, 3.4f, 3.4f, w);
+                    });
+                    break;
+                case 'w': PixelGrid(c, EL - 8, -8, 4, 4); for (int i = 0; i < 4; i++) c.Rect(ER - 9 + i * 5, 0, 3.4f, 2.6f, w); break;
+                default:
+                    c.Both((x, s) =>
+                    {
+                        int rows = Math.Max(1, (int)Math.Round(4 * c.Open));
+                        PixelGrid(c, x - 8 + (float)Math.Round(c.LookX) * 4, -8 + (4 - rows) * 2, 4, rows);
+                    });
+                    break;
+            }
+        }
+
+        private static void Visor(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f':
+                    {
+                        // La luz se vuelve una onda que baila (mockup aprobado)
+                        c.RR(-32, -6, 64, 12, 6, w, 0.12f);
+                        List<PointF> wave = new List<PointF>();
+                        for (float x = -29; x <= 29; x += 2)
+                        {
+                            float env = (float)Math.Sin((x + 29) / 58 * Math.PI);
+                            wave.Add(new PointF(x, (float)Math.Sin((x + 55) / 5 + c.T / 110) * 6 * env));
+                        }
+                        PointF[] points = wave.ToArray();
+                        using (Pen halo = Stroke(c.C(w, 0.15f), 9)) c.G.DrawLines(halo, points);
+                        using (Pen halo = Stroke(c.C(w, 0.3f), 6)) c.G.DrawLines(halo, points);
+                        using (Pen core = Stroke(c.C(w), 3.5f)) c.G.DrawLines(core, points);
+                        break;
+                    }
+                case 's': c.Glow(-32, -9, 64, 18, w, 0.85f); break;
+                case 'd': c.Both((x, s) => c.Glow(x - 9, 0, 18, 3, w, 0.55f)); break;
+                case 'z':
+                    {
+                        c.RR(-32, -6, 64, 12, 6, w, 0.12f);
+                        float x = (float)Math.Sin(c.T / 60) * 26;
+                        c.Glow(x - 6, -6, 12, 12, w, Math.Sin(c.T / 40) > 0 ? 1 : 0.4f);
+                        break;
+                    }
+                case 'a': { float p = c.Pulse; c.Glow(-32, -6 * p, 64, 12 * p, PinkHeart); break; }
+                case 'e': c.Glow(-32, -3, 64, 6, Red); break;
+                case 'w': c.RR(-32, -6, 64, 12, 6, w, 0.12f); c.Glow(-29, -6, 26, 12, w); c.RR(5, -1, 24, 2, 1, w, 0.6f); break;
+                default:
+                    {
+                        float h = Math.Max(3, 12 * c.Open);
+                        c.RR(-32, -h / 2, 64, h, h / 2, w, 0.18f);
+                        c.Glow(c.LookX * 20 - 9, -h / 2, 18, h, w);
+                        break;
+                    }
+            }
+        }
+
+        private static void Cyclops(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Arc(0, 6, 10, 1.1f, 1.9f, 4, w); break;
+                case 's': c.Ell(0, 0, 11, 16, w); c.Dot(0, 3, 3, Dark); c.Line(-10, -19, 10, -19, 2.5f, w); break;
+                case 'd': c.Arc(0, -4, 9, 0.1f, 0.9f, 3, w); c.Arc(0, -2, 9, 0.15f, 0.85f, 1.5f, w, 0.35f); break;
+                case 'z': c.Spiral(0, 0, w, false, 1.3f); break;
+                case 'a': c.Heart(0, 0, 2 * c.Pulse, PinkHeart); break;
+                case 'e': c.Ell(0, 3, 10, 8, w); c.Dot(0, 4, 4, Dark); c.Lines(3, w, -12, -12, 0, -6, 12, -12); break;
+                case 'w':
+                    if (c.T % 1600 < 800) { c.Ell(0, 0, 9, 13, w); c.Dot(0, 2, 4, Dark); }
+                    else c.Arc(0, 4, 9, 1.1f, 1.9f, 4, w);
+                    break;
+                default: c.Ell(0, 0, 9, 13 * c.Open, w); if (c.Open > 0.5f) c.Dot(c.LookX * 3, 2 + c.LookY * 2, 4, Dark); break;
+            }
+        }
+
+        private static void Closed(Face c) { c.Both((x, s) => c.Arc(x, -3, 6, 0.15f, 0.85f, 3, c.Eye)); }
+
+        private static void Hearts(Face c, char face)
+        {
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Heart(x, 0, 1.4f + 0.12f * (float)Math.Sin(c.T / 150), PinkHeart)); break;
+                case 's': c.Both((x, s) => c.Heart(x, 0, 1.8f, Rose)); break;
+                case 'd': Closed(c); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 160, () => c.Heart(0, 0, 1.1f, PinkHeart))); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.7f * c.Pulse, Rose)); break;
+                case 'e': c.Both((x, s) => c.Heart(x, 2, 1, Red)); break;
+                case 'w': c.Heart(EL, 0, 1.2f, PinkHeart); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, c.Eye); break;
+                default: c.Both((x, s) => c.Heart(x + c.LookX * 2, c.LookY * 2, 1.1f * c.Open + 0.1f, PinkHeart)); break;
+            }
+        }
+
+        private static void Stars(Face c, char face)
+        {
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Star(x, 0, 10 + (float)Math.Sin(c.T / 150), Yellow)); break;
+                case 's': c.Both((x, s) => c.Star(x, 0, 12, Color.White)); break;
+                case 'd': Closed(c); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 150, () => c.Star(0, 0, 9, Amber))); break;
+                case 'a': c.Both((x, s) => c.Star(x, 0, 10 * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => c.Star(x, 2, 7, Red)); break;
+                case 'w': c.Star(EL, 0, 9, Amber); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, c.Eye); break;
+                default: c.Both((x, s) => c.Star(x + c.LookX * 2, c.LookY * 2, 8 * c.Open + 1, Amber)); break;
+            }
+        }
+
+        private static void Glasses(Face c, char face)
+        {
+            Color w = c.Eye;
+            c.Box(EL - 10, -8, 20, 16, w, 2);
+            c.Box(ER - 10, -8, 20, 16, w, 2);
+            c.Line(EL + 10, -2, ER - 10, -2, 2, w);
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Arc(x, 3, 5, 1.15f, 1.85f, 2.5f, w)); break;
+                case 's': c.Both((x, s) => c.Dot(x, 0, 5, w)); break;
+                case 'd': c.Both((x, s) => c.Line(x - 6, 0, x + 6, 0, 2, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.55f)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => c.RR(x - 3, -1, 6, 4, 1, w)); break;
+                case 'w': c.RR(EL - 3, -3, 6, 6, 1, w); c.Line(ER - 6, 0, ER + 6, 0, 2, w); break;
+                default: c.Both((x, s) => c.RR(x - 3 + c.LookX * 3, -3 * c.Open + c.LookY * 2, 6, 6 * c.Open, 1, w)); break;
+            }
+        }
+
+        private static void Owl(Face c, char face)
+        {
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Rect(x - 11, 0, 22, 11, Color.Black); }); break;
+                case 's': c.Both((x, s) => { c.Dot(x, 0, 12, Amber); c.Dot(x, 0, 3, Color.Black); }); break;
+                case 'd': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Rect(x - 11, -11, 22, 13, Color.Black); }); break;
+                case 'z': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Spiral(x, 0, Color.Black, false, 0.6f); }); break;
+                case 'a': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Heart(x, 0, 0.6f * c.Pulse, Color.FromArgb(190, 24, 93)); }); break;
+                case 'e': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Dot(x, 2, 4, Color.Black); c.Poly(Color.Black, x - 11, -11, x + 11, -11, s < 0 ? x + 11 : x - 11, -1); }); break;
+                case 'w': c.Dot(EL, 0, 10, Amber); c.Dot(EL, 0, 5, Color.Black); c.Dot(ER, 0, 10, Amber); c.Rect(ER - 11, -11, 22, 13, Color.Black); break;
+                default: c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Dot(x + c.LookX * 3, c.LookY * 2, 5 * c.Open, Color.Black); }); break;
+            }
+        }
+
+        private static void HalfMoon(Face c, float x)
+        {
+            using (SolidBrush b = new SolidBrush(c.C(c.Eye))) c.G.FillPie(b, x - 7, -6, 14, 14, 0, 180);
+            c.Rect(x - 7, -1, 14, 2, c.Eye);
+        }
+
+        private static void Sleepy(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Arc(x, 3, 6, 1.1f, 1.9f, 3, w)); break;
+                case 's': c.Both((x, s) => c.Dot(x, 0, 7, w)); break;
+                case 'd': c.Both((x, s) => c.Rect(x - 7, 0, 14, 2, w)); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, Math.Sin(c.T / 120) * 0.5, () => HalfMoon(c, 0))); break;
+                case 'a': c.Both((x, s) => HalfMoon(c, x)); c.Heart(0, -12, 0.6f * c.Pulse, PinkHeart); break;
+                case 'e': c.Both((x, s) => c.Spin(x, 0, s * 0.25, () => c.Rect(-7, 0, 14, 3, w))); break;
+                case 'w': HalfMoon(c, EL); c.Rect(ER - 7, 0, 14, 2, w); break;
+                default: c.Both((x, s) => HalfMoon(c, x + c.LookX * 2)); break;
+            }
+        }
+
+        private static void CyberEye(Face c, float x, float o)
+        {
+            c.Poly(Cyan, x - 9, 5 * o, x - 4, -6 * o, x + 9, -6 * o, x + 4, 5 * o);
+        }
+
+        private static void Cyber(Face c, char face)
+        {
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Lines(3, Cyan, x - 8, 4, x, -4, x + 8, 4)); break;
+                case 's': c.Both((x, s) => { c.Box(x - 9, -9, 18, 18, Cyan, 2); c.Rect(x - 3, -3, 6, 6, Cyan); }); break;
+                case 'd': c.Both((x, s) => c.Rect(x - 9, 0, 18, 2, Cyan)); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 120, () => c.Box(-7, -7, 14, 14, Cyan, 2))); break;
+                case 'a':
+                    c.Both((x, s) =>
+                    {
+                        GraphicsState st = c.G.Save();
+                        c.G.TranslateTransform(x, 0);
+                        c.G.ScaleTransform(c.Pulse, c.Pulse);
+                        using (Pen p = Stroke(c.C(PinkHeart), 2))
+                            c.G.DrawPolygon(p, new[] { new PointF(0, 7), new PointF(-8, -1), new PointF(-4, -6), new PointF(0, -2), new PointF(4, -6), new PointF(8, -1) });
+                        c.G.Restore(st);
+                    });
+                    break;
+                case 'e': c.Both((x, s) => c.Poly(Red, x - 9, 5, x - 9, s < 0 ? -1 : -5, x + 9, s < 0 ? -5 : -1, x + 9, 5)); break;
+                case 'w': CyberEye(c, EL, 1); c.Rect(ER - 9, 0, 18, 2, Cyan); break;
+                default: c.Both((x, s) => CyberEye(c, x + c.LookX * 2, c.Open)); break;
+            }
+        }
+
+        #endregion
 
         private static void DrawHeart(Graphics g, float cx, float cy, float s, Color color)
         {

@@ -588,7 +588,7 @@ namespace StreeckSuite.Modules
             DrawCard(g, y, 98);
             DrawText(g, "Con una ventana maximizada", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40),
-                new[] { "Esconder (pegar el ratón arriba)", "Mostrar siempre", "Solo avisos" }, (int)SuiteSettings.IslandMaximized,
+                new[] { "Esconder", "Mostrar siempre", "Solo avisos", "Camuflaje" }, (int)SuiteSettings.IslandMaximized,
                 i => { SuiteSettings.IslandMaximized = (SuiteSettings.MaximizedBehavior)i; SuiteSettings.Save(); });
 
             y = 322;
@@ -1205,11 +1205,12 @@ namespace StreeckSuite.Modules
                 DrawText(g, moodNames[i], _reg12, Gray, new RectangleF(InnerX + i * (cellW + 10), y + 64, cellW, 20), StringAlignment.Center);
             }
 
-            // Estilo: 9 opciones en dos filas
+            // Estilo: 15 opciones en tres filas
             y += 96 + 14;
-            DrawCard(g, y, 110);
+            DrawCard(g, y, 142);
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
-            string[] styles = { "Actual", "Con pupila", "Anime", "Gato", "Robot", "Puntitos", "Pixel", "Visor LED", "Cíclope" };
+            string[] styles = { "Actual", "Con pupila", "Anime", "Gato", "Robot", "Puntitos", "Pixel", "Visor LED", "Cíclope",
+                                "Corazones", "Estrellas", "Lentes", "Búho", "Somnoliento", "Ciber" };
             float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
             for (int i = 0; i < styles.Length; i++)
             {
@@ -1223,7 +1224,7 @@ namespace StreeckSuite.Modules
             }
 
             // Color y extras
-            y += 110 + 14;
+            y += 142 + 14;
             DrawCard(g, y, 96);
             DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 4, 120, 40), StringAlignment.Near);
             string[] colors = { "#FFFFFF", "#38BDF8", "#F472B6", "#A3E635", "#FBBF24" };

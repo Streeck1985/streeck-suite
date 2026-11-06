@@ -855,6 +855,7 @@ namespace StreeckSuite.Modules
             if (_mode == Mode.Tucked) return new SizeF(Px(120), Px(6));
             SizeF size = ActiveView.BaseSize;
             if (_mode == Mode.Expanded) return new SizeF(Px(ActiveView.PanelWidth), Px(ContentTop + size.Height + PanelBottom));
+            if (_camouflage && _mode == Mode.Compact) return new SizeF(Px(size.Width * 0.8f), Px(Math.Min(size.Height, 26))); // Más bajita, como una pestaña
             return new SizeF(Px(size.Width), Px(size.Height));
         }
 
@@ -904,7 +905,12 @@ namespace StreeckSuite.Modules
                     _atBottom = atBottom;
                     ApplyBounds();
                 }
-                _tuckRequested = SuiteSettings.IslandMaximized != SuiteSettings.MaximizedBehavior.AlwaysShow && ForegroundCoversNotch();
+                bool covered = SuiteSettings.IslandMaximized != SuiteSettings.MaximizedBehavior.AlwaysShow && ForegroundCoversNotch();
+                // Camuflaje (mockup aprobado): no se esconde; toma el color de la barra de pestañas de abajo y se encoge
+                bool camouflage = covered && SuiteSettings.IslandMaximized == SuiteSettings.MaximizedBehavior.Camouflage;
+                if (camouflage) _camouflageColor = SampleBesideIsland();
+                if (camouflage != _camouflage) { _camouflage = camouflage; RenderSurface(); }
+                _tuckRequested = covered && !camouflage;
             }
 
             // Ratón encima: cuenta el tiempo para expandir; al salir se mantiene un momento antes de plegar
@@ -1108,6 +1114,32 @@ namespace StreeckSuite.Modules
         private Screen _islandScreen;
         private bool _atBottom; // Con la barra arriba la isla va pegada al borde de abajo
 
+        // Camuflaje sobre apps con pestañas: color de la pantalla junto a la isla (la barra de pestañas)
+        private bool _camouflage;
+        private Color _camouflageColor = Color.Black;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+        [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern uint GetPixel(IntPtr dc, int x, int y);
+
+        private Color SampleBesideIsland()
+        {
+            Rectangle screen = IslandScreen.Bounds;
+            int x = Left + ShadowPad - (int)Px(30);
+            int y = _atBottom ? screen.Bottom - (int)Px(10) : screen.Y + (int)Px(10);
+            IntPtr dc = GetDC(IntPtr.Zero);
+            try
+            {
+                uint pixel = GetPixel(dc, Math.Max(screen.X, x), y);
+                if (pixel == 0xFFFFFFFF) return _camouflageColor; // Fuera de la pantalla
+                return Color.FromArgb((int)(pixel & 0xFF), (int)((pixel >> 8) & 0xFF), (int)((pixel >> 16) & 0xFF));
+            }
+            finally
+            {
+                ReleaseDC(IntPtr.Zero, dc);
+            }
+        }
+
         // Franja centrada pegada al borde donde vive la isla (arriba, o abajo si la barra está arriba)
         private Rectangle EdgeStrip(int width, int height)
         {
@@ -1199,7 +1231,8 @@ namespace StreeckSuite.Modules
             // Panel expandido y avisos: tarjeta con esquinas de 26 px (22 en el de volumen); compacta: píldora
             RectangleF bounds = new RectangleF(ShadowPad, ShadowPad, PillW - 1, PillH - 1);
             float radius = Math.Min(_radius > 0 ? _radius : TargetRadius(new SizeF(PillW, PillH)), bounds.Height / 2);
-            DrawSoftShadow(g, bounds, radius, ShadowPad * 0.8f, Px(6), _mode == Mode.Tucked ? 90 : 200);
+            bool camouflaged = _camouflage && _mode == Mode.Compact;
+            if (!camouflaged) DrawSoftShadow(g, bounds, radius, ShadowPad * 0.8f, Px(6), _mode == Mode.Tucked ? 90 : 200);
 
             // A partir de aquí todo se dibuja en coordenadas de la isla
             g.TranslateTransform(ShadowPad, ShadowPad);
@@ -1209,7 +1242,11 @@ namespace StreeckSuite.Modules
             using (GraphicsPath path = IslandShape(bounds, radius, true))
             using (GraphicsPath outline = IslandShape(bounds, radius, false))
             {
-                IslandSkin.Paint(g, path, outline, bounds, IslandFill);
+                if (camouflaged)
+                {
+                    using (SolidBrush tabs = new SolidBrush(_camouflageColor)) g.FillPath(tabs, path); // Se funde con las pestañas
+                }
+                else IslandSkin.Paint(g, path, outline, bounds, IslandFill);
             }
 
             if (_mode == Mode.Tucked) return; // Solo la rayita, sin contenido
