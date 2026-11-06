@@ -342,14 +342,19 @@ namespace StreeckSetup
             Report(0.25f, "Copiando archivos…");
             Directory.CreateDirectory(InstallDir);
             bool oldBarLoaded = false;
+            Assembly payloads = Assembly.GetExecutingAssembly();
             foreach (string old in Directory.GetFiles(InstallDir, "streeck_taskbar_*.dll"))
             {
+                // La misma DLL que trae este instalador (mismo nombre): se queda, aunque el Explorador la esté usando
+                if (payloads.GetManifestResourceNames().Contains("payload/" + Path.GetFileName(old))) continue;
                 try { File.Delete(old); } catch (Exception) { oldBarLoaded = true; } // El Explorador aún la usa
             }
             Assembly self = Assembly.GetExecutingAssembly();
             foreach (string name in self.GetManifestResourceNames())
             {
                 if (!name.StartsWith("payload/")) continue;
+                string destination = Path.Combine(InstallDir, name.Substring("payload/".Length));
+                if (name.EndsWith(".dll") && File.Exists(destination)) continue; // Ya está (y puede estar en uso)
                 using (Stream source = self.GetManifestResourceStream(name))
                 using (FileStream target = File.Create(Path.Combine(InstallDir, name.Substring("payload/".Length))))
                 {
