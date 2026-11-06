@@ -76,8 +76,7 @@ namespace StreeckSuite.Modules
             float barX = icon.Right + p.Px(14);
             float barWidth = size.Width - x - numberWidth - p.Px(10) - barX;
             p.DrawText(g, DeviceName, p.Text12, gray, new RectangleF(barX, p.Px(12), barWidth, p.Px(18)), StringAlignment.Near);
-            IslandPainter.DrawBar(g, new RectangleF(barX, p.Px(35), barWidth, p.Px(6)), Level,
-                IslandPainter.Fade(IslandPainter.Track, alpha), IslandPainter.Fade(IslandPainter.Sky, alpha));
+            IslandSkin.DrawLevelBar(g, new RectangleF(barX, p.Px(35), barWidth, p.Px(6)), Level, alpha); // Con el color del skin
             p.DrawText(g, string.Format("{0:0}", Level * 100), p.Bold18, white,
                 new RectangleF(size.Width - x - numberWidth, 0, numberWidth, size.Height), StringAlignment.Far);
         }
