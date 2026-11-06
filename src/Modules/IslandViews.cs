@@ -253,7 +253,7 @@ namespace StreeckSuite.Modules
         }
 
         // Segundos sin tocar el ratón ni el teclado
-        private static double IdleSeconds()
+        internal static double IdleSeconds()
         {
             LASTINPUTINFO info = new LASTINPUTINFO();
             info.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(LASTINPUTINFO));

@@ -37,6 +37,7 @@ namespace StreeckSuite.Modules
         private static DateTime _blinkAt = DateTime.MinValue, _nextBlink = DateTime.Now.AddSeconds(2.5);
         private static DateTime _nextFidget = DateTime.MinValue;
         private static bool _wasAsleep;
+        private static bool _wasHovering;
         private static DateTime _asleepSince;
         private static bool? _caps;
         private static Point _lastCursor;
@@ -161,6 +162,14 @@ namespace StreeckSuite.Modules
 
             Frame f = new Frame { Alpha = alpha, Ms = now.TimeOfDay.TotalMilliseconds, Open = 1, Phase = 0, Compact = compact };
             bool hovering = IslandRect.Width > 0 && IslandRect.Contains(cursor);
+            // Cosquillas solo al entrar el ratón (con la isla abierta el ratón se queda encima y no debe reírse siempre)
+            if (hovering && !_wasHovering && !tempActive && SuiteSettings.EyesMoods)
+            {
+                Start(Mood.Laugh, 1.5);
+                tempActive = true;
+            }
+            _wasHovering = hovering;
+            hovering = false;
             if (tempActive)
             {
                 f.Mood = _temp;
@@ -222,6 +231,24 @@ namespace StreeckSuite.Modules
         {
             Frame f = new Frame { Mood = mood, Open = 1, Phase = 0.5f, LookX = 0.3f, LookY = 0.2f, Ms = 0, Alpha = 255 };
             Paint(g, center, unit, f);
+        }
+
+        /// <summary>
+        /// Icono del botón de Inicio con los mismos ojitos de la isla (estilo, color y extras): una píldora negra con
+        /// los ojos abiertos o cerrados (la barra alterna las dos imágenes para parpadear).
+        /// </summary>
+        public static Bitmap RenderStartIcon(int size, bool closed)
+        {
+            Bitmap bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                float s = size / 128f;
+                IslandPainter.FillRounded(g, new RectangleF(0, 22 * s, size, 84 * s), 42 * s, Color.Black);
+                Frame f = new Frame { Mood = Mood.Idle, Open = closed ? 0.1f : 1, Phase = 0, LookX = 0, LookY = 0, Ms = 0, Alpha = 255, Compact = true };
+                Paint(g, new PointF(size / 2f, size / 2f + (SuiteSettings.EyesMouth ? 6 * s : 0)), 1.35f * s, f);
+            }
+            return bitmap;
         }
 
         private static Color EyeColor
