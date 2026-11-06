@@ -182,8 +182,6 @@ static void LoadSettings()
     g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
     g_settings.StartOpensSuite = ToInt(values, L"inicio_clic", 1) == 1;
     g_settings.Edge = std::clamp(ToInt(values, L"borde", 3), 0, 3);
-    // Barra vertical (a un lado): las islas se calculan de izquierda a derecha y ahí no sirven; queda la de Windows
-    if (g_settings.Edge == 0 || g_settings.Edge == 2) g_settings.Active = false;
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
     int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
     auto color = values.find(L"color");
@@ -442,8 +440,9 @@ static void AddNotchShape(wuxc::Canvas const& canvas, double x, double y, double
     wuxs::Path path;
     path.Data(geometry);
     path.Fill(fill);
-    // Barra arriba: el notch se voltea para quedar pegado al borde de arriba de la pantalla
-    if (g_settings.Edge == 1)
+    // Barra arriba (o a la izquierda, que se dibuja acostada y luego se transpone): el notch se voltea para quedar
+    // pegado al borde de la pantalla
+    if (g_settings.Edge == 1 || g_settings.Edge == 0)
     {
         wuxm::ScaleTransform flip;
         flip.ScaleY(-1);
@@ -542,6 +541,10 @@ static void LayoutFrame(FrameState& state)
     }
     try { ApplyStartIcon(state); } catch (...) { }
 
+    // Barra a un lado: todo se calcula «acostado» (y como x) y al final el dibujo se gira con una transposición
+    const bool vertical = root.ActualHeight() > root.ActualWidth();
+    auto lay = [vertical](Rect r) { return vertical ? Rect{ r.Y, r.X, r.Height, r.Width } : r; };
+
     // Piezas reales de la barra en tres grupos: 0 clima, 1 inicio + búsqueda + apps, 2 bandeja + reloj
     struct Item { wux::FrameworkElement Element; int Group; Rect Bounds; };
     std::vector<Item> items;
@@ -560,16 +563,17 @@ static void LayoutFrame(FrameState& state)
         }
         // El botón del clima es más ancho que lo que muestra: se mide solo lo visible (ícono y textos)
         Rect bounds = element.TransformToVisual(root).TransformBounds(Rect{ 0, 0, (float)element.ActualWidth(), (float)element.ActualHeight() });
-        if (group == 0)
+        // ItemsRepeater guarda los botones que recicla fuera de la pantalla (x = -10000): no cuentan
+        if (bounds.X + bounds.Width < -200 || bounds.X > 20000 || bounds.Y + bounds.Height < -200 || bounds.Y > 20000) continue;
+        if (group == 0 && !vertical)
         {
             double left = 1e9, right = -1e9;
             VisibleExtent(element, root, left, right, element.Translation().x);
             if (left < right) { bounds.X = (float)left; bounds.Width = (float)(right - left); }
         }
         auto shift = g_shift.find(winrt::get_abi(element));
-        if (shift != g_shift.end()) bounds.X -= shift->second;  // Posición natural, sin nuestro desplazamiento
-        // ItemsRepeater guarda los botones que recicla fuera de la pantalla (x = -10000): no cuentan
-        if (bounds.X + bounds.Width < -200 || bounds.X > 20000) continue;
+        if (shift != g_shift.end() && !vertical) bounds.X -= shift->second;  // Posición natural, sin nuestro desplazamiento
+        bounds = lay(bounds);
         items.push_back({ element, group, bounds });
         minX[group] = std::min(minX[group], (double)bounds.X);
         maxX[group] = std::max(maxX[group], (double)(bounds.X + bounds.Width));
@@ -583,7 +587,7 @@ static void LayoutFrame(FrameState& state)
         if (!element || element.Visibility() != wux::Visibility::Visible || element.ActualWidth() < 1) return;
         try
         {
-            Rect bounds = element.TransformToVisual(root).TransformBounds(Rect{ 0, 0, (float)element.ActualWidth(), (float)element.ActualHeight() });
+            Rect bounds = lay(element.TransformToVisual(root).TransformBounds(Rect{ 0, 0, (float)element.ActualWidth(), (float)element.ActualHeight() }));
             if (bounds.X + bounds.Width < -200 || bounds.X > 20000) return;
             minX[group] = std::min(minX[group], (double)bounds.X);
             maxX[group] = std::max(maxX[group], (double)(bounds.X + bounds.Width));
@@ -604,7 +608,7 @@ static void LayoutFrame(FrameState& state)
         DumpTree();
     }
 
-    const double width = root.ActualWidth(), height = root.ActualHeight();
+    const double width = vertical ? root.ActualHeight() : root.ActualWidth(), height = vertical ? root.ActualWidth() : root.ActualHeight();
     const double pad = 8, islandHeight = std::min(height - 6, 40.0), top = (height - islandHeight) / 2;
     bool present[3];
     double islandWidth[3];
@@ -617,7 +621,7 @@ static void LayoutFrame(FrameState& state)
     // Formatos centrados (juntas o cápsula): se estrecha el marco de la barra y Windows mismo junta las piezas
     // (clima a la izquierda del marco, apps al centro, bandeja a la derecha). Igual que los temas dock del Styler.
     double shiftOf[3] = { 0, 0, 0 };
-    bool centered = g_settings.Active && g_settings.Format != Full && !(g_settings.Format == Islands && g_settings.Edges);
+    bool centered = g_settings.Active && !vertical && g_settings.Format != Full && !(g_settings.Format == Islands && g_settings.Edges);
     double gap = g_settings.Format == Capsule ? 0 : g_settings.Gap;
     double margin = 0;
     wux::FrameworkElement frame = state.Frame.get();
@@ -691,7 +695,7 @@ static void LayoutFrame(FrameState& state)
     for (Item& item : items) SetShift(item.Element, (float)shiftOf[item.Group]);
 
     // Mini reproductor: a la derecha de la isla de las apps (solo en la barra principal)
-    if (!g_frames.empty() && g_frames[0].get() == &state && present[1])
+    if (!g_frames.empty() && g_frames[0].get() == &state && present[1] && !vertical)
     {
         PlacePlayer(root, maxX[1] + shiftOf[1] + pad + 14, top, islandHeight);
     }
@@ -728,6 +732,17 @@ static void LayoutFrame(FrameState& state)
     canvas.Children().Clear();
     for (auto& story : g_animations) story.Stop();  // Los bordes RGB anteriores ya no se ven
     g_animations.clear();
+    // Vertical: lo dibujado «acostado» se transpone (x ↔ y) para quedar a lo largo de la barra
+    if (vertical)
+    {
+        wuxm::MatrixTransform transpose;
+        transpose.Matrix(wuxm::Matrix{ 0, 1, 1, 0, 0, 0 });
+        canvas.RenderTransform(transpose);
+    }
+    else
+    {
+        canvas.RenderTransform(nullptr);
+    }
 
     // Completa o Línea fina: una barra de lado a lado (Línea fina: delgada y con divisiones entre los grupos)
     if (g_settings.Format == Full || g_settings.Skin == SkinLine)
