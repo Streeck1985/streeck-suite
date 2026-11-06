@@ -117,7 +117,8 @@ struct FrameState
     bool Diagnosed = false;  // Ya se guardó el árbol porque faltaba una pieza
     wux::DispatcherTimer Recheck{ nullptr };  // Vuelve a medir por si un icono terminó de animarse sin avisar
     int Burst = 0;      // Tras un cambio en la barra: mediciones rápidas (cada 250 ms) mientras los iconos se animan
-    int Idle = 0;       // Sin cambios: una medición cada 6 vueltas (1,5 s)
+    int Idle = 0;       // Sin cambios: una medición cada 12 vueltas (3 s)
+    int Pieces = -1;    // Piezas de la barra la última vez (si cambia, se abrió o cerró una app)
 };
 
 // Todo esto solo se toca desde el hilo de la interfaz de la barra (los avisos del árbol llegan ahí)
@@ -586,6 +587,14 @@ static void LayoutFrame(FrameState& state)
         items.push_back({ element, group, bounds });
         minX[group] = std::min(minX[group], (double)bounds.X);
         maxX[group] = std::max(maxX[group], (double)(bounds.X + bounds.Width));
+    }
+
+    // Cambió el número de iconos visibles (una app abrió o cerró): mediciones rápidas mientras se animan. No por
+    // cualquier movimiento de la barra (indicadores de audio, etc.), que pasa todo el tiempo
+    if ((int)items.size() != state.Pieces)
+    {
+        state.Pieces = (int)items.size();
+        state.Burst = 6;
     }
 
     // Otras versiones de Windows 11 no siempre tienen la bandeja o el clima dentro del repetidor: se buscan en toda
@@ -1146,12 +1155,16 @@ static void ListenForStartFace()
 // Los ojos se corren un poquito hacia el ratón (12 veces por segundo; casi sin gasto)
 static void FollowCursor()
 {
+    // Si el ratón no se movió no hay nada que calcular (casi todo el tiempo)
+    static POINT last = { -1, -1 };
+    POINT cursor;
+    if (!GetCursorPos(&cursor) || (cursor.x == last.x && cursor.y == last.y)) return;
+    last = cursor;
     wux::FrameworkElement layer = g_eyesLayer.get();
     if (!layer || layer.ActualWidth() < 1) return;
-    POINT cursor;
     RECT bar;
     HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
-    if (!GetCursorPos(&cursor) || !tray || !GetWindowRect(tray, &bar)) return;
+    if (!tray || !GetWindowRect(tray, &bar)) return;
     auto origin = layer.TransformToVisual(nullptr).TransformPoint(winrt::Windows::Foundation::Point{ 0, 0 });
     double cx = bar.left + origin.X + layer.ActualWidth() / 2, cy = bar.top + origin.Y + layer.ActualHeight() / 2;
     double dx = cursor.x - cx, dy = cursor.y - cy, d = std::max(1.0, std::sqrt(dx * dx + dy * dy));
@@ -1493,7 +1506,6 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
         {
             auto locked = weak.lock();
             if (!locked) return;
-            locked->Burst = 6;  // Algo cambió (app que abre o cierra): mediciones rápidas durante 1,5 s
             if (locked->Pending) return;
             locked->Pending = true;
             dispatcher.RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Low, [weak]
@@ -1516,7 +1528,7 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
             auto locked = weak.lock();
             if (!locked || locked->Pending) return;
             if (locked->Burst > 0) locked->Burst--;
-            else if (++locked->Idle < 6) return;
+            else if (++locked->Idle < 12) return;
             locked->Idle = 0;
             try { LayoutFrame(*locked); } catch (...) { }
         });
