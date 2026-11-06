@@ -711,30 +711,58 @@ namespace StreeckSuite.Modules
         private IntPtr _hook;
         private bool _winDown, _combo;
 
+        // El gancho vive en su propio hilo con su propio bucle de mensajes: si la interfaz de la suite se traba un
+        // momento, Windows quita sin avisar los ganchos que no responden a tiempo y la tecla volvía a abrir su menú
+        private volatile bool _enabled;
+        private Thread _thread;
+        private uint _threadId;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam, lParam;
+            public uint time;
+            public int x, y;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern int GetMessage(out MSG msg, IntPtr hwnd, uint min, uint max);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostThreadMessage(uint threadId, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        private static extern uint GetCurrentThreadId();
+
         public WinKeyHook(Action pressed)
         {
             _pressed = pressed;
             _proc = OnKey;
+            _thread = new Thread(() =>
+            {
+                _threadId = GetCurrentThreadId();
+                _hook = NativeMethods.SetWindowsHookEx(WH_KEYBOARD_LL, _proc, NativeMethods.GetModuleHandle(null), 0);
+                if (_hook == IntPtr.Zero) { Log.Error("[WinKeyHook] No se pudo instalar el gancho de teclado"); return; }
+                MSG msg;
+                while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0) { }
+                NativeMethods.UnhookWindowsHookEx(_hook);
+                _hook = IntPtr.Zero;
+            });
+            _thread.IsBackground = true;
+            _thread.Name = "Tecla Windows";
+            _thread.Start();
         }
 
         public void Apply()
         {
-            bool wanted = SuiteSettings.StartMenuWinKey;
-            if (wanted && _hook == IntPtr.Zero)
-            {
-                _hook = NativeMethods.SetWindowsHookEx(WH_KEYBOARD_LL, _proc, NativeMethods.GetModuleHandle(null), 0);
-                if (_hook == IntPtr.Zero) Log.Error("[WinKeyHook] No se pudo instalar el gancho de teclado");
-            }
-            else if (!wanted && _hook != IntPtr.Zero)
-            {
-                NativeMethods.UnhookWindowsHookEx(_hook);
-                _hook = IntPtr.Zero;
-            }
+            _enabled = SuiteSettings.StartMenuWinKey;
         }
 
         private IntPtr OnKey(int code, IntPtr message, IntPtr data)
         {
-            if (code >= 0)
+            if (code >= 0 && _enabled)
             {
                 KBDLLHOOKSTRUCT key = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(data, typeof(KBDLLHOOKSTRUCT));
                 int msg = message.ToInt32();
@@ -768,7 +796,8 @@ namespace StreeckSuite.Modules
 
         public void Dispose()
         {
-            if (_hook != IntPtr.Zero) { NativeMethods.UnhookWindowsHookEx(_hook); _hook = IntPtr.Zero; }
+            _enabled = false;
+            if (_threadId != 0) PostThreadMessage(_threadId, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
         }
     }
 }

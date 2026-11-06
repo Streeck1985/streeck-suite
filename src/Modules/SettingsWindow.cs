@@ -1449,6 +1449,21 @@ namespace StreeckSuite.Modules
             StrokeRound(g, open, 9, SoftBorder, 1, false);
             DrawText(g, "Abrir página", _semi13, TextColor, open, StringAlignment.Center);
             AddHit(open, () => OpenUrl("https://github.com/" + AppInfo.GitHubRepo + "/releases"));
+            y += 52 + 14;
+
+            // Diagnóstico: registro y mapa de la barra (barra_skin.log, barra_arbol.txt) para reportar fallas
+            DrawCard(g, y, 58);
+            DrawText(g, "Diagnóstico", _semi14, TextColor, new RectangleF(InnerX, y + 10, 300, 18), StringAlignment.Near);
+            DrawText(g, "Registros de la suite y de la barra, para reportar una falla", _reg12, Gray, new RectangleF(InnerX, y + 30, 360, 16), StringAlignment.Near);
+            RectangleF folder = new RectangleF(ContentRight - 16 - 120, y + 13, 120, 32);
+            FillRound(g, folder, 9, Hover(folder) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, folder, 9, SoftBorder, 1, false);
+            DrawText(g, "Abrir carpeta", _semi13, TextColor, folder, StringAlignment.Center);
+            AddHit(folder, () =>
+            {
+                try { System.Diagnostics.Process.Start("explorer.exe", System.IO.Path.GetDirectoryName(Log.FilePath)); }
+                catch (Exception ex) { Log.Error("[Settings] No se pudo abrir la carpeta: {0}", ex.Message); }
+            });
         }
 
         private static string Ago(DateTime when)
