@@ -13,7 +13,7 @@ namespace StreeckSuite.Core
     /// </summary>
     public static class SuiteSettings
     {
-        public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly }
+        public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly, Camouflage }  // Camuflaje: toma el color de las pestañas y se encoge
         public enum IslandStyleKind { Attached, Floating }               // Pegada arriba (notch de Bloom) o flotante
         public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
@@ -63,7 +63,7 @@ namespace StreeckSuite.Core
         public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
 
         // Ojitos (mockup «Ojitos del notch»)
-        public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops }
+        public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops, Hearts, Stars, Glasses, Owl, Sleepy, Cyber }
         public static EyesStyleKind EyesStyle = EyesStyleKind.Actual;
         public static string EyesColor = "#FFFFFF";
         public static bool EyesBrows = true;
