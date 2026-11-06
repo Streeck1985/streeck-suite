@@ -1148,15 +1148,9 @@ namespace StreeckSuite.Modules
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Completa", "Solo icono", "Oculta" }, (int)SuiteSettings.TaskbarSearch,
                 i => { SuiteSettings.TaskbarSearch = (SuiteSettings.TaskbarSearchKind)i; SuiteSettings.Save(); });
 
-            y = 380;
-            DrawCard(g, y, 118);
-            DrawText(g, "Estilo de cristal", _semi14, TextColor, new RectangleF(InnerX, y + 14, 400, 20), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Aero acrílico", "100 % transparente", "Obsidiana", "Neón" }, (int)SuiteSettings.GlassStyle,
-                i => { SuiteSettings.GlassStyle = (SuiteSettings.GlassStyleKind)i; SuiteSettings.Save(); });
-            DrawText(g, "Se aplica al menú de inicio (la barra usa su skin y la isla su color)", _reg12, Gray, new RectangleF(InnerX, y + 92, InnerW, 16), StringAlignment.Near);
-
+            // (El «Estilo de cristal» se quitó: solo cambiaba el menú de inicio y no se notaba; el usuario lo pidió)
             // Mini reproductor (sugerencia del mockup de la barra): con él, la isla de arriba no repite la música
-            y += 118 + 14;
+            y = 380;
             DrawCard(g, y, 66);
             DrawToggleRow(g, y + 4, "Mini reproductor en la barra", "Una isla más con la canción; la isla de arriba deja de mostrar música", SuiteSettings.TaskbarMiniPlayer,
                 () => { SuiteSettings.TaskbarMiniPlayer = !SuiteSettings.TaskbarMiniPlayer; SuiteSettings.Save(); });

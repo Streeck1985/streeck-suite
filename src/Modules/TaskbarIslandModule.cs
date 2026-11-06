@@ -75,6 +75,15 @@ namespace StreeckSuite.Modules
         }
 
         private static int _edge = 3;
+
+        /// <summary>
+        /// Borde donde está la barra (0 izquierda, 1 arriba, 2 derecha, 3 abajo); se revisa cada 2 s.
+        /// La isla lo usa para irse abajo cuando la barra está arriba.
+        /// </summary>
+        public static int CurrentEdge
+        {
+            get { return _edge; }
+        }
         private System.Windows.Forms.Timer _edgeTimer;
 
         [StructLayout(LayoutKind.Sequential)]

@@ -103,6 +103,59 @@ namespace StreeckSuite.Modules
             }
         }
 
+        /// <summary>
+        /// Barra de nivel (volumen) con el color del skin: blanca en Notch, cian con brillo en Neón, degradado en
+        /// Aurora, cristal en Aero 7, arcoíris que gira en Gamer RGB...
+        /// </summary>
+        public static void DrawLevelBar(Graphics g, RectangleF track, float value, int alpha)
+        {
+            IslandPainter.FillRounded(g, track, track.Height / 2, IslandPainter.Fade(IslandPainter.Track, alpha));
+            if (value <= 0.005f) return;
+            RectangleF fill = new RectangleF(track.X, track.Y, Math.Max(track.Height, track.Width * Math.Min(1f, value)), track.Height);
+            int skin = Current;
+            if (skin == Neon)
+            {
+                RectangleF glow = RectangleF.Inflate(fill, 2, 2);
+                IslandPainter.FillRounded(g, glow, glow.Height / 2, Color.FromArgb(70 * alpha / 255, Sky));
+            }
+            using (GraphicsPath path = IslandPainter.RoundedRect(fill, fill.Height / 2))
+            {
+                if (skin == Aurora || skin == Rgb || skin == Aero7)
+                {
+                    RectangleF area = new RectangleF(track.X, track.Y - 1, track.Width, track.Height + 2); // El degradado va a lo largo de toda la pista
+                    float angle = skin == Rgb ? (float)(DateTime.Now.TimeOfDay.TotalMilliseconds / 4000.0 * 360 % 360) : skin == Aero7 ? 90f : 0f;
+                    using (LinearGradientBrush brush = new LinearGradientBrush(area, Color.White, Color.White, angle))
+                    {
+                        ColorBlend blend = new ColorBlend();
+                        if (skin == Aurora)
+                        {
+                            blend.Colors = new[] { Color.FromArgb(alpha, 167, 139, 250), Color.FromArgb(alpha, 236, 72, 153) };
+                            blend.Positions = new[] { 0f, 1f };
+                        }
+                        else if (skin == Aero7)
+                        {
+                            blend.Colors = new[] { Color.FromArgb(alpha, 186, 230, 253), Color.FromArgb(alpha, 56, 150, 230), Color.FromArgb(alpha, 20, 90, 180) };
+                            blend.Positions = new[] { 0f, 0.5f, 1f };
+                        }
+                        else
+                        {
+                            blend.Colors = new[] { Color.FromArgb(alpha, 255, 0, 76), Color.FromArgb(alpha, 255, 184, 0), Color.FromArgb(alpha, 61, 255, 110),
+                                Color.FromArgb(alpha, 0, 194, 255), Color.FromArgb(alpha, 157, 77, 255), Color.FromArgb(alpha, 255, 0, 76) };
+                            blend.Positions = new[] { 0f, 0.2f, 0.4f, 0.6f, 0.8f, 1f };
+                        }
+                        brush.InterpolationColors = blend;
+                        g.FillPath(brush, path);
+                    }
+                    return;
+                }
+                Color color = skin == Glass ? Sky
+                            : skin == Neon ? Color.FromArgb(125, 211, 252)
+                            : skin == Liquid ? Color.FromArgb(200, 255, 255, 255)
+                            : Color.White; // Notch, Dock, Fantasma, Línea fina
+                using (SolidBrush brush = new SolidBrush(IslandPainter.Fade(color, alpha))) g.FillPath(brush, path);
+            }
+        }
+
         private static void Fill(Graphics g, GraphicsPath shape, Color color)
         {
             using (SolidBrush brush = new SolidBrush(color)) g.FillPath(brush, shape);

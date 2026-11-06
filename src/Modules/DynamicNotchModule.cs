@@ -839,6 +839,17 @@ namespace StreeckSuite.Modules
             return path;
         }
 
+        // Forma de la isla: notch pegado (volteado si vive abajo) o píldora flotante
+        private GraphicsPath IslandShape(RectangleF b, float radius, bool closed)
+        {
+            GraphicsPath path = Attached ? NotchPath(b, radius, closed) : IslandPainter.RoundedRect(b, radius);
+            if (Attached && _atBottom)
+            {
+                using (System.Drawing.Drawing2D.Matrix flip = new System.Drawing.Drawing2D.Matrix(1, 0, 0, -1, 0, b.Top + b.Bottom)) path.Transform(flip);
+            }
+            return path;
+        }
+
         private SizeF TargetSize()
         {
             if (_mode == Mode.Tucked) return new SizeF(Px(120), Px(6));
@@ -886,11 +897,11 @@ namespace StreeckSuite.Modules
             {
                 _lastTuckCheck = now;
                 FollowMouseMonitor();
-                // Barra de tareas arriba: la isla baja y nace debajo de ella (si no, se enciman)
-                int barOffset = Math.Max(0, IslandScreen.WorkingArea.Top - IslandScreen.Bounds.Top);
-                if (barOffset != _barOffset)
+                // Barra de tareas arriba: la isla se va al borde de abajo y crece hacia arriba (mockup aprobado)
+                bool atBottom = TaskbarIslandModule.CurrentEdge == 1;
+                if (atBottom != _atBottom)
                 {
-                    _barOffset = barOffset;
+                    _atBottom = atBottom;
                     ApplyBounds();
                 }
                 _tuckRequested = SuiteSettings.IslandMaximized != SuiteSettings.MaximizedBehavior.AlwaysShow && ForegroundCoversNotch();
@@ -1085,8 +1096,7 @@ namespace StreeckSuite.Modules
             NativeMethods.RECT rect;
             if (!NativeMethods.GetWindowRect(foreground, out rect)) return false;
 
-            Rectangle screen = IslandScreen.Bounds;
-            Rectangle zone = new Rectangle(screen.X + (screen.Width - (int)Px(440)) / 2, IslandEdgeY, (int)Px(440), (int)Px(TopMargin + 38 + 10));
+            Rectangle zone = EdgeStrip((int)Px(440), (int)Px(TopMargin + 38 + 10));
             return zone.IntersectsWith(Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom));
         }
 
@@ -1096,12 +1106,14 @@ namespace StreeckSuite.Modules
         /// </summary>
         // Monitor de la isla: el principal o el del ratón (Ajustes → Isla → Monitor). Solo se cambia con la isla cerrada.
         private Screen _islandScreen;
-        private int _barOffset; // Alto de la barra de tareas si está arriba (la isla empieza debajo)
+        private bool _atBottom; // Con la barra arriba la isla va pegada al borde de abajo
 
-        // Borde de arriba donde nace la isla: el de la pantalla o, con la barra arriba, el de debajo de la barra
-        private int IslandEdgeY
+        // Franja centrada pegada al borde donde vive la isla (arriba, o abajo si la barra está arriba)
+        private Rectangle EdgeStrip(int width, int height)
         {
-            get { return IslandScreen.Bounds.Y + _barOffset; }
+            Rectangle screen = IslandScreen.Bounds;
+            int x = screen.X + (screen.Width - width) / 2;
+            return _atBottom ? new Rectangle(x, screen.Bottom - height, width, height) : new Rectangle(x, screen.Y, width, height);
         }
 
         private Screen IslandScreen
@@ -1125,10 +1137,15 @@ namespace StreeckSuite.Modules
             if (_mode == Mode.Tucked)
             {
                 int stripWidth = (int)Px(260);
-                return new Rectangle(screen.X + (screen.Width - stripWidth) / 2, IslandEdgeY, stripWidth, Math.Max(1, (int)Px(TuckedEdgePx)));
+                return EdgeStrip(stripWidth, Math.Max(1, (int)Px(TuckedEdgePx)));
             }
             int margin = (int)Px(8);
-            return new Rectangle(Left + ShadowPad - margin, IslandEdgeY, PillW + 2 * margin, Top + ShadowPad + PillH - IslandEdgeY + margin);
+            if (_atBottom)
+            {
+                int islandTop = Top + ShadowPad - margin;
+                return new Rectangle(Left + ShadowPad - margin, islandTop, PillW + 2 * margin, screen.Bottom - islandTop);
+            }
+            return new Rectangle(Left + ShadowPad - margin, screen.Y, PillW + 2 * margin, Top + ShadowPad + PillH - screen.Y + margin);
         }
 
         private void ApplyBounds()
@@ -1143,7 +1160,8 @@ namespace StreeckSuite.Modules
             int top = Attached ? 0 : (int)Math.Round(Px(TuckedTopMargin) + openness * (Px(TopMargin) - Px(TuckedTopMargin)));
 
             // La ventana es la isla más un margen alrededor para su sombra
-            Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, IslandEdgeY + top - ShadowPad,
+            int y = _atBottom ? screen.Bottom - top - height : screen.Y + top; // Abajo: crece hacia arriba
+            Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, y - ShadowPad,
                 width + 2 * ShadowPad, height + 2 * ShadowPad);
             RenderSurface();
         }
@@ -1188,8 +1206,8 @@ namespace StreeckSuite.Modules
             bounds.Offset(-ShadowPad, -ShadowPad);
 
             // El mismo skin que la barra de tareas (con la barra apagada: el color y la opacidad del panel Isla)
-            using (GraphicsPath path = Attached ? NotchPath(bounds, radius, true) : IslandPainter.RoundedRect(bounds, radius))
-            using (GraphicsPath outline = Attached ? NotchPath(bounds, radius, false) : IslandPainter.RoundedRect(bounds, radius))
+            using (GraphicsPath path = IslandShape(bounds, radius, true))
+            using (GraphicsPath outline = IslandShape(bounds, radius, false))
             {
                 IslandSkin.Paint(g, path, outline, bounds, IslandFill);
             }
