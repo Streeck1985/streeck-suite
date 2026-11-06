@@ -609,7 +609,8 @@ static void LayoutFrame(FrameState& state)
     }
 
     const double width = vertical ? root.ActualHeight() : root.ActualWidth(), height = vertical ? root.ActualWidth() : root.ActualHeight();
-    const double pad = 8, islandHeight = std::min(height - 6, 40.0), top = (height - islandHeight) / 2;
+    // Vertical: la isla ocupa todo el grueso de la barra (los iconos y el clima no caben en 40 px de 48)
+    const double pad = vertical ? 10 : 8, islandHeight = vertical ? height : std::min(height - 2, 46.0), top = (height - islandHeight) / 2;
     bool present[3];
     double islandWidth[3];
     for (int g = 0; g < 3; g++)
