@@ -244,7 +244,7 @@ static wux::FrameworkElement FindByClass(wux::DependencyObject const& root, std:
     return nullptr;
 }
 
-static void DumpTree();
+static void DumpTree(const wchar_t* fileName = L"barra_arbol.txt");
 
 static bool HasDescendantClass(wux::DependencyObject const& root, std::wstring_view className, int depth = 0)
 {
@@ -447,7 +447,7 @@ static void AddNotchShape(wuxc::Canvas const& canvas, double x, double y, double
     {
         wuxm::ScaleTransform flip;
         flip.ScaleY(-1);
-        flip.CenterY((y + bottom) / 2 - 1.5);
+        flip.CenterY((bottom - 1) / 2); // bottom = alto de la barra + 1: el espejo queda justo contra el borde de arriba
         path.RenderTransform(flip);
     }
     canvas.Children().Append(path);
@@ -532,6 +532,14 @@ static void LayoutFrame(FrameState& state)
     wuxc::Grid root = state.Root.get();
     wux::FrameworkElement repeater = state.Repeater.get();
     if (!root || !repeater) return;
+    // Barra vertical (a un lado): la primera vez se guarda su árbol para diseñar las islas verticales
+    static bool verticalDumped = false;
+    if (!verticalDumped && root.ActualHeight() > root.ActualWidth() && root.ActualWidth() > 1)
+    {
+        verticalDumped = true;
+        Log(L"Barra vertical: " + std::to_wstring((int)root.ActualWidth()) + L"×" + std::to_wstring((int)root.ActualHeight()) + L", árbol en barra_arbol_vertical.txt");
+        DumpTree(L"barra_arbol_vertical.txt");
+    }
     try { ApplyStartIcon(state); } catch (...) { }
 
     // Piezas reales de la barra en tres grupos: 0 clima, 1 inicio + búsqueda + apps, 2 bandeja + reloj
@@ -1336,7 +1344,7 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
     LayoutFrame(*state);
 }
 
-static void DumpTree()
+static void DumpTree(const wchar_t* fileName)
 {
     std::map<InstanceHandle, std::vector<InstanceHandle>> children;
     std::vector<InstanceHandle> roots;
@@ -1345,7 +1353,7 @@ static void DumpTree()
         if (g_nodes.count(pair.second.Parent)) children[pair.second.Parent].push_back(pair.first);
         else roots.push_back(pair.first);
     }
-    std::wofstream file(DataFolder() + L"\\barra_arbol.txt");
+    std::wofstream file(DataFolder() + L"\\" + fileName);
     std::vector<std::pair<InstanceHandle, int>> stack;
     for (auto it = roots.rbegin(); it != roots.rend(); ++it) stack.push_back({ *it, 0 });
     while (!stack.empty())
