@@ -54,22 +54,40 @@ namespace StreeckSuite.Modules
         /// PNG para la DLL (null si el icono es el original o los ojitos). El nombre cambia con el contenido: la
         /// barra puede tener abierto el anterior.
         /// </summary>
+        /// <summary>
+        /// Con «Ojitos»: imagen con los ojos cerrados (la DLL alterna las dos para parpadear). null en los demás.
+        /// </summary>
+        public static string ClosedEyesFile { get; private set; }
+
         public static string PrepareFile(int kind)
         {
-            if (kind == Original || kind == Eyes) return null;
-            string stamp = kind == Custom && File.Exists(CustomCopy) ? File.GetLastWriteTimeUtc(CustomCopy).Ticks.ToString() : "1";
+            ClosedEyesFile = null;
+            if (kind == Original) return null;
+            // Ojitos: los mismos de la isla (estilo, color y extras), así que el nombre cambia con ellos
+            string stamp = kind == Custom && File.Exists(CustomCopy) ? File.GetLastWriteTimeUtc(CustomCopy).Ticks.ToString()
+                         : kind == Eyes ? string.Format("{0}_{1}{2}{3}{4}", SuiteSettings.EyesStyle, SuiteSettings.EyesColor.TrimStart('#'),
+                               SuiteSettings.EyesMouth ? "b" : "", SuiteSettings.EyesBrows ? "c" : "", SuiteSettings.EyesBlush ? "r" : "")
+                         : "1";
             string file = Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp + ".png");
-            if (File.Exists(file)) return file;
+            string closed = kind == Eyes ? Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp + "_cerrados.png") : null;
             try
             {
-                using (Bitmap bitmap = Render(kind, 128))
+                if (!File.Exists(file))
                 {
-                    if (bitmap == null) return null;
-                    bitmap.Save(file, ImageFormat.Png);
+                    using (Bitmap bitmap = kind == Eyes ? IslandEyes.RenderStartIcon(128, false) : Render(kind, 128))
+                    {
+                        if (bitmap == null) return null;
+                        bitmap.Save(file, ImageFormat.Png);
+                    }
                 }
+                if (closed != null && !File.Exists(closed))
+                {
+                    using (Bitmap bitmap = IslandEyes.RenderStartIcon(128, true)) bitmap.Save(closed, ImageFormat.Png);
+                }
+                ClosedEyesFile = closed;
                 foreach (string old in Directory.GetFiles(Folder, "inicio_icono_*.png"))
                 {
-                    if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase) && !string.Equals(old, closed, StringComparison.OrdinalIgnoreCase))
                     {
                         try { File.Delete(old); } catch (Exception) { } // La barra puede tenerlo abierto: se borra después
                     }
@@ -88,6 +106,7 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static Bitmap Render(int kind, int size)
         {
+            if (kind == Eyes) return IslandEyes.RenderStartIcon(size, false); // Los mismos ojitos de la isla
             Bitmap bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(bitmap))
             {

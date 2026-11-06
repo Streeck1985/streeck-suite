@@ -856,6 +856,7 @@ namespace StreeckSuite.Modules
             SizeF size = ActiveView.BaseSize;
             if (_mode == Mode.Expanded) return new SizeF(Px(ActiveView.PanelWidth), Px(ContentTop + size.Height + PanelBottom));
             if (_camouflage && _mode == Mode.Compact) return new SizeF(Px(size.Width * 0.8f), Px(Math.Min(size.Height, 26))); // Más bajita, como una pestaña
+            if (_mode == Mode.Alert && EyesEverywhere) return new SizeF(Px(size.Width + AlertEyesWidth), Px(size.Height)); // La carita a la izquierda del aviso
             return new SizeF(Px(size.Width), Px(size.Height));
         }
 
@@ -874,8 +875,18 @@ namespace StreeckSuite.Modules
 
         private static float ContentTop
         {
-            get { return Attached ? 16 : TabsTop + TabsHeight + 14; }
+            // Con ojitos, el panel pegado deja arriba una franja para la carita (mockup «La carita siempre visible»)
+            get { return Attached ? (EyesEverywhere ? 30 : 16) : TabsTop + TabsHeight + 14; }
         }
+
+        // La carita se ve siempre: en la isla cerrada, a la izquierda de los avisos y en la esquina del panel abierto
+        private static bool EyesEverywhere
+        {
+            get { return SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes; }
+        }
+
+        private const float AlertEyesWidth = 64;
+        private const float PadLeft = 18;
 
         private static float PanelBottom
         {
@@ -979,7 +990,8 @@ namespace StreeckSuite.Modules
             }
 
             // Fuera de las transiciones basta con ~10 fps para lo que se mueve y para seguir al ratón
-            int interval = transitioning ? 16 : _mode != Mode.Tucked && ActiveView.WantsSmoothFrames ? 33 : 100;
+            bool eyesMoving = EyesEverywhere && (_mode == Mode.Alert || _mode == Mode.Expanded) && IslandEyes.Lively;
+            int interval = transitioning ? 16 : _mode != Mode.Tucked && (ActiveView.WantsSmoothFrames || eyesMoving) ? 33 : 100;
             if (_frameTimer.Interval != interval) _frameTimer.Interval = interval;
         }
 
@@ -1027,7 +1039,8 @@ namespace StreeckSuite.Modules
 
             if (_mode == Mode.Alert)
             {
-                ActiveView.OnClick(point);       // Notificación: abre la app; fin de tiempo: siguiente fase
+                // Notificación: abre la app; fin de tiempo: siguiente fase (la vista empieza después de la carita)
+                ActiveView.OnClick(EyesEverywhere ? new PointF(point.X - Px(AlertEyesWidth), point.Y) : point);
                 if (ActiveView == _timerAlert) _timerAlertPending = false;
                 _alertUntil = DateTime.MinValue; // Clic en un aviso: descartarlo
                 UpdateMode();
@@ -1255,13 +1268,31 @@ namespace StreeckSuite.Modules
             int alpha = (int)(255 * _contentOpacity);
             if (alpha <= 0) return;
 
+            float eyesUnit = Px(11) / 16f;
             if (_mode != Mode.Expanded)
             {
+                if (_mode == Mode.Alert && EyesEverywhere)
+                {
+                    // Aviso: la carita a la izquierda (con su cara de sorpresa) y el aviso a su lado
+                    float eyesWidth = Px(AlertEyesWidth);
+                    IslandEyes.Draw(g, new PointF(Px(8) + eyesWidth / 2, PillH / 2f), eyesUnit * 0.75f, alpha, IslandEyes.Mood.Idle, CompactView.IdleSeconds(), true);
+                    g.TranslateTransform(eyesWidth, 0);
+                    ActiveView.Draw(g, new SizeF(PillW - eyesWidth, PillH), alpha, _painter);
+                    g.TranslateTransform(-eyesWidth, 0);
+                    return;
+                }
                 ActiveView.Draw(g, new SizeF(PillW, PillH), alpha, _painter);
                 return;
             }
 
             if (Attached) DrawDots(g, alpha); else DrawTabs(g, alpha);
+            if (EyesEverywhere)
+            {
+                // Panel abierto: la carita pequeña arriba a la izquierda (o abajo en el estilo flotante, junto a los puntitos)
+                float u = eyesUnit * 0.6f;
+                float cy = Attached ? Px(15) : PillH - Px(PanelBottom) / 2;
+                IslandEyes.Draw(g, new PointF(Px(PadLeft) + 30 * u, cy), u, alpha, IslandEyes.Mood.Idle, CompactView.IdleSeconds(), true);
+            }
             g.TranslateTransform(0, Px(ContentTop));
             ActiveView.Draw(g, new SizeF(PillW, PillH - Px(ContentTop) - Px(PanelBottom)), alpha, _painter);
             g.TranslateTransform(0, -Px(ContentTop));

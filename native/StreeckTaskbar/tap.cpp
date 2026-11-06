@@ -88,6 +88,7 @@ struct Settings
     int StartSize = 100;                // 70..140 %
     int StartHover = 1;                 // 0 nada, 1 crece, 2 gira
     std::wstring StartFile;
+    std::wstring StartClosedFile;       // Ojitos: la misma cara con los ojos cerrados (para parpadear)
     bool StartOpensSuite = true;        // El clic en Inicio abre el menú de Streeck (no el de Windows)
     int Edge = 3;                       // Borde de la barra: 0 izquierda, 1 arriba, 2 derecha, 3 abajo
 };
@@ -180,6 +181,8 @@ static void LoadSettings()
     g_settings.StartHover = std::clamp(ToInt(values, L"inicio_efecto", 1), 0, 2);
     auto startFile = values.find(L"inicio_archivo");
     g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
+    auto closedFile = values.find(L"inicio_cerrados");
+    g_settings.StartClosedFile = closedFile != values.end() ? closedFile->second : L"";
     g_settings.StartOpensSuite = ToInt(values, L"inicio_clic", 1) == 1;
     g_settings.Edge = std::clamp(ToInt(values, L"borde", 3), 0, 3);
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
@@ -1075,13 +1078,13 @@ static wux::FrameworkElement FindStartButton(wux::FrameworkElement const& repeat
 }
 
 // La imagen se lee del archivo a memoria (sin ms-appx ni rutas file:, que la barra no siempre acepta)
-static wuxm::ImageSource LoadStartImage()
+static wuxm::ImageSource LoadStartImage(std::wstring const& path)
 {
-    if (g_settings.StartFile.empty()) return nullptr;
+    if (path.empty()) return nullptr;
     winrt::com_ptr<IStream> stream;
-    if (FAILED(SHCreateStreamOnFileEx(g_settings.StartFile.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, 0, FALSE, nullptr, stream.put())))
+    if (FAILED(SHCreateStreamOnFileEx(path.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, 0, FALSE, nullptr, stream.put())))
     {
-        Log(L"Icono de Inicio: no se pudo abrir " + g_settings.StartFile);
+        Log(L"Icono de Inicio: no se pudo abrir " + path);
         return nullptr;
     }
     winrt::Windows::Storage::Streams::IRandomAccessStream random{ nullptr };
@@ -1108,9 +1111,9 @@ static wux::FrameworkElement MakeStartIcon(double size)
     transform.CenterY(size / 2);
     holder.RenderTransform(transform);
 
-    if (g_settings.StartIcon == 3)
+    if (g_settings.StartIcon == 3 && g_settings.StartFile.empty())
     {
-        // Ojitos: píldora negra con dos ojos blancos que parpadean cada 3,5 s (lo anima el compositor)
+        // Ojitos sin imagen de la suite (versión anterior): píldora negra con dos ojos blancos que parpadean
         wuxc::Border pill;
         pill.Background(wuxm::SolidColorBrush(Argb(255, 0, 0, 0)));
         pill.Height(size * 0.75);
@@ -1152,10 +1155,37 @@ static wux::FrameworkElement MakeStartIcon(double size)
     }
     else
     {
+        // Ojitos de la isla: debajo la cara con los ojos cerrados y encima la abierta, que se apaga un instante cada
+        // 3,5 s para parpadear (lo anima el compositor)
+        if (g_settings.StartIcon == 3 && !g_settings.StartClosedFile.empty())
+        {
+            wuxc::Image closed;
+            closed.Source(LoadStartImage(g_settings.StartClosedFile));
+            closed.Stretch(wuxm::Stretch::Uniform);
+            holder.Children().Append(closed);
+        }
         wuxc::Image image;
-        image.Source(LoadStartImage());
+        image.Source(LoadStartImage(g_settings.StartFile));
         image.Stretch(wuxm::Stretch::Uniform);
         holder.Children().Append(image);
+        if (g_settings.StartIcon == 3 && !g_settings.StartClosedFile.empty())
+        {
+            wuxm::Animation::DoubleAnimationUsingKeyFrames blink;
+            std::pair<int, double> keys[] = { { 0, 1.0 }, { 3360, 1.0 }, { 3361, 0.0 }, { 3500, 0.0 }, { 3501, 1.0 } };
+            for (auto& key : keys)
+            {
+                wuxm::Animation::DiscreteDoubleKeyFrame frame;
+                frame.KeyTime(wuxm::Animation::KeyTimeHelper::FromTimeSpan(std::chrono::milliseconds(key.first)));
+                frame.Value(key.second);
+                blink.KeyFrames().Append(frame);
+            }
+            blink.RepeatBehavior(wuxm::Animation::RepeatBehaviorHelper::Forever());
+            wuxm::Animation::Storyboard story;
+            wuxm::Animation::Storyboard::SetTarget(blink, image);
+            wuxm::Animation::Storyboard::SetTargetProperty(blink, L"Opacity");
+            story.Children().Append(blink);
+            story.Begin();
+        }
     }
     return holder;
 }
