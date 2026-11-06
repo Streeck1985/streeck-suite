@@ -924,6 +924,8 @@ namespace StreeckSuite.Modules
                 _tuckRequested = covered && !camouflage;
             }
 
+            UpdateCamouflageInput();
+
             // Ratón encima: cuenta el tiempo para expandir; al salir se mantiene un momento antes de plegar
             if (HoverZone().Contains(Cursor.Position))
             {
@@ -1179,6 +1181,8 @@ namespace StreeckSuite.Modules
         {
             Rectangle screen = IslandScreen.Bounds;
             if (_mode == Mode.Tucked && HiddenExceptAlerts) return Rectangle.Empty; // Invisible: el ratón no la abre
+            // Camuflaje: pasar por encima no la abre (para poder tocar la pestaña); se abre pegando el ratón al borde
+            if (_camouflage && _mode == Mode.Compact) return EdgeStrip(PillW, Math.Max(2, (int)Px(TuckedEdgePx)));
             if (_mode == Mode.Tucked)
             {
                 int stripWidth = (int)Px(260);
@@ -1233,7 +1237,33 @@ namespace StreeckSuite.Modules
 
         protected override byte SurfaceAlpha
         {
-            get { return 255; } // La opacidad del panel solo transparenta el fondo (ver IslandFill), nunca las letras
+            // La opacidad del panel solo transparenta el fondo (ver IslandFill), nunca las letras. En camuflaje, con el
+            // ratón encima se aparta: casi transparente para ver y tocar la pestaña de debajo
+            get { return _camouflageFaded ? (byte)50 : (byte)255; }
+        }
+
+        // Camuflaje: los clics atraviesan la isla (llegan a la pestaña) y se abre pegando el ratón al borde
+        private bool _camouflageFaded;
+        private bool _clickThrough;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+
+        private void UpdateCamouflageInput()
+        {
+            bool camouflaged = _camouflage && _mode == Mode.Compact;
+            if (camouflaged != _clickThrough && IsHandleCreated)
+            {
+                _clickThrough = camouflaged;
+                int style = GetWindowLong(Handle, -20 /* GWL_EXSTYLE */);
+                SetWindowLong(Handle, -20, camouflaged ? style | 0x20 /* WS_EX_TRANSPARENT */ : style & ~0x20);
+            }
+            bool faded = camouflaged && new Rectangle(Left + ShadowPad, Top + ShadowPad, PillW, PillH).Contains(Cursor.Position);
+            if (faded != _camouflageFaded)
+            {
+                _camouflageFaded = faded;
+                RenderSurface();
+            }
         }
 
         protected override void DrawSurface(Graphics g)
