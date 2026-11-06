@@ -1245,6 +1245,8 @@ namespace StreeckSuite.Modules
             RectangleF bounds = new RectangleF(ShadowPad, ShadowPad, PillW - 1, PillH - 1);
             float radius = Math.Min(_radius > 0 ? _radius : TargetRadius(new SizeF(PillW, PillH)), bounds.Height / 2);
             bool camouflaged = _camouflage && _mode == Mode.Compact;
+            // Letras nítidas (ClearType) cuando el fondo de la isla es sólido (mockup «Aviso más nítido»)
+            if (camouflaged || IslandSkin.IsSolid(IslandFill)) g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             if (!camouflaged) DrawSoftShadow(g, bounds, radius, ShadowPad * 0.8f, Px(6), _mode == Mode.Tucked ? 90 : 200);
 
             // A partir de aquí todo se dibuja en coordenadas de la isla

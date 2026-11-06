@@ -59,35 +59,49 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static string ClosedEyesFile { get; private set; }
 
+        /// <summary>
+        /// Con «Ojitos»: inicio de los nombres de las caras (base + "_" + cara + ".png"); la barra cambia de cara
+        /// junto con la isla. null en los demás.
+        /// </summary>
+        public static string FacesBase { get; private set; }
+
         public static string PrepareFile(int kind)
         {
             ClosedEyesFile = null;
+            FacesBase = null;
             if (kind == Original) return null;
             // Ojitos: los mismos de la isla (estilo, color y extras), así que el nombre cambia con ellos
             string stamp = kind == Custom && File.Exists(CustomCopy) ? File.GetLastWriteTimeUtc(CustomCopy).Ticks.ToString()
-                         : kind == Eyes ? string.Format("{0}_{1}{2}{3}{4}", SuiteSettings.EyesStyle, SuiteSettings.EyesColor.TrimStart('#'),
+                         : kind == Eyes ? string.Format("v2_{0}_{1}{2}{3}{4}",SuiteSettings.EyesStyle, SuiteSettings.EyesColor.TrimStart('#'),
                                SuiteSettings.EyesMouth ? "b" : "", SuiteSettings.EyesBrows ? "c" : "", SuiteSettings.EyesBlush ? "r" : "")
                          : "1";
-            string file = Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp + ".png");
-            string closed = kind == Eyes ? Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp + "_cerrados.png") : null;
+            string baseName = Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp);
+            string file = kind == Eyes ? baseName + "_n.png" : baseName + ".png";
             try
             {
-                if (!File.Exists(file))
+                if (kind == Eyes)
                 {
-                    using (Bitmap bitmap = kind == Eyes ? IslandEyes.RenderStartIcon(128, false) : Render(kind, 128))
+                    // Todas las caras de los ojitos (normal, ojos cerrados, feliz, sorpresa, dormido, mareado...)
+                    foreach (char face in IslandEyes.StartFaces)
+                    {
+                        string facePath = baseName + "_" + face + ".png";
+                        if (File.Exists(facePath)) continue;
+                        using (Bitmap bitmap = IslandEyes.RenderStartIcon(128, face, false)) bitmap.Save(facePath, ImageFormat.Png);
+                    }
+                    ClosedEyesFile = baseName + "_c.png";
+                    FacesBase = baseName;
+                }
+                else if (!File.Exists(file))
+                {
+                    using (Bitmap bitmap = Render(kind, 128))
                     {
                         if (bitmap == null) return null;
                         bitmap.Save(file, ImageFormat.Png);
                     }
                 }
-                if (closed != null && !File.Exists(closed))
-                {
-                    using (Bitmap bitmap = IslandEyes.RenderStartIcon(128, true)) bitmap.Save(closed, ImageFormat.Png);
-                }
-                ClosedEyesFile = closed;
                 foreach (string old in Directory.GetFiles(Folder, "inicio_icono_*.png"))
                 {
-                    if (!string.Equals(old, file, StringComparison.OrdinalIgnoreCase) && !string.Equals(old, closed, StringComparison.OrdinalIgnoreCase))
+                    if (!old.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
                     {
                         try { File.Delete(old); } catch (Exception) { } // La barra puede tenerlo abierto: se borra después
                     }
@@ -106,7 +120,7 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static Bitmap Render(int kind, int size)
         {
-            if (kind == Eyes) return IslandEyes.RenderStartIcon(size, false); // Los mismos ojitos de la isla
+            if (kind == Eyes) return IslandEyes.RenderStartIcon(size, 'n'); // Los mismos ojitos de la isla
             Bitmap bitmap = new Bitmap(size, size, PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(bitmap))
             {

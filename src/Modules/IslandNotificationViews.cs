@@ -42,16 +42,18 @@ namespace StreeckSuite.Modules
         public IslandNotification Notification;
         public int Pending;   // Avisos en cola detrás de este
 
-        // Texto del aviso: 440 - márgenes (18 + 18) - icono (40) - separación (14) - hueco para «+N»
-        private const float BodyWidth = 440 - 36 - 40 - 14 - 40;
-        private static readonly Font MeasureFont = new Font("Segoe UI", 9.75f, FontStyle.Regular);
+        // Aviso más pequeño y nítido (mockup «Aviso más nítido»): 360 de ancho, icono de 32 y letras más finas.
+        // Texto: 360 - márgenes (18 + 18) - icono (32) - separación (12) - hueco para «+N»
+        private const float Width = 360, IconSize = 32;
+        private const float BodyWidth = Width - 36 - IconSize - 12 - 40;
+        private static readonly Font MeasureFont = new Font("Segoe UI", 9f, FontStyle.Regular);
         private IslandNotification _measured;
         private int _bodyLines;
 
-        // Alto según el texto: sin cuerpo 64, una línea 82, dos líneas 100 (antes era fijo y sobraba espacio)
+        // Alto según el texto: sin cuerpo 54, una línea 70, dos líneas 86
         public override SizeF BaseSize
         {
-            get { return new SizeF(440, 64 + 18 * BodyLines); }
+            get { return new SizeF(Width, 54 + 16 * BodyLines); }
         }
 
         private int BodyLines
@@ -89,8 +91,8 @@ namespace StreeckSuite.Modules
             Color white = Color.FromArgb(alpha, Color.White);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
-            RectangleF icon = new RectangleF(x, (size.Height - p.Px(40)) / 2, p.Px(40), p.Px(40)); // Centrado en vertical
-            NotificationDrawing.DrawAppIcon(g, p, n, icon, p.Px(12), alpha);
+            RectangleF icon = new RectangleF(x, (size.Height - p.Px(IconSize)) / 2, p.Px(IconSize), p.Px(IconSize)); // Centrado en vertical
+            NotificationDrawing.DrawAppIcon(g, p, n, icon, p.Px(10), alpha);
 
             float badgeWidth = 0;
             if (Pending > 0)
@@ -103,17 +105,17 @@ namespace StreeckSuite.Modules
                 badgeWidth += p.Px(12);
             }
 
-            float textX = icon.Right + p.Px(14);
+            float textX = icon.Right + p.Px(12);
             float textWidth = size.Width - textX - x - badgeWidth;
-            p.DrawText(g, n.AppName, p.Text12, gray, new RectangleF(textX, p.Px(10), textWidth - p.Px(50), p.Px(18)), StringAlignment.Near);
-            p.DrawText(g, NotificationDrawing.RelativeTime(n.Time), p.Text12, gray, new RectangleF(textX, p.Px(10), textWidth, p.Px(18)), StringAlignment.Far);
-            p.DrawText(g, n.Title, p.Bold15, white, new RectangleF(textX, p.Px(28), textWidth, p.Px(22)), StringAlignment.Near);
+            p.DrawText(g, n.AppName, p.Text11, gray, new RectangleF(textX, p.Px(8), textWidth - p.Px(50), p.Px(16)), StringAlignment.Near);
+            p.DrawText(g, NotificationDrawing.RelativeTime(n.Time), p.Text11, gray, new RectangleF(textX, p.Px(8), textWidth, p.Px(16)), StringAlignment.Far);
+            p.DrawText(g, n.Title, p.Semibold13, white, new RectangleF(textX, p.Px(24), textWidth, p.Px(20)), StringAlignment.Near);
 
             using (StringFormat wrap = new StringFormat())
             using (SolidBrush brush = new SolidBrush(IslandPainter.Fade(Color.FromArgb(195, 201, 212), alpha)))
             {
                 wrap.Trimming = StringTrimming.EllipsisWord;
-                g.DrawString(n.Body ?? "", p.Text13, brush, new RectangleF(textX, p.Px(51), textWidth, p.Px(18) * BodyLines + p.Px(2)), wrap);
+                g.DrawString(n.Body ?? "", p.Text12, brush, new RectangleF(textX, p.Px(43), textWidth, p.Px(16) * BodyLines + p.Px(2)), wrap);
             }
         }
 
