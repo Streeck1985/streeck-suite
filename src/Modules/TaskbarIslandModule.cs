@@ -59,10 +59,50 @@ namespace StreeckSuite.Modules
             };
             SuiteSettings.Changed += _settingsChanged;
             Apply();
+
+            // Si mueves la barra (arriba, a un lado, abajo) la DLL tiene que saberlo: se revisa cada 2 s (es barato)
+            _edge = TaskbarEdge();
+            _edgeTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+            _edgeTimer.Tick += (s, e) =>
+            {
+                int edge = TaskbarEdge();
+                if (edge == _edge) return;
+                _edge = edge;
+                Log.Info("[Taskbar] La barra se movió al borde {0}", edge);
+                Apply();
+            };
+            _edgeTimer.Start();
+        }
+
+        private static int _edge = 3;
+        private System.Windows.Forms.Timer _edgeTimer;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct APPBARDATA
+        {
+            public int cbSize;
+            public IntPtr hWnd;
+            public uint uCallbackMessage;
+            public uint uEdge;
+            public int Left, Top, Right, Bottom;
+            public IntPtr lParam;
+        }
+
+        [DllImport("shell32.dll")]
+        private static extern UIntPtr SHAppBarMessage(uint message, ref APPBARDATA data);
+
+        // Borde de la barra principal: 0 izquierda, 1 arriba, 2 derecha, 3 abajo
+        private static int TaskbarEdge()
+        {
+            APPBARDATA data = new APPBARDATA();
+            data.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+            if (SHAppBarMessage(5 /* ABM_GETTASKBARPOS */, ref data) == UIntPtr.Zero) return 3;
+            return (int)Math.Min(3u, data.uEdge);
         }
 
         public void Stop()
         {
+            if (_edgeTimer != null) { _edgeTimer.Dispose(); _edgeTimer = null; }
             SuiteSettings.Changed -= _settingsChanged;
             WriteSettings(false);
             Signal();
@@ -105,6 +145,7 @@ namespace StreeckSuite.Modules
                     "inicio_tamano=" + SuiteSettings.StartIconSize,
                     "inicio_efecto=" + SuiteSettings.StartIconHover,
                     "inicio_clic=" + (SuiteSettings.StartButtonOpensSuite ? 1 : 0),
+                    "borde=" + TaskbarEdge(),
                     "inicio_archivo=" + (StartIconRenderer.PrepareFile(SuiteSettings.StartIcon) ?? ""),
                 });
             }

@@ -89,6 +89,7 @@ struct Settings
     int StartHover = 1;                 // 0 nada, 1 crece, 2 gira
     std::wstring StartFile;
     bool StartOpensSuite = true;        // El clic en Inicio abre el menú de Streeck (no el de Windows)
+    int Edge = 3;                       // Borde de la barra: 0 izquierda, 1 arriba, 2 derecha, 3 abajo
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -111,6 +112,7 @@ struct FrameState
     winrt::weak_ref<wux::FrameworkElement> StartButton, StartHookedButton;
     winrt::weak_ref<wuxc::Border> StartOverlay;  // Capa invisible sobre el botón: el clic abre el menú de Streeck
     std::wstring StartDrawn;
+    bool Diagnosed = false;  // Ya se guardó el árbol porque faltaba una pieza
 };
 
 // Todo esto solo se toca desde el hilo de la interfaz de la barra (los avisos del árbol llegan ahí)
@@ -179,6 +181,9 @@ static void LoadSettings()
     auto startFile = values.find(L"inicio_archivo");
     g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
     g_settings.StartOpensSuite = ToInt(values, L"inicio_clic", 1) == 1;
+    g_settings.Edge = std::clamp(ToInt(values, L"borde", 3), 0, 3);
+    // Barra vertical (a un lado): las islas se calculan de izquierda a derecha y ahí no sirven; queda la de Windows
+    if (g_settings.Edge == 0 || g_settings.Edge == 2) g_settings.Active = false;
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
     int opacity = std::clamp(ToInt(values, L"opacidad", 86), 30, 100);
     auto color = values.find(L"color");
@@ -224,6 +229,22 @@ static wux::FrameworkElement FindByName(wux::DependencyObject const& root, std::
     }
     return nullptr;
 }
+
+static wux::FrameworkElement FindByClass(wux::DependencyObject const& root, std::wstring_view className, int depth = 0)
+{
+    if (!root || depth > 30) return nullptr;
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(root);
+    for (int i = 0; i < count; i++)
+    {
+        wux::DependencyObject child = wuxm::VisualTreeHelper::GetChild(root, i);
+        if (winrt::get_class_name(child) == className) return child.try_as<wux::FrameworkElement>();
+        wux::FrameworkElement found = FindByClass(child, className, depth + 1);
+        if (found) return found;
+    }
+    return nullptr;
+}
+
+static void DumpTree();
 
 static bool HasDescendantClass(wux::DependencyObject const& root, std::wstring_view className, int depth = 0)
 {
@@ -421,6 +442,14 @@ static void AddNotchShape(wuxc::Canvas const& canvas, double x, double y, double
     wuxs::Path path;
     path.Data(geometry);
     path.Fill(fill);
+    // Barra arriba: el notch se voltea para quedar pegado al borde de arriba de la pantalla
+    if (g_settings.Edge == 1)
+    {
+        wuxm::ScaleTransform flip;
+        flip.ScaleY(-1);
+        flip.CenterY((y + bottom) / 2 - 1.5);
+        path.RenderTransform(flip);
+    }
     canvas.Children().Append(path);
 }
 
@@ -536,6 +565,35 @@ static void LayoutFrame(FrameState& state)
         items.push_back({ element, group, bounds });
         minX[group] = std::min(minX[group], (double)bounds.X);
         maxX[group] = std::max(maxX[group], (double)(bounds.X + bounds.Width));
+    }
+
+    // Otras versiones de Windows 11 no siempre tienen la bandeja o el clima dentro del repetidor: se buscan en toda
+    // la barra. Solo se miden (no se desplazan). Si aun así falta la bandeja, se guarda el árbol para diagnosticar.
+    wux::FrameworkElement frameElement = state.Frame.get();
+    auto measureOutside = [&](wux::FrameworkElement const& element, int group)
+    {
+        if (!element || element.Visibility() != wux::Visibility::Visible || element.ActualWidth() < 1) return;
+        try
+        {
+            Rect bounds = element.TransformToVisual(root).TransformBounds(Rect{ 0, 0, (float)element.ActualWidth(), (float)element.ActualHeight() });
+            if (bounds.X + bounds.Width < -200 || bounds.X > 20000) return;
+            minX[group] = std::min(minX[group], (double)bounds.X);
+            maxX[group] = std::max(maxX[group], (double)(bounds.X + bounds.Width));
+        }
+        catch (...) { } // Está en otra ventana de la barra: no se puede medir desde aquí
+    };
+    if (frameElement && minX[2] >= maxX[2]) measureOutside(FindByClass(frameElement, L"SystemTray.SystemTrayFrame"), 2);
+    if (frameElement && minX[0] >= maxX[0])
+    {
+        wux::FrameworkElement widgets = FindByClass(frameElement, L"Taskbar.AugmentedEntryPointButton");
+        if (!widgets) widgets = FindByName(frameElement, L"WidgetsButton");
+        measureOutside(widgets, 0);
+    }
+    if (minX[2] >= maxX[2] && g_settings.Active && !state.Diagnosed)
+    {
+        state.Diagnosed = true;
+        Log(L"No se encontró la bandeja dentro de la barra: se guarda el árbol en barra_arbol.txt");
+        DumpTree();
     }
 
     const double width = root.ActualWidth(), height = root.ActualHeight();
