@@ -220,7 +220,8 @@ namespace StreeckSuite.Modules
             if (f.Mood == Mood.Nod && f.Phase < 0.75f) f.Open = Math.Max(0.12f, 1 - f.Phase / 0.75f);
 
             Lively = Math.Abs(targetX - _lookX) > 0.02f || Math.Abs(targetY - _lookY) > 0.02f || tempActive || hovering
-                     || bp < 1.5 || (_nextBlink - now).TotalMilliseconds < 150 || f.Mood == Mood.Happy || f.Mood == Mood.Yawn;
+                     || bp < 1.5 || (_nextBlink - now).TotalMilliseconds < 150 || f.Mood == Mood.Yawn;
+            // (El baile con la música va a ~10 fps: dura toda la canción y a 30 fps gastaba el triple)
 
             Paint(g, center, unit, f);
         }
