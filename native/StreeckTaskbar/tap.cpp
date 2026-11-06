@@ -115,6 +115,9 @@ struct FrameState
     winrt::weak_ref<wuxc::Border> StartOverlay;  // Capa invisible sobre el botón: el clic abre el menú de Streeck
     std::wstring StartDrawn;
     bool Diagnosed = false;  // Ya se guardó el árbol porque faltaba una pieza
+    wux::DispatcherTimer Recheck{ nullptr };  // Vuelve a medir por si un icono terminó de animarse sin avisar
+    int Burst = 0;      // Tras un cambio en la barra: mediciones rápidas (cada 250 ms) mientras los iconos se animan
+    int Idle = 0;       // Sin cambios: una medición cada 6 vueltas (1,5 s)
 };
 
 // Todo esto solo se toca desde el hilo de la interfaz de la barra (los avisos del árbol llegan ahí)
@@ -1489,7 +1492,9 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
         repeater.LayoutUpdated([weak, dispatcher](auto&&, auto&&)
         {
             auto locked = weak.lock();
-            if (!locked || locked->Pending) return;
+            if (!locked) return;
+            locked->Burst = 6;  // Algo cambió (app que abre o cierra): mediciones rápidas durante 1,5 s
+            if (locked->Pending) return;
             locked->Pending = true;
             dispatcher.RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Low, [weak]
             {
@@ -1500,6 +1505,22 @@ static void SetupFrame(std::shared_ptr<FrameState> const& state)
             });
         });
         state->Hooked = true;
+
+        // Windows anima los iconos que entran o salen y al terminar no siempre vuelve a acomodar la barra: si la isla
+        // se midió a media animación quedaba corta (un icono medio afuera). Se vuelve a medir cada 1,5 s; si nada
+        // cambió, la firma evita redibujar
+        state->Recheck = wux::DispatcherTimer();
+        state->Recheck.Interval(std::chrono::milliseconds(250));
+        state->Recheck.Tick([weak](auto&&, auto&&)
+        {
+            auto locked = weak.lock();
+            if (!locked || locked->Pending) return;
+            if (locked->Burst > 0) locked->Burst--;
+            else if (++locked->Idle < 6) return;
+            locked->Idle = 0;
+            try { LayoutFrame(*locked); } catch (...) { }
+        });
+        state->Recheck.Start();
     }
     LayoutFrame(*state);
 }
