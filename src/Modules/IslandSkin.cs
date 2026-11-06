@@ -104,6 +104,20 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
+        /// El fondo es casi sólido: las letras se pueden dibujar con ClearType (nítidas). En los skins muy
+        /// transparentes (Fantasma, Cristal líquido) ClearType dejaría bordes de colores: van suavizadas en gris.
+        /// </summary>
+        public static bool IsSolid(Color userFill)
+        {
+            switch (Current)
+            {
+                case Notch: return userFill.A >= 190;
+                case Ghost: case Liquid: return false;
+                default: return true;
+            }
+        }
+
+        /// <summary>
         /// Barra de nivel (volumen) con el color del skin: blanca en Notch, cian con brillo en Neón, degradado en
         /// Aurora, cristal en Aero 7, arcoíris que gira en Gamer RGB...
         /// </summary>

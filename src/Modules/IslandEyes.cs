@@ -216,6 +216,7 @@ namespace StreeckSuite.Modules
             }
             double bp = (now - _blinkAt).TotalMilliseconds / 140;
             if (bp < 1) f.Open = (float)(Math.Abs(1 - 2 * bp) * 0.9 + 0.1);
+            TellStartButton(FaceFor(f.Mood, f.Phase));
             if (f.Mood == Mood.Nod && f.Phase < 0.75f) f.Open = Math.Max(0.12f, 1 - f.Phase / 0.75f);
 
             Lively = Math.Abs(targetX - _lookX) > 0.02f || Math.Abs(targetY - _lookY) > 0.02f || tempActive || hovering
@@ -234,21 +235,73 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
-        /// Icono del botón de Inicio con los mismos ojitos de la isla (estilo, color y extras): una píldora negra con
-        /// los ojos abiertos o cerrados (la barra alterna las dos imágenes para parpadear).
+        /// Cara que toca para una emoción: n normal, f feliz, s sorpresa, d dormido, z mareado, a enamorado,
+        /// e enojado, w guiño (las mismas 8 del mockup de cada estilo).
         /// </summary>
-        public static Bitmap RenderStartIcon(int size, bool closed)
+        public static char FaceFor(Mood mood, float phase)
+        {
+            switch (mood)
+            {
+                case Mood.Happy: case Mood.Laugh: return 'f';
+                case Mood.Surprised: return 's';
+                case Mood.Sleep: return 'd';
+                case Mood.Yawn: return phase > 0.15f && phase < 0.85f ? 'd' : 'n';
+                case Mood.Dizzy: return 'z';
+                case Mood.Love: return 'a';
+                case Mood.Angry: return 'e';
+                case Mood.Wink: return 'w';
+                case Mood.Nod: return phase > 0.75f ? 's' : 'n'; // Despierta de golpe
+                default: return 'n';
+            }
+        }
+
+        /// <summary>
+        /// Caras que la suite prepara para el botón de Inicio ('c' = normal con los ojos cerrados, para parpadear).
+        /// </summary>
+        public const string StartFaces = "ncfsdzaew";
+
+        private static readonly Dictionary<char, Mood> FaceMoods = new Dictionary<char, Mood>
+        {
+            { 'n', Mood.Idle }, { 'c', Mood.Idle }, { 'f', Mood.Happy }, { 's', Mood.Surprised }, { 'd', Mood.Sleep },
+            { 'z', Mood.Dizzy }, { 'a', Mood.Love }, { 'e', Mood.Angry }, { 'w', Mood.Wink }
+        };
+
+        /// <summary>
+        /// Icono del botón de Inicio con los mismos ojitos de la isla (estilo, color y extras) haciendo una cara:
+        /// una píldora negra con la cara encima. La barra cambia de imagen según la cara de la isla.
+        /// </summary>
+        public static Bitmap RenderStartIcon(int size, char face, bool pill = true)
         {
             Bitmap bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(bitmap))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 float s = size / 128f;
-                IslandPainter.FillRounded(g, new RectangleF(0, 22 * s, size, 84 * s), 42 * s, Color.Black);
-                Frame f = new Frame { Mood = Mood.Idle, Open = closed ? 0.1f : 1, Phase = 0, LookX = 0, LookY = 0, Ms = 0, Alpha = 255, Compact = true };
+                // Sin píldora: la pone la barra debajo, así los ojos pueden moverse hacia el ratón sin moverla
+                if (pill) IslandPainter.FillRounded(g, new RectangleF(0, 22 * s, size, 84 * s), 42 * s, Color.Black);
+                Mood mood;
+                if (!FaceMoods.TryGetValue(face, out mood)) mood = Mood.Idle;
+                Frame f = new Frame { Mood = mood, Open = face == 'c' ? 0.1f : 1, Phase = 0.5f, LookX = 0, LookY = 0, Ms = 0, Alpha = 255, Compact = true };
                 Paint(g, new PointF(size / 2f, size / 2f + (SuiteSettings.EyesMouth ? 6 * s : 0)), 1.35f * s, f);
             }
             return bitmap;
+        }
+
+        // El botón de Inicio hace la misma cara que la isla: se le avisa solo cuando la cara cambia
+        private static char _startFace = ' ';
+        private static System.Threading.EventWaitHandle _faceEvent;
+
+        private static void TellStartButton(char face)
+        {
+            if (SuiteSettings.StartIcon != StartIconRenderer.Eyes || face == _startFace) return;
+            _startFace = face;
+            try
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Log.FilePath), "inicio_cara.txt"), face.ToString());
+                if (_faceEvent == null) _faceEvent = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.AutoReset, @"Local\StreeckSuite.StartFace");
+                _faceEvent.Set();
+            }
+            catch (Exception) { }
         }
 
         private static Color EyeColor
@@ -298,21 +351,8 @@ namespace StreeckSuite.Modules
 
                 // Cara del estilo (mockup «Caras de cada estilo»): cada estilo dibuja sus 8 caras en las unidades del
                 // mockup (ojos a ±15), que aquí se agrandan 1,2 veces para quedar a ±18 como antes
-                char face;
+                char face = FaceFor(mood, f.Phase);
                 float open = f.Open;
-                switch (mood)
-                {
-                    case Mood.Happy: case Mood.Laugh: face = 'f'; break;
-                    case Mood.Surprised: face = 's'; break;
-                    case Mood.Sleep: face = 'd'; break;
-                    case Mood.Yawn: face = f.Phase > 0.15f && f.Phase < 0.85f ? 'd' : 'n'; break;
-                    case Mood.Dizzy: face = 'z'; break;
-                    case Mood.Love: face = 'a'; break;
-                    case Mood.Angry: face = 'e'; break;
-                    case Mood.Wink: face = 'w'; break;
-                    case Mood.Nod: face = f.Phase > 0.75f ? 's' : 'n'; break; // Despierta de golpe
-                    default: face = 'n'; break;
-                }
                 if (mood == Mood.Focus) open *= 0.5f;
                 else if (mood == Mood.Sad) open *= 0.8f;
                 else if (mood == Mood.Whistle) open *= 0.6f;

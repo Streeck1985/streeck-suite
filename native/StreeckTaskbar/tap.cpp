@@ -89,6 +89,7 @@ struct Settings
     int StartHover = 1;                 // 0 nada, 1 crece, 2 gira
     std::wstring StartFile;
     std::wstring StartClosedFile;       // Ojitos: la misma cara con los ojos cerrados (para parpadear)
+    std::wstring StartFacesBase;        // Ojitos: base de las caras (base_n.png, base_f.png...): imitan a la isla
     bool StartOpensSuite = true;        // El clic en Inicio abre el menú de Streeck (no el de Windows)
     int Edge = 3;                       // Borde de la barra: 0 izquierda, 1 arriba, 2 derecha, 3 abajo
 };
@@ -183,6 +184,8 @@ static void LoadSettings()
     g_settings.StartFile = startFile != values.end() ? startFile->second : L"";
     auto closedFile = values.find(L"inicio_cerrados");
     g_settings.StartClosedFile = closedFile != values.end() ? closedFile->second : L"";
+    auto facesBase = values.find(L"inicio_caras");
+    g_settings.StartFacesBase = facesBase != values.end() ? facesBase->second : L"";
     g_settings.StartOpensSuite = ToInt(values, L"inicio_clic", 1) == 1;
     g_settings.Edge = std::clamp(ToInt(values, L"borde", 3), 0, 3);
     // Color "#RRGGBB" y opacidad 30..100 de la isla de arriba
@@ -1097,6 +1100,65 @@ static wuxm::ImageSource LoadStartImage(std::wstring const& path)
     return bitmap;
 }
 
+// Ojitos que imitan a la isla: una imagen por cara (solo se ve la actual) y una capa que se mueve hacia el ratón
+static std::vector<std::pair<wchar_t, winrt::weak_ref<wuxc::Image>>> g_faceImages;
+static winrt::weak_ref<wux::FrameworkElement> g_eyesLayer;
+static wux::DispatcherTimer g_followTimer{ nullptr };
+static wchar_t g_startFace = L'n';
+
+static void ShowStartFace(wchar_t face)
+{
+    g_startFace = face;
+    for (auto& entry : g_faceImages)
+    {
+        wuxc::Image image = entry.second.get();
+        if (!image) continue;
+        bool show = face == L'n' ? (entry.first == L'n' || entry.first == L'c') : entry.first == face;
+        image.Visibility(show ? wux::Visibility::Visible : wux::Visibility::Collapsed);
+    }
+}
+
+static wchar_t ReadStartFace()
+{
+    std::wifstream file(DataFolder() + L"\\inicio_cara.txt");
+    wchar_t face = L'n';
+    if (file) file >> face;
+    return std::wstring(L"ncfsdzaew").find(face) == std::wstring::npos ? L'n' : face;
+}
+
+// La suite avisa cuando la carita de la isla cambia de cara
+static void ListenForStartFace()
+{
+    HANDLE changed = CreateEventW(nullptr, FALSE, FALSE, L"Local\\StreeckSuite.StartFace");
+    for (;;)
+    {
+        WaitForSingleObject(changed, INFINITE);
+        wux::UIElement anchor = g_anchor.get();
+        if (!anchor) continue;
+        wchar_t face = ReadStartFace();
+        anchor.Dispatcher().RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, [face] { try { ShowStartFace(face); } catch (...) { } });
+    }
+}
+
+// Los ojos se corren un poquito hacia el ratón (12 veces por segundo; casi sin gasto)
+static void FollowCursor()
+{
+    wux::FrameworkElement layer = g_eyesLayer.get();
+    if (!layer || layer.ActualWidth() < 1) return;
+    POINT cursor;
+    RECT bar;
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!GetCursorPos(&cursor) || !tray || !GetWindowRect(tray, &bar)) return;
+    auto origin = layer.TransformToVisual(nullptr).TransformPoint(winrt::Windows::Foundation::Point{ 0, 0 });
+    double cx = bar.left + origin.X + layer.ActualWidth() / 2, cy = bar.top + origin.Y + layer.ActualHeight() / 2;
+    double dx = cursor.x - cx, dy = cursor.y - cy, d = std::max(1.0, std::sqrt(dx * dx + dy * dy));
+    double reach = std::min(1.0, d / 300) * layer.ActualWidth() * 0.09;
+    wuxm::TranslateTransform move = layer.RenderTransform().try_as<wuxm::TranslateTransform>();
+    if (!move) return;
+    double x = dx / d * reach, y = dy / d * reach * 0.7;
+    if (std::abs(move.X() - x) > 0.05 || std::abs(move.Y() - y) > 0.05) { move.X(x); move.Y(y); }
+}
+
 static wux::FrameworkElement MakeStartIcon(double size)
 {
     wuxc::Grid holder;
@@ -1111,7 +1173,59 @@ static wux::FrameworkElement MakeStartIcon(double size)
     transform.CenterY(size / 2);
     holder.RenderTransform(transform);
 
-    if (g_settings.StartIcon == 3 && g_settings.StartFile.empty())
+    if (g_settings.StartIcon == 3 && !g_settings.StartFacesBase.empty())
+    {
+        // Ojitos de la isla: píldora negra y encima las caras (normal parpadeando, feliz, sorpresa, dormido...)
+        wuxc::Border pill;
+        pill.Background(wuxm::SolidColorBrush(Argb(255, 0, 0, 0)));
+        pill.Height(size * 84 / 128);
+        pill.CornerRadius(wux::CornerRadiusHelper::FromUniformRadius(size * 42 / 128));
+        pill.VerticalAlignment(wux::VerticalAlignment::Center);
+        holder.Children().Append(pill);
+        wuxc::Grid layer;
+        layer.RenderTransform(wuxm::TranslateTransform());
+        holder.Children().Append(layer);
+        // Varios monitores: cada barra tiene su botón; solo se quitan las caras que ya no existen
+        g_faceImages.erase(std::remove_if(g_faceImages.begin(), g_faceImages.end(), [](auto& e) { return !e.second.get(); }), g_faceImages.end());
+        for (wchar_t face : std::wstring(L"cnfsdzaew"))
+        {
+            wuxc::Image image;
+            image.Source(LoadStartImage(g_settings.StartFacesBase + L"_" + face + L".png"));
+            image.Stretch(wuxm::Stretch::Uniform);
+            layer.Children().Append(image);
+            g_faceImages.push_back({ face, image });
+            if (face == L'n')
+            {
+                // Parpadeo: la cara abierta se apaga un instante cada 3,5 s y se ve la de los ojos cerrados
+                wuxm::Animation::DoubleAnimationUsingKeyFrames blink;
+                std::pair<int, double> keys[] = { { 0, 1.0 }, { 3360, 1.0 }, { 3361, 0.0 }, { 3500, 0.0 }, { 3501, 1.0 } };
+                for (auto& key : keys)
+                {
+                    wuxm::Animation::DiscreteDoubleKeyFrame frame;
+                    frame.KeyTime(wuxm::Animation::KeyTimeHelper::FromTimeSpan(std::chrono::milliseconds(key.first)));
+                    frame.Value(key.second);
+                    blink.KeyFrames().Append(frame);
+                }
+                blink.RepeatBehavior(wuxm::Animation::RepeatBehaviorHelper::Forever());
+                wuxm::Animation::Storyboard story;
+                wuxm::Animation::Storyboard::SetTarget(blink, image);
+                wuxm::Animation::Storyboard::SetTargetProperty(blink, L"Opacity");
+                story.Children().Append(blink);
+                story.Begin();
+            }
+        }
+        g_eyesLayer = layer;
+        ShowStartFace(ReadStartFace());
+        if (!g_followTimer)
+        {
+            g_followTimer = wux::DispatcherTimer();
+            g_followTimer.Interval(std::chrono::milliseconds(80));
+            g_followTimer.Tick([](auto&&, auto&&) { try { FollowCursor(); } catch (...) { } });
+            g_followTimer.Start();
+            std::thread(ListenForStartFace).detach();
+        }
+    }
+    else if (g_settings.StartIcon == 3 && g_settings.StartFile.empty())
     {
         // Ojitos sin imagen de la suite (versión anterior): píldora negra con dos ojos blancos que parpadean
         wuxc::Border pill;

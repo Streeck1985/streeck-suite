@@ -157,6 +157,7 @@ namespace StreeckSuite.Modules
                     "borde=" + TaskbarEdge(),
                     "inicio_archivo=" + (StartIconRenderer.PrepareFile(SuiteSettings.StartIcon) ?? ""),
                     "inicio_cerrados=" + (StartIconRenderer.ClosedEyesFile ?? ""), // Ojitos: la misma cara con los ojos cerrados
+                    "inicio_caras=" + (StartIconRenderer.FacesBase ?? ""),          // Ojitos: base de las 9 caras (_n, _f, _s...)
                 });
             }
             catch (Exception ex)
