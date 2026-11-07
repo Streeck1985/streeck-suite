@@ -397,16 +397,51 @@ namespace StreeckSetup
             }
         }
 
+        /// <summary>
+        /// Reinicia solo el Explorador de la barra, con cuidado: primero le pide salir como lo haría Windows
+        /// («Salir del Explorador»), y solo si no responde lo termina. No toca las ventanas de carpetas ni otros
+        /// procesos. Si OneDrive estaba abierto y se cayó con el Explorador, lo vuelve a abrir en segundo plano.
+        /// </summary>
         private static void RestartExplorer()
         {
-            foreach (Process explorer in Process.GetProcessesByName("explorer"))
+            bool oneDriveWasRunning = Process.GetProcessesByName("OneDrive").Length > 0;
+            IntPtr tray = FindWindow("Shell_TrayWnd", null);
+            if (tray != IntPtr.Zero)
             {
-                try { explorer.Kill(); } catch (Exception) { }
+                uint shellId;
+                GetWindowThreadProcessId(tray, out shellId);
+                PostMessage(tray, 0x5B4, IntPtr.Zero, IntPtr.Zero); // Salida ordenada del Explorador
+                try
+                {
+                    using (Process shell = Process.GetProcessById((int)shellId))
+                    {
+                        if (!shell.WaitForExit(2000)) shell.Kill(); // No respondió (Windows 11 reciente lo ignora): solo ese proceso
+                    }
+                }
+                catch (Exception) { } // Ya se cerró
             }
-            Thread.Sleep(2500);
-            if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
+            Thread.Sleep(800);
+            if (FindWindow("Shell_TrayWnd", null) == IntPtr.Zero) Process.Start("explorer.exe");
+            for (int i = 0; i < 40 && FindWindow("Shell_TrayWnd", null) == IntPtr.Zero; i++) Thread.Sleep(200); // Espera la barra nueva
+
+            // OneDrive a veces se cierra cuando el Explorador se va: se vuelve a abrir como lo abre Windows
             Thread.Sleep(1500);
+            if (oneDriveWasRunning && Process.GetProcessesByName("OneDrive").Length == 0)
+            {
+                string oneDrive = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\OneDrive\OneDrive.exe");
+                if (!File.Exists(oneDrive)) oneDrive = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Microsoft OneDrive\OneDrive.exe");
+                try { if (File.Exists(oneDrive)) Process.Start(oneDrive, "/background"); } catch (Exception) { }
+            }
         }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr FindWindow(string className, string windowName);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         private void Uninstall()
         {
