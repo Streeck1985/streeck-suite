@@ -68,7 +68,8 @@ namespace StreeckSuite.Modules
                     LastChecked = DateTime.Now;
                     string tag = Convert.ToString(release["tag_name"]).TrimStart('v', 'V');
                     _downloadUrl = null;
-                    ArrayList assets = release.ContainsKey("assets") ? release["assets"] as ArrayList : null;
+                    // JavaScriptSerializer entrega los arreglos JSON como object[] (no ArrayList): se acepta cualquier lista
+                    IEnumerable assets = release.ContainsKey("assets") ? release["assets"] as IEnumerable : null;
                     if (assets != null)
                     {
                         foreach (object item in assets)
@@ -83,6 +84,7 @@ namespace StreeckSuite.Modules
                     LatestVersion = tag;
                     Notes = release.ContainsKey("body") ? Convert.ToString(release["body"]) : "";
                     bool newer = _downloadUrl != null && IsNewer(tag, AppInfo.Version);
+                    Log.Info("[UpdateService] En GitHub: {0} (instalador: {1}); esta: {2}", tag, _downloadUrl != null ? "sí" : "no", AppInfo.Version);
                     _busy = 0;
                     Set(newer ? State.Available : State.UpToDate);
                     if (newer)

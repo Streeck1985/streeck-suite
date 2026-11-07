@@ -115,6 +115,7 @@ struct FrameState
     winrt::weak_ref<wuxc::Border> StartOverlay;  // Capa invisible sobre el botón: el clic abre el menú de Streeck
     std::wstring StartDrawn;
     bool Diagnosed = false;  // Ya se guardó el árbol porque faltaba una pieza
+    bool TraySiblingLogged = false;  // Ya se avisó en el registro que la bandeja está al lado del marco
     wux::DispatcherTimer Recheck{ nullptr };  // Vuelve a medir por si un icono terminó de animarse sin avisar
     int Burst = 0;      // Tras un cambio en la barra: mediciones rápidas (cada 250 ms) mientras los iconos se animan
     int Idle = 0;       // Sin cambios: una medición cada 12 vueltas (3 s)
@@ -612,7 +613,24 @@ static void LayoutFrame(FrameState& state)
         }
         catch (...) { } // Está en otra ventana de la barra: no se puede medir desde aquí
     };
-    if (frameElement && minX[2] >= maxX[2]) measureOutside(FindByClass(frameElement, L"SystemTray.SystemTrayFrame"), 2);
+    // En algunas versiones (26300) la bandeja no está dentro del marco sino a su lado, en la misma raíz XAML: se busca
+    // también ahí. A esa bandeja no la mueve el marco, así que se dibuja donde está, sin desplazarla.
+    bool traySibling = false;
+    if (frameElement && minX[2] >= maxX[2])
+    {
+        wux::FrameworkElement tray = FindByClass(frameElement, L"SystemTray.SystemTrayFrame");
+        if (!tray)
+        {
+            tray = FindByClass(wuxm::VisualTreeHelper::GetParent(frameElement), L"SystemTray.SystemTrayFrame");
+            traySibling = (bool)tray;
+        }
+        measureOutside(tray, 2);
+        if (traySibling && !state.TraySiblingLogged)
+        {
+            state.TraySiblingLogged = true;
+            Log(L"La bandeja está al lado del marco de la barra (no dentro): se mide ahí");
+        }
+    }
     if (frameElement && minX[0] >= maxX[0])
     {
         wux::FrameworkElement widgets = FindByClass(frameElement, L"Taskbar.AugmentedEntryPointButton");
@@ -657,8 +675,9 @@ static void LayoutFrame(FrameState& state)
         state.CalibratedCount = items.size();
         state.Side = present[0] ? maxX[0] + pad : 0;
         state.Apps = islandWidth[1];
-        state.TrayWidth = islandWidth[2];
-        state.TrayInset = present[2] ? width - (maxX[2] + pad) : 0;
+        // Bandeja al lado del marco: no se puede acercar a las apps, se queda en su sitio (ancho 0 = no se corre)
+        state.TrayWidth = traySibling ? 0 : islandWidth[2];
+        state.TrayInset = present[2] && !traySibling ? width - (maxX[2] + pad) : 0;
     }
     else if (state.Calibrated && (islandWidth[1] < state.Apps - 12 || (state.Side > 0 && present[0] && maxX[0] + pad < state.Side - 12)))
     {

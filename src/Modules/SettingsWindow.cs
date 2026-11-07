@@ -1388,7 +1388,7 @@ namespace StreeckSuite.Modules
             switch (state)
             {
                 case UpdateService.State.Checking: status = "Revisando GitHub…"; break;
-                case UpdateService.State.UpToDate: status = "Tienes la versión más reciente · revisado " + Ago(UpdateService.LastChecked); break;
+                case UpdateService.State.UpToDate: status = "Al día (en GitHub: " + UpdateService.LatestVersion + ") · revisado " + Ago(UpdateService.LastChecked); break;
                 case UpdateService.State.Available: status = string.Format("Hay una versión nueva: {0} ({1:0.0} MB)", UpdateService.LatestVersion, UpdateService.SizeBytes / 1048576.0); break;
                 case UpdateService.State.Downloading: status = "Descargando " + UpdateService.LatestVersion + "… se cierra y se vuelve a abrir sola"; break;
                 case UpdateService.State.Error: status = "No se pudo revisar: " + UpdateService.ErrorText; break;
