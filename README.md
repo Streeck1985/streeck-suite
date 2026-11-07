@@ -17,6 +17,8 @@
 
 ---
 
+> ⚠️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
+
 ## Isla dinámica
 
 Una isla negra arriba de la pantalla que se abre al pasar el ratón: música con letra, centro de control (Wi-Fi, Bluetooth, volumen y micrófono), calendario con pomodoro, clima, sistema y avisos.
