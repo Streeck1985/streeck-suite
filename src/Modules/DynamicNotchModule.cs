@@ -996,8 +996,8 @@ namespace StreeckSuite.Modules
             if (!_animating) elapsed = FrameSeconds;
             elapsed = Math.Max(FrameSeconds / 4, Math.Min(elapsed, 0.1f));
             // Velocidad elegida en Ajustes → Isla (Normal = la sensación original de la isla)
-            float speed = SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Slow ? 0.35f
-                        : SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Fast ? 0.85f : 0.5f;
+            float speed = SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Slow ? 0.45f
+                        : SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Fast ? 1f : 0.7f;
             elapsed *= speed;
             int steps = Math.Max(1, (int)Math.Round(elapsed / FrameSeconds));
             float stepSeconds = elapsed / steps;
@@ -1013,7 +1013,7 @@ namespace StreeckSuite.Modules
             }
             if (_contentOpacity < 1f) _contentOpacity = Math.Min(1f, _contentOpacity + elapsed * 5f);
 
-            if (springing) ApplyBounds();
+            // (Si cambia el tamaño, ApplyBounds ya dibuja: abajo no se vuelve a dibujar en el mismo cuadro)
 
             bool transitioning = springing || _contentOpacity < 1f;
             if (transitioning && !_animating)
@@ -1040,7 +1040,7 @@ namespace StreeckSuite.Modules
             {
                 _lastFullPaintSecond = now.Second;
                 long drawStart = _animationClock.ElapsedTicks;
-                RenderSurface();
+                if (springing) ApplyBounds(); else RenderSurface(); // Una sola entrega por cuadro
                 if (transitioning)
                 {
                     _animationFrames++;
@@ -1269,9 +1269,9 @@ namespace StreeckSuite.Modules
 
             // La ventana es la isla más un margen alrededor para su sombra
             int y = _atBottom ? screen.Bottom - top - height : screen.Y + top; // Abajo: crece hacia arriba
-            Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, y - ShadowPad,
-                width + 2 * ShadowPad, height + 2 * ShadowPad);
-            RenderSurface();
+            // Posición, tamaño e imagen nueva en un solo paso (sin cuadro intermedio que tiemble)
+            RenderSurface(new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, y - ShadowPad,
+                width + 2 * ShadowPad, height + 2 * ShadowPad));
         }
 
         private int ShadowPad
