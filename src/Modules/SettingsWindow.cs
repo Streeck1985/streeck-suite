@@ -981,6 +981,12 @@ namespace StreeckSuite.Modules
             DrawText(g, "Atajo del asistente", _semi14, TextColor, new RectangleF(InnerX, y + 14, 300, 20), StringAlignment.Near);
             DrawSegmented(g, new RectangleF(InnerX, y + 44, InnerW, 40), new[] { "Ctrl + Alt + A", "Solo desde la búsqueda (Ctrl + Alt + S)" },
                 SuiteSettings.AssistantHotkey ? 0 : 1, i => { SuiteSettings.AssistantHotkey = i == 0; SuiteSettings.Save(); });
+
+            // Micrófono automático al abrir con el atajo (el dictado se envía solo al dejar de hablar)
+            y = 588;
+            DrawCard(g, y, 58);
+            DrawToggleRow(g, y, "Escuchar al abrir con Ctrl + Alt + A", "El micrófono se enciende solo; si empiezas a escribir, se apaga",
+                SuiteSettings.AssistantAutoListen, () => { SuiteSettings.AssistantAutoListen = !SuiteSettings.AssistantAutoListen; SuiteSettings.Save(); });
         }
 
         // Fila con título, estado de color y un botón opcional a la derecha

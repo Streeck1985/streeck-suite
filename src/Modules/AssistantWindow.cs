@@ -108,6 +108,16 @@ namespace StreeckSuite.Modules
         }
 
         /// <summary>
+        /// Ctrl+Alt+A: abre el asistente y, si así está en Ajustes → Asistente IA, ya escuchando (sin tocar el micrófono).
+        /// </summary>
+        public void ToggleFromHotkey()
+        {
+            if (Visible) { HideAssistant(); return; }
+            ShowAssistant(null);
+            if (SuiteSettings.AssistantAutoListen) BeginInvoke((Action)(() => { if (Visible && !_listening) ToggleListening(); }));
+        }
+
+        /// <summary>
         /// Abre el asistente; con una pregunta (desde la búsqueda) la envía directamente.
         /// </summary>
         public void ShowAssistant(string question)
@@ -295,6 +305,7 @@ namespace StreeckSuite.Modules
         protected override void OnKeyPress(KeyPressEventArgs e)
         {
             base.OnKeyPress(e);
+            if (_listening && !char.IsControl(e.KeyChar)) StopListening(); // Empezó a escribir: el micrófono se apaga
             if (e.KeyChar == '\b') { if (_query.Length > 0) SetQuery(_query.Substring(0, _query.Length - 1)); }
             else if (!char.IsControl(e.KeyChar)) SetQuery(_query + e.KeyChar);
             e.Handled = true;
