@@ -51,11 +51,29 @@ namespace StreeckSuite.Core
             get { return 255; }
         }
 
+        // Posición y tamaño que se aplican junto con el próximo dibujo (ver RenderSurface(Rectangle))
+        private Rectangle? _nextBounds;
+        private bool _pushing;
+
+        /// <summary>
+        /// Mueve/redimensiona la ventana y entrega su contenido nuevo en un solo paso (UpdateLayeredWindow):
+        /// así no hay un cuadro intermedio con la imagen vieja en el tamaño nuevo, que en las animaciones se ve
+        /// como un temblor.
+        /// </summary>
+        public void RenderSurface(Rectangle bounds)
+        {
+            _nextBounds = bounds;
+            RenderSurface();
+        }
+
         public void RenderSurface()
         {
-            if (!IsHandleCreated || IsDisposed || Width <= 0 || Height <= 0) return;
+            if (!IsHandleCreated || IsDisposed) return;
+            Rectangle target = _nextBounds ?? new Rectangle(Left, Top, Width, Height);
+            _nextBounds = null;
+            if (target.Width <= 0 || target.Height <= 0) return;
 
-            using (Bitmap surface = new Bitmap(Width, Height, PixelFormat.Format32bppArgb))
+            using (Bitmap surface = new Bitmap(target.Width, target.Height, PixelFormat.Format32bppArgb))
             {
                 using (Graphics g = Graphics.FromImage(surface))
                 {
@@ -63,11 +81,11 @@ namespace StreeckSuite.Core
                     g.SmoothingMode = SmoothingMode.AntiAlias;
                     DrawSurface(g);
                 }
-                Push(surface);
+                Push(surface, target.Location);
             }
         }
 
-        private void Push(Bitmap surface)
+        private void Push(Bitmap surface, Point location)
         {
             IntPtr screenDc = NativeMethods.GetDC(IntPtr.Zero);
             IntPtr memoryDc = NativeMethods.CreateCompatibleDC(screenDc);
@@ -78,7 +96,7 @@ namespace StreeckSuite.Core
                 bitmap = surface.GetHbitmap(Color.FromArgb(0));
                 previous = NativeMethods.SelectObject(memoryDc, bitmap);
 
-                NativeMethods.POINT destination = new NativeMethods.POINT(Left, Top);
+                NativeMethods.POINT destination = new NativeMethods.POINT(location.X, location.Y);
                 NativeMethods.SIZE size = new NativeMethods.SIZE(surface.Width, surface.Height);
                 NativeMethods.POINT source = new NativeMethods.POINT(0, 0);
                 NativeMethods.BLENDFUNCTION blend = new NativeMethods.BLENDFUNCTION();
@@ -86,7 +104,9 @@ namespace StreeckSuite.Core
                 blend.SourceConstantAlpha = SurfaceAlpha;
                 blend.AlphaFormat = NativeMethods.AC_SRC_ALPHA;
 
-                NativeMethods.UpdateLayeredWindow(Handle, screenDc, ref destination, ref size, memoryDc, ref source, 0, ref blend, NativeMethods.ULW_ALPHA);
+                _pushing = true; // Windows avisa del cambio de tamaño aquí mismo: no hay que volver a dibujar
+                try { NativeMethods.UpdateLayeredWindow(Handle, screenDc, ref destination, ref size, memoryDc, ref source, 0, ref blend, NativeMethods.ULW_ALPHA); }
+                finally { _pushing = false; }
             }
             finally
             {
@@ -106,7 +126,7 @@ namespace StreeckSuite.Core
         protected override void OnSizeChanged(EventArgs e)
         {
             base.OnSizeChanged(e);
-            RenderSurface();
+            if (!_pushing) RenderSurface(); // Cambio de tamaño hecho por RenderSurface: ya trae su contenido
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)
