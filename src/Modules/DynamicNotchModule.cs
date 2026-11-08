@@ -1269,9 +1269,9 @@ namespace StreeckSuite.Modules
 
             // La ventana es la isla más un margen alrededor para su sombra
             int y = _atBottom ? screen.Bottom - top - height : screen.Y + top; // Abajo: crece hacia arriba
-            // Posición, tamaño e imagen nueva en un solo paso (sin cuadro intermedio que tiemble)
-            RenderSurface(new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, y - ShadowPad,
-                width + 2 * ShadowPad, height + 2 * ShadowPad));
+            Bounds = new Rectangle(screen.X + (screen.Width - width) / 2 - ShadowPad, y - ShadowPad,
+                width + 2 * ShadowPad, height + 2 * ShadowPad);
+            RenderSurface();
         }
 
         private int ShadowPad
