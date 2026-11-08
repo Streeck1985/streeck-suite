@@ -173,6 +173,14 @@ namespace StreeckSuite.Modules
         private readonly System.Diagnostics.Stopwatch _frameClock = new System.Diagnostics.Stopwatch(); // Tiempo real entre cuadros
         private bool _animating; // El cuadro anterior ya estaba animando (si no, su tiempo no cuenta)
 
+        // Medición de cada animación (se anota en el registro para diagnosticar PCs lentas)
+        private readonly System.Diagnostics.Stopwatch _animationClock = new System.Diagnostics.Stopwatch();
+        private int _animationFrames;
+        private double _animationDrawMs;
+
+        [System.Runtime.InteropServices.DllImport("winmm.dll")] private static extern uint timeBeginPeriod(uint milliseconds);
+        [System.Runtime.InteropServices.DllImport("winmm.dll")] private static extern uint timeEndPeriod(uint milliseconds);
+
         private readonly EventBus _eventBus;
         private readonly float _dpiScale;
         private float _scale;                // PPP de la pantalla × tamaño elegido en el panel de ajustes
@@ -1008,16 +1016,43 @@ namespace StreeckSuite.Modules
             if (springing) ApplyBounds();
 
             bool transitioning = springing || _contentOpacity < 1f;
+            if (transitioning && !_animating)
+            {
+                // Empieza una animación: temporizador de Windows de 1 ms para llegar a ~60 cuadros por segundo
+                // (por defecto late cada ~15,6 ms y un intervalo de 16 termina en ~31 ms: unos 20-30 fps)
+                timeBeginPeriod(1);
+                _animationFrames = 0;
+                _animationDrawMs = 0;
+                _animationClock.Restart();
+            }
+            else if (!transitioning && _animating)
+            {
+                timeEndPeriod(1);
+                if (_animationFrames > 0)
+                {
+                    double total = _animationClock.Elapsed.TotalMilliseconds;
+                    Log.Info("[Isla] Animación: {0} cuadros en {1:0} ms ({2:0} fps), dibujo {3:0.0} ms por cuadro",
+                        _animationFrames, total, _animationFrames * 1000.0 / Math.Max(1, total), _animationDrawMs / _animationFrames);
+                }
+            }
             _animating = transitioning;
             if (transitioning || now.Second != _lastFullPaintSecond || (_mode != Mode.Tucked && (ActiveView.IsAnimated || IslandSkin.IsAnimated)))
             {
                 _lastFullPaintSecond = now.Second;
+                long drawStart = _animationClock.ElapsedTicks;
                 RenderSurface();
+                if (transitioning)
+                {
+                    _animationFrames++;
+                    _animationDrawMs += (_animationClock.ElapsedTicks - drawStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                }
             }
 
             // Fuera de las transiciones basta con ~10 fps para lo que se mueve y para seguir al ratón
             bool eyesMoving = EyesEverywhere && (_mode == Mode.Alert || _mode == Mode.Expanded) && IslandEyes.Lively;
-            int interval = transitioning ? 16 : _mode != Mode.Tucked && (ActiveView.WantsSmoothFrames || eyesMoving) ? 33 : 100;
+            // Animando: el temporizador de Windows es de baja prioridad y con 16 ms salían ~38 fps; con 10 ms (y el
+            // temporizador de 1 ms) llega a ~60. Como la animación va según el tiempo real, más cuadros = más suave
+            int interval = transitioning ? 10 : _mode != Mode.Tucked && (ActiveView.WantsSmoothFrames || eyesMoving) ? 33 : 100;
             if (_frameTimer.Interval != interval) _frameTimer.Interval = interval;
         }
 
