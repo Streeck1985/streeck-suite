@@ -72,7 +72,7 @@ namespace StreeckSuite.Modules
             _registeredShortcut = SuiteSettings.SearchHotkey;
             if (!_searchHotkey.Register()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ El atajo de la búsqueda está ocupado; elige otro en Ajustes");
             // Asistente de IA (fase G): Ctrl + Alt + A y el resultado «Preguntar a la IA» de la búsqueda
-            _assistantHotkey = new AssistantHotkey(() => Assistant.Toggle());
+            _assistantHotkey = new AssistantHotkey(() => Assistant.ToggleFromHotkey());
             _registeredAssistantHotkey = SuiteSettings.AssistantHotkey;
             if (!_assistantHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + A ya lo usa otro programa");
             SearchService.AssistantRequested += question => Assistant.ShowAssistant(question);

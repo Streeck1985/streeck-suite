@@ -110,6 +110,7 @@ namespace StreeckSuite.Core
         public static bool AssistantSpeak = false;       // Leer las respuestas en voz alta
         public static AssistantVoiceKind AssistantVoice = AssistantVoiceKind.GeminiCharon; // Charon con Piper Ald de respaldo
         public static bool AssistantHotkey = true;       // Ctrl+Alt+A; si no, solo desde la búsqueda
+        public static bool AssistantAutoListen = true;   // Al abrir con Ctrl+Alt+A el micrófono ya escucha
 
         // Menú de inicio (fase H)
         public static bool StartMenuWinKey = true;       // La tecla Windows abre el menú de la suite
@@ -226,6 +227,7 @@ namespace StreeckSuite.Core
                 AssistantVoiceKind voiceKind;
                 if (values.TryGetValue("asistente.voz", out raw) && Enum.TryParse(raw, out voiceKind)) AssistantVoice = voiceKind;
                 AssistantHotkey = ReadBool(values, "asistente.atajo", AssistantHotkey);
+                AssistantAutoListen = ReadBool(values, "asistente.escucharAlAbrir", AssistantAutoListen);
                 StartMenuWinKey = ReadBool(values, "inicio.teclaWindows", StartMenuWinKey);
                 StartMenuShowRecent = ReadBool(values, "inicio.recientes", StartMenuShowRecent);
                 TaskbarEnabled = ReadBool(values, "barra.islas", TaskbarEnabled);
@@ -313,6 +315,7 @@ namespace StreeckSuite.Core
                     "asistente.leerEnVozAlta=" + (AssistantSpeak ? 1 : 0),
                     "asistente.voz=" + AssistantVoice,
                     "asistente.atajo=" + (AssistantHotkey ? 1 : 0),
+                    "asistente.escucharAlAbrir=" + (AssistantAutoListen ? 1 : 0),
                     "inicio.teclaWindows=" + (StartMenuWinKey ? 1 : 0),
                     "inicio.recientes=" + (StartMenuShowRecent ? 1 : 0),
                     "barra.islas=" + (TaskbarEnabled ? 1 : 0),
