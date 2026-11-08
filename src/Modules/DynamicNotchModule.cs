@@ -170,6 +170,7 @@ namespace StreeckSuite.Modules
         private const float HeightStiffness = 450f, HeightDamping = 29f;
         private const float RadiusStiffness = 1000f, RadiusDamping = 40f;
         private const float FrameSeconds = 1f / 60f;
+        private readonly System.Diagnostics.Stopwatch _frameClock = new System.Diagnostics.Stopwatch(); // Tiempo real entre cuadros
 
         private readonly EventBus _eventBus;
         private readonly float _dpiScale;
@@ -976,11 +977,24 @@ namespace StreeckSuite.Modules
 
             if (DesiredMode() != _mode) UpdateMode();
 
+            // Las animaciones avanzan según el tiempo real, no un paso fijo por cuadro: en PCs donde dibujar la isla
+            // tarda más (laptops con gráficos híbridos, pantallas con escala alta) antes se veían en cámara lenta.
+            // El muelle se integra en pasos de 1/60 s para que el rebote sea el mismo en cualquier PC.
+            float elapsed = _frameClock.IsRunning ? (float)_frameClock.Elapsed.TotalSeconds : FrameSeconds;
+            _frameClock.Restart();
+            elapsed = Math.Max(FrameSeconds / 4, Math.Min(elapsed, 0.1f)); // Tras una pausa larga no salta de golpe
+            int steps = Math.Max(1, (int)Math.Round(elapsed / FrameSeconds));
+
             SizeF target = TargetSize();
-            bool springing = StepSpring(ref _width, ref _widthVelocity, target.Width, WidthStiffness, WidthDamping)
-                           | StepSpring(ref _height, ref _heightVelocity, target.Height, HeightStiffness, HeightDamping)
-                           | StepSpring(ref _radius, ref _radiusVelocity, TargetRadius(target), RadiusStiffness, RadiusDamping);
-            if (_contentOpacity < 1f) _contentOpacity = Math.Min(1f, _contentOpacity + FrameSeconds * 5f);
+            bool springing = false;
+            for (int step = 0; step < steps; step++)
+            {
+                springing = StepSpring(ref _width, ref _widthVelocity, target.Width, WidthStiffness, WidthDamping)
+                          | StepSpring(ref _height, ref _heightVelocity, target.Height, HeightStiffness, HeightDamping)
+                          | StepSpring(ref _radius, ref _radiusVelocity, TargetRadius(target), RadiusStiffness, RadiusDamping);
+                if (!springing) break;
+            }
+            if (_contentOpacity < 1f) _contentOpacity = Math.Min(1f, _contentOpacity + elapsed * 5f);
 
             if (springing) ApplyBounds();
 
