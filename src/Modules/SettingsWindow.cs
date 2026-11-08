@@ -19,7 +19,7 @@ namespace StreeckSuite.Modules
         public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, StartIcon, Widgets, Clock, Eyes, About }
 
         // Medidas del mockup (a 96 PPP)
-        private const float W = 800, H = 768, SideW = 210, ContentX = 238, ContentW = 534;
+        private const float W = 800, H = 808, SideW = 210, ContentX = 238, ContentW = 534;
         private const float ContentRight = ContentX + ContentW;
         private const float InnerX = ContentX + 16, InnerW = ContentW - 32;
 
@@ -605,15 +605,19 @@ namespace StreeckSuite.Modules
                 f => { SuiteSettings.IslandSongPeekMs = (int)Math.Round(f * 10) * 1000; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
 
             y = 472;
-            DrawCard(g, y, 78);
+            DrawCard(g, y, 118);
             DrawInlineSlider(g, y + 12, "Tamaño", SuiteSettings.IslandScalePercent + " %", (SuiteSettings.IslandScalePercent - 70) / 50f,
                 f => { SuiteSettings.IslandScalePercent = 70 + (int)Math.Round(f * 10) * 5; SuiteSettings.NotifyChanged(); });
             // Opacidad: solo el fondo (las letras siempre se ven completas)
             DrawInlineSlider(g, y + 44, "Opacidad", SuiteSettings.IslandOpacityPercent + " %", (SuiteSettings.IslandOpacityPercent - 30) / 70f,
                 f => { SuiteSettings.IslandOpacityPercent = 30 + (int)Math.Round(f * 70); SuiteSettings.NotifyChanged(); });
+            // Velocidad de las animaciones al abrir y cambiar de vista (Normal = la original)
+            DrawText(g, "Animación", _semi14, TextColor, new RectangleF(InnerX, y + 76, 120, 34), StringAlignment.Near);
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 76, 330, 32), new[] { "Lenta", "Normal", "Rápida" },
+                (int)SuiteSettings.IslandAnimation, i => { SuiteSettings.IslandAnimation = (SuiteSettings.AnimationSpeed)i; SuiteSettings.Save(); });
 
             // Estilo (fase J1) y color del fondo, el mismo para los dos estilos
-            y = 562;
+            y = 602;
             DrawCard(g, y, 188);
             // Varios monitores: la isla en el principal o en el del ratón
             DrawText(g, "Monitor", _semi14, TextColor, new RectangleF(InnerX, y + 142, 120, 40), StringAlignment.Near);
@@ -624,7 +628,7 @@ namespace StreeckSuite.Modules
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 101, 330, 34), new[] { "Widgets", "Ojitos" },
                 (int)SuiteSettings.IslandIdle, i => { SuiteSettings.IslandIdle = (SuiteSettings.IslandIdleKind)i; SuiteSettings.Save(); });
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y, 120, 56), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba (Bloom)", "Flotante" },
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba", "Flotante" },
                 (int)SuiteSettings.IslandStyle, i => { SuiteSettings.IslandStyle = (SuiteSettings.IslandStyleKind)i; SuiteSettings.Save(); });
             DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 54, 120, 40), StringAlignment.Near);
             string[] colors = { "#000000", "#1c1c1e", "#0f172a", "#1e1b4b", "#2e1065", "#052e16", "#3f0d12" };

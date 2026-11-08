@@ -61,6 +61,8 @@ namespace StreeckSuite.Core
         public enum IslandMonitorKind { Primary, Mouse }
         public static IslandMonitorKind IslandMonitor = IslandMonitorKind.Primary; // Varios monitores: la isla en el principal o donde esté el ratón
         public static IslandIdleKind IslandIdle = IslandIdleKind.Widgets; // Isla cerrada: widgets a los lados u ojitos
+        public enum AnimationSpeed { Slow, Normal, Fast }
+        public static AnimationSpeed IslandAnimation = AnimationSpeed.Normal; // Velocidad al abrir/cambiar (Normal = la original)
 
         // Ojitos (mockup «Ojitos del notch»)
         public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops, Hearts, Stars, Glasses, Owl, Sleepy, Cyber }
@@ -184,6 +186,8 @@ namespace StreeckSuite.Core
                 EyesMoods = ReadBool(values, "ojos.emociones", EyesMoods);
                 EyesFidgets = ReadBool(values, "ojos.sinuso", EyesFidgets);
                 UpdateAuto = ReadBool(values, "actualizar.auto", UpdateAuto);
+                AnimationSpeed animation;
+                if (values.TryGetValue("isla.animacion", out raw) && Enum.TryParse(raw, out animation)) IslandAnimation = animation;
                 IslandMonitorKind monitor;
                 if (values.TryGetValue("isla.monitor", out raw) && Enum.TryParse(raw, out monitor)) IslandMonitor = monitor;
                 IslandScalePercent = ReadInt(values, "isla.tamano", IslandScalePercent, 70, 120);
@@ -282,6 +286,7 @@ namespace StreeckSuite.Core
                     "ojos.sinuso=" + (EyesFidgets ? 1 : 0),
                     "actualizar.auto=" + (UpdateAuto ? 1 : 0),
                     "isla.monitor=" + IslandMonitor,
+                    "isla.animacion=" + IslandAnimation,
                     "isla.tamano=" + IslandScalePercent,
                     "isla.estilo=" + IslandStyle,
                     "avisos.activos=" + (NotificationsEnabled ? 1 : 0),

@@ -171,6 +171,7 @@ namespace StreeckSuite.Modules
         private const float RadiusStiffness = 1000f, RadiusDamping = 40f;
         private const float FrameSeconds = 1f / 60f;
         private readonly System.Diagnostics.Stopwatch _frameClock = new System.Diagnostics.Stopwatch(); // Tiempo real entre cuadros
+        private bool _animating; // El cuadro anterior ya estaba animando (si no, su tiempo no cuenta)
 
         private readonly EventBus _eventBus;
         private readonly float _dpiScale;
@@ -982,16 +983,24 @@ namespace StreeckSuite.Modules
             // El muelle se integra en pasos de 1/60 s para que el rebote sea el mismo en cualquier PC.
             float elapsed = _frameClock.IsRunning ? (float)_frameClock.Elapsed.TotalSeconds : FrameSeconds;
             _frameClock.Restart();
-            elapsed = Math.Max(FrameSeconds / 4, Math.Min(elapsed, 0.1f)); // Tras una pausa larga no salta de golpe
+            // Al empezar una animación el cuadro anterior fue hace ~100 ms (la isla en reposo late más lento): ese
+            // tiempo no cuenta, si no la animación arranca con un brinco
+            if (!_animating) elapsed = FrameSeconds;
+            elapsed = Math.Max(FrameSeconds / 4, Math.Min(elapsed, 0.1f));
+            // Velocidad elegida en Ajustes → Isla (Normal = la sensación original de la isla)
+            float speed = SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Slow ? 0.35f
+                        : SuiteSettings.IslandAnimation == SuiteSettings.AnimationSpeed.Fast ? 0.85f : 0.5f;
+            elapsed *= speed;
             int steps = Math.Max(1, (int)Math.Round(elapsed / FrameSeconds));
+            float stepSeconds = elapsed / steps;
 
             SizeF target = TargetSize();
             bool springing = false;
             for (int step = 0; step < steps; step++)
             {
-                springing = StepSpring(ref _width, ref _widthVelocity, target.Width, WidthStiffness, WidthDamping)
-                          | StepSpring(ref _height, ref _heightVelocity, target.Height, HeightStiffness, HeightDamping)
-                          | StepSpring(ref _radius, ref _radiusVelocity, TargetRadius(target), RadiusStiffness, RadiusDamping);
+                springing = StepSpring(ref _width, ref _widthVelocity, target.Width, WidthStiffness, WidthDamping, stepSeconds)
+                          | StepSpring(ref _height, ref _heightVelocity, target.Height, HeightStiffness, HeightDamping, stepSeconds)
+                          | StepSpring(ref _radius, ref _radiusVelocity, TargetRadius(target), RadiusStiffness, RadiusDamping, stepSeconds);
                 if (!springing) break;
             }
             if (_contentOpacity < 1f) _contentOpacity = Math.Min(1f, _contentOpacity + elapsed * 5f);
@@ -999,6 +1008,7 @@ namespace StreeckSuite.Modules
             if (springing) ApplyBounds();
 
             bool transitioning = springing || _contentOpacity < 1f;
+            _animating = transitioning;
             if (transitioning || now.Second != _lastFullPaintSecond || (_mode != Mode.Tucked && (ActiveView.IsAnimated || IslandSkin.IsAnimated)))
             {
                 _lastFullPaintSecond = now.Second;
@@ -1014,11 +1024,11 @@ namespace StreeckSuite.Modules
         /// <summary>
         /// Avanza un paso del muelle amortiguado. Devuelve true mientras siga en movimiento.
         /// </summary>
-        private static bool StepSpring(ref float value, ref float velocity, float target, float stiffness, float damping)
+        private static bool StepSpring(ref float value, ref float velocity, float target, float stiffness, float damping, float seconds)
         {
             float acceleration = stiffness * (target - value) - damping * velocity;
-            velocity += acceleration * FrameSeconds;
-            value += velocity * FrameSeconds;
+            velocity += acceleration * seconds;
+            value += velocity * seconds;
 
             if (Math.Abs(target - value) < 0.5f && Math.Abs(velocity) < 0.5f)
             {
