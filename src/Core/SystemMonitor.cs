@@ -61,7 +61,12 @@ namespace StreeckSuite.Core
             {
                 _isGameModeSuspended = true;
                 _eventBus.Publish(Events.GameModeActive, true);
-                Log.Info("[SystemMonitor] Juego / Pantalla completa detectada -> Suite en suspensión");
+                // Se anota quién fue, para encontrar falsas alarmas (ventanas que cubren la pantalla sin ser juegos)
+                string who = "?";
+                try { using (Process p = Process.GetProcessById((int)processId)) who = p.ProcessName; } catch (Exception) { }
+                StringBuilder cls = new StringBuilder(256);
+                NativeMethods.GetClassName(foregroundHwnd, cls, cls.Capacity);
+                Log.Info("[SystemMonitor] Juego / Pantalla completa detectada -> Suite en suspensión ({0}, {1})", who, cls);
             }
             else if (!isFullScreen && _isGameModeSuspended)
             {
@@ -85,8 +90,20 @@ namespace StreeckSuite.Core
             return false;
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
+
         private static bool CoversItsScreen(IntPtr hwnd)
         {
+            // Ventanas que cubren la pantalla sin verse (capas de NVIDIA, Discord, clientes de juegos...): no cuentan
+            if (!IsWindowVisible(hwnd)) return false;
+            int cloaked;
+            if (DwmGetWindowAttribute(hwnd, 14 /* DWMWA_CLOAKED */, out cloaked, 4) == 0 && cloaked != 0) return false;
+            int exStyle = GetWindowLong(hwnd, -20 /* GWL_EXSTYLE */);
+            if ((exStyle & 0x20) != 0 && (exStyle & 0x80000) != 0) return false; // Transparente a los clics (WS_EX_TRANSPARENT + LAYERED)
+            if ((exStyle & 0x80) != 0) return false; // Ventana de herramienta (WS_EX_TOOLWINDOW): no es un juego
+
             NativeMethods.RECT rect;
             if (!NativeMethods.GetWindowRect(hwnd, out rect)) return false;
 
