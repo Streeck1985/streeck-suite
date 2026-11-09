@@ -91,6 +91,7 @@ namespace StreeckSuite.Core
         }
 
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsZoomed(IntPtr hwnd);
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
         [System.Runtime.InteropServices.DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
 
@@ -103,6 +104,9 @@ namespace StreeckSuite.Core
             int exStyle = GetWindowLong(hwnd, -20 /* GWL_EXSTYLE */);
             if ((exStyle & 0x20) != 0 && (exStyle & 0x80000) != 0) return false; // Transparente a los clics (WS_EX_TRANSPARENT + LAYERED)
             if ((exStyle & 0x80) != 0) return false; // Ventana de herramienta (WS_EX_TOOLWINDOW): no es un juego
+            // Ventana maximizada (no pantalla completa): con la barra que se oculta sola cubre toda la pantalla, pero
+            // es VS Code, el navegador... no un juego ni un video con F11
+            if (IsZoomed(hwnd)) return false;
 
             NativeMethods.RECT rect;
             if (!NativeMethods.GetWindowRect(hwnd, out rect)) return false;
