@@ -126,6 +126,18 @@ namespace StreeckSuite.Modules
                 return new AssistantAction { Glyph = "", Title = "Silencio activado o quitado", Detail = "" };
             }
 
+            // No molestar / Pausar notificaciones
+            if (Regex.IsMatch(text, @"^(pausar|pausa|silenciar|silencia|no molestar|desactivar)( las| los)? (notificaciones|avisos)$|^no molestar$"))
+            {
+                if (!SuiteSettings.DoNotDisturb) NotificationService.ToggleDoNotDisturb();
+                return new AssistantAction { Glyph = "", Title = "Notificaciones en pausa", Detail = "Atajo: Ctrl + Alt + N" };
+            }
+            if (Regex.IsMatch(text, @"^(activar|activa|reanudar|reanuda|quitar silencio)( las| los)? (notificaciones|avisos)$"))
+            {
+                if (SuiteSettings.DoNotDisturb) NotificationService.ToggleDoNotDisturb();
+                return new AssistantAction { Glyph = "", Title = "Notificaciones activadas", Detail = "Atajo: Ctrl + Alt + N" };
+            }
+
             // Modo privacidad
             m = Regex.Match(text, @"^(activa|desactiva|enciende|apaga|quita|pon)( el)? modo (de )?privacidad$");
             if (m.Success)

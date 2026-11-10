@@ -63,7 +63,12 @@ namespace StreeckSuite.Modules
         public void SetSettings(ClockSettings settings)
         {
             bool secondsChanged = settings.ShowSeconds != _settings.ShowSeconds;
+            bool monitorChanged = settings.MonitorIndex != _settings.MonitorIndex;
             _settings = settings;
+            if (monitorChanged && IsEmbedded)
+            {
+                EmbedInDesktop();
+            }
             Invalidate();
             if (secondsChanged && _minuteTimer.Enabled) ScheduleNextMinute();
         }
@@ -174,8 +179,9 @@ namespace StreeckSuite.Modules
             NativeMethods.SetLayeredWindowAttributes(Handle, 0, 255, NativeMethods.LWA_ALPHA);
             NativeMethods.SetParent(Handle, _host);
 
-            // Coordenadas de la pantalla principal convertidas a las de la ventana anfitriona
-            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            // Coordenadas de la pantalla destino convertidas a las de la ventana anfitriona
+            Screen targetScreen = DepthClockModule.GetTargetScreen(_settings);
+            Rectangle screen = targetScreen != null ? targetScreen.Bounds : Screen.PrimaryScreen.Bounds;
             NativeMethods.RECT rect = new NativeMethods.RECT();
             rect.Left = screen.Left;
             rect.Top = screen.Top;

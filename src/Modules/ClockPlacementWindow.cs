@@ -44,7 +44,8 @@ namespace StreeckSuite.Modules
             _settings = clock.CurrentSettings;
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
-            Bounds = Screen.PrimaryScreen.Bounds;
+            Screen targetScreen = DepthClockModule.GetTargetScreen(_settings);
+            Bounds = (targetScreen != null ? targetScreen : Screen.PrimaryScreen).Bounds;
             TopMost = true;
             ShowInTaskbar = false;
             DoubleBuffered = true;

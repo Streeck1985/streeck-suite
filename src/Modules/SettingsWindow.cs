@@ -55,6 +55,8 @@ namespace StreeckSuite.Modules
         private static readonly CultureInfo Spanish = new CultureInfo("es-ES");
 
         private static SettingsWindow _instance;
+        internal static bool ForceMultiMonitorPreview = false;
+        internal static bool ForceMultiMonitorP2 = false;
 
         private class Hit
         {
@@ -79,11 +81,17 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static void Open(Page page)
         {
+            if (_instance != null && !_instance.IsDisposed && _instance.InvokeRequired)
+            {
+                _instance.BeginInvoke((Action)(() => Open(page)));
+                return;
+            }
             if (_instance == null || _instance.IsDisposed) _instance = new SettingsWindow();
             _instance._page = page;
             if (!_instance.Visible) _instance.Show();
             if (_instance.WindowState == FormWindowState.Minimized) _instance.WindowState = FormWindowState.Normal;
             _instance.Activate();
+            _instance.BringToFront();
             _instance.Invalidate();
         }
 
@@ -341,6 +349,25 @@ namespace StreeckSuite.Modules
                         bitmap.Save(System.IO.Path.Combine(folder, "ajustes-" + page.ToString().ToLowerInvariant() + ".png"));
                     }
                 }
+
+                // Renderizar también la versión multimonitor para preview y documentación fiel
+                ForceMultiMonitorPreview = true;
+                ForceMultiMonitorP2 = false;
+                window._page = Page.Clock;
+                using (Bitmap bitmap = new Bitmap(window.Px(W), window.Px(H)))
+                {
+                    using (Graphics g = Graphics.FromImage(bitmap)) window.PaintAll(g);
+                    bitmap.Save(System.IO.Path.Combine(folder, "ajustes-clock-multimonitor-p1.png"));
+                }
+
+                ForceMultiMonitorP2 = true;
+                using (Bitmap bitmap = new Bitmap(window.Px(W), window.Px(H)))
+                {
+                    using (Graphics g = Graphics.FromImage(bitmap)) window.PaintAll(g);
+                    bitmap.Save(System.IO.Path.Combine(folder, "ajustes-clock-multimonitor-p2.png"));
+                }
+                ForceMultiMonitorPreview = false;
+                ForceMultiMonitorP2 = false;
             }
         }
 
@@ -687,16 +714,19 @@ namespace StreeckSuite.Modules
             DrawTitle(g, "Avisos");
 
             float y = 66;
-            DrawCard(g, y, 102);
-            DrawText(g, "Notificaciones en la isla", _semi14, TextColor, new RectangleF(InnerX, y + 12, 400, 18), StringAlignment.Near);
-            DrawText(g, "Los avisos de tus apps aparecen arriba, además de en Windows", _reg12, Gray, new RectangleF(InnerX, y + 32, 420, 16), StringAlignment.Near);
-            DrawToggle(g, ContentRight - 16 - 44, y + 19, SuiteSettings.NotificationsEnabled, false,
+            DrawCard(g, y, 168);
+            DrawToggleRow(g, y, "Pausar notificaciones", "Modo No molestar (atajo rápido: Ctrl + Alt + N)", SuiteSettings.DoNotDisturb,
+                () => { NotificationService.ToggleDoNotDisturb(); Invalidate(); });
+            DrawRowDivider(g, y + 58);
+            DrawToggleRow(g, y + 58, "Notificaciones en la isla", "Los avisos de tus apps aparecen arriba, además de en Windows",
+                SuiteSettings.NotificationsEnabled,
                 () => { SuiteSettings.NotificationsEnabled = !SuiteSettings.NotificationsEnabled; SuiteSettings.Save(); });
-            DrawLabelValue(g, y + 56, "Mostrar cada aviso durante", SecondsText(SuiteSettings.NotificationDurationMs), _reg13, _bold13);
-            DrawSlider(g, new RectangleF(InnerX, y + 84, InnerW, 6), (SuiteSettings.NotificationDurationMs - 1000) / 9000f,
+            DrawRowDivider(g, y + 116);
+            DrawLabelValue(g, y + 120, "Mostrar cada aviso durante", SecondsText(SuiteSettings.NotificationDurationMs), _reg13, _bold13);
+            DrawSlider(g, new RectangleF(InnerX, y + 148, InnerW, 6), (SuiteSettings.NotificationDurationMs - 1000) / 9000f,
                 f => { SuiteSettings.NotificationDurationMs = 1000 + (int)Math.Round(f * 9) * 1000; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
 
-            y = 182;
+            y = 66 + 168 + 14;
             List<NotificationApps.App> apps = NotificationApps.All;
             int rows = Math.Max(1, Math.Min(AppRowsVisible, (apps.Count + 1) / 2));
             float cardHeight = 36 + rows * 40 + 6;
@@ -1568,9 +1598,49 @@ namespace StreeckSuite.Modules
             bool stretched = s.Style == ClockStyle.Samsung;
             float y = 62;
             DrawCard(g, y, 66);
-            DrawText(g, "Estilo", _semi13, TextColor, new RectangleF(InnerX, y + 8, 200, 18), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(InnerX, y + 28, InnerW, 30), new[] { "Detrás del sujeto", "Contorno" },
-                (int)s.Style, i => ChangeClock(c => c.Style = (ClockStyle)i));
+            Screen[] screens = Screen.AllScreens;
+            bool isMulti = ForceMultiMonitorPreview || (screens != null && screens.Length > 1);
+            if (isMulti)
+            {
+                float gap = 16;
+                float halfW = (InnerW - gap) / 2;
+
+                // Columna izquierda: Estilo
+                DrawText(g, "Estilo", _semi13, TextColor, new RectangleF(InnerX, y + 8, halfW, 18), StringAlignment.Near);
+                DrawSegmented(g, new RectangleF(InnerX, y + 28, halfW, 30), new[] { "Detrás", "Contorno" },
+                    (int)s.Style, i => ChangeClock(c => c.Style = (ClockStyle)i));
+
+                // Columna derecha: Pantalla destino
+                float rightX = InnerX + halfW + gap;
+                DrawText(g, "Pantalla", _semi13, TextColor, new RectangleF(rightX, y + 8, halfW, 18), StringAlignment.Near);
+
+                string[] screenNames;
+                if (ForceMultiMonitorPreview && (screens == null || screens.Length <= 1))
+                {
+                    screenNames = new[] { "P1 (1080p ★)", "P2 (1440p)" };
+                }
+                else
+                {
+                    screenNames = new string[screens.Length];
+                    for (int i = 0; i < screens.Length; i++)
+                    {
+                        if (screens.Length == 2)
+                            screenNames[i] = string.Format("P{0} ({1}p{2})", i + 1, Math.Min(screens[i].Bounds.Width, screens[i].Bounds.Height), screens[i].Primary ? " ★" : "");
+                        else
+                            screenNames[i] = string.Format("P{0}{1}", i + 1, screens[i].Primary ? " ★" : "");
+                    }
+                }
+
+                int selectedMonitor = ForceMultiMonitorP2 ? 1 : Math.Max(0, Math.Min(s.MonitorIndex, screenNames.Length - 1));
+                DrawSegmented(g, new RectangleF(rightX, y + 28, halfW, 30), screenNames,
+                    selectedMonitor, i => ChangeClock(c => c.MonitorIndex = i));
+            }
+            else
+            {
+                DrawText(g, "Estilo", _semi13, TextColor, new RectangleF(InnerX, y + 8, 200, 18), StringAlignment.Near);
+                DrawSegmented(g, new RectangleF(InnerX, y + 28, InnerW, 30), new[] { "Detrás del sujeto", "Contorno" },
+                    (int)s.Style, i => ChangeClock(c => c.Style = (ClockStyle)i));
+            }
 
             // Posición y tamaño (el estirado suma cuánto puede crecer un número)
             y = 136;

@@ -44,6 +44,19 @@ namespace StreeckSuite.Modules
         internal static DepthClockModule Current { get; private set; }
 
         /// <summary>
+        /// Obtiene el monitor configurado en los ajustes o el principal si el índice no es válido.
+        /// </summary>
+        internal static Screen GetTargetScreen(ClockSettings settings)
+        {
+            Screen[] all = Screen.AllScreens;
+            if (settings != null && settings.MonitorIndex >= 0 && settings.MonitorIndex < all.Length)
+            {
+                return all[settings.MonitorIndex];
+            }
+            return Screen.PrimaryScreen;
+        }
+
+        /// <summary>
         /// Se analizó un fondo nuevo (cambia si la IA encontró sujeto).
         /// </summary>
         internal event Action LayersChanged;
@@ -76,8 +89,21 @@ namespace StreeckSuite.Modules
             _watchTimer.Interval = WallpaperCheckIntervalMs;
             _watchTimer.Tick += (s, e) => CheckWallpaper();
             _watchTimer.Start();
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             CheckWallpaper();
             UpdateWeatherService();
+        }
+
+        private void OnDisplaySettingsChanged(object sender, EventArgs e)
+        {
+            if (_ui == null) return;
+            _ui.Post(state =>
+            {
+                if (!_isRunning) return;
+                Log.Info("[DepthClockModule] Configuración de pantallas cambiada; reubicando reloj");
+                _wallpaperKey = null;
+                CheckWallpaper();
+            }, null);
         }
 
         /// <summary>
@@ -113,6 +139,7 @@ namespace StreeckSuite.Modules
         public void Stop()
         {
             _isRunning = false;
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             if (_watchTimer != null) { _watchTimer.Dispose(); _watchTimer = null; }
             if (_recomposeTimer != null) { _recomposeTimer.Dispose(); _recomposeTimer = null; }
             UpdateWeatherService();
@@ -186,9 +213,18 @@ namespace StreeckSuite.Modules
                               || settings.FontFamily != _settings.FontFamily || settings.ShowSeconds != _settings.ShowSeconds
                               || settings.Style != _settings.Style;
             bool enabledChanged = settings.Enabled != _settings.Enabled;
+            bool monitorChanged = settings.MonitorIndex != _settings.MonitorIndex;
             _settings = settings;
             _settings.Save();
             UpdateWeatherService();
+
+            if (monitorChanged)
+            {
+                DestroyForm();
+                _wallpaperKey = null;
+                CheckWallpaper();
+                return;
+            }
 
             if (enabledChanged)
             {
@@ -255,12 +291,12 @@ namespace StreeckSuite.Modules
             }
 
             string path = WallpaperInfo.GetCurrentPath();
-            string key = WallpaperInfo.GetChangeKey(path);
+            Screen targetScreen = GetTargetScreen(_settings);
+            string key = WallpaperInfo.GetChangeKey(path, targetScreen);
             if (key == _wallpaperKey) return;
             if (Interlocked.CompareExchange(ref _processing, 1, 0) != 0) return;
 
             _wallpaperKey = key;
-            Size screen = Screen.PrimaryScreen.Bounds.Size;
             ClockSettings settings = _settings.Clone();
 
             ThreadPool.QueueUserWorkItem(_ =>
@@ -281,7 +317,7 @@ namespace StreeckSuite.Modules
                         VisionModel.Subject.EnsureDownloaded();
                     }
 
-                    DepthClockLayers layers = DepthClockLayers.Analyze(path, screen);
+                    DepthClockLayers layers = DepthClockLayers.Analyze(path, targetScreen);
                     layers.Foreground = layers.ComposeForeground(settings);
                     _ui.Post(state =>
                     {
@@ -385,9 +421,15 @@ namespace StreeckSuite.Modules
 
         public static string GetChangeKey(string path)
         {
+            return GetChangeKey(path, Screen.PrimaryScreen);
+        }
+
+        public static string GetChangeKey(string path, Screen targetScreen)
+        {
             if (path == null) return "none";
             DateTime stamp = File.Exists(TranscodedPath) ? File.GetLastWriteTimeUtc(TranscodedPath) : File.GetLastWriteTimeUtc(path);
-            return path + "|" + stamp.Ticks + "|" + Screen.PrimaryScreen.Bounds.Size;
+            string screenKey = targetScreen != null ? targetScreen.Bounds.ToString() : Screen.PrimaryScreen.Bounds.ToString();
+            return path + "|" + stamp.Ticks + "|" + screenKey;
         }
 
         /// <summary>

@@ -67,6 +67,18 @@ namespace StreeckSuite.Modules
             });
             privacyItem.ShortcutKeyDisplayString = "Ctrl+Alt+P";
 
+            ToolStripMenuItem dndItem = TrayMenuStyle.Item("Pausar notificaciones", "", (s, e) =>
+            {
+                NotificationService.ToggleDoNotDisturb();
+            });
+            dndItem.ShortcutKeyDisplayString = "Ctrl+Alt+N";
+
+            _contextMenu.Opening += (s, e) =>
+            {
+                dndItem.Checked = SuiteSettings.DoNotDisturb;
+                dndItem.Text = SuiteSettings.DoNotDisturb ? "Notificaciones en pausa" : "Pausar notificaciones";
+            };
+
             // Widgets, reloj, isla y privacidad se configuran en la ventana de ajustes
             ToolStripMenuItem settingsItem = TrayMenuStyle.Item("Ajustes…", "", (s, e) =>
             {
@@ -79,6 +91,7 @@ namespace StreeckSuite.Modules
             });
 
             _contextMenu.Items.Add(privacyItem);
+            _contextMenu.Items.Add(dndItem);
             _contextMenu.Items.Add(settingsItem);
             _contextMenu.Items.Add(new ToolStripSeparator());
             _contextMenu.Items.Add(exitItem);
@@ -89,7 +102,7 @@ namespace StreeckSuite.Modules
             _notifyIcon.ContextMenuStrip = _contextMenu;
             _notifyIcon.DoubleClick += (s, e) =>
             {
-                _eventBus.Publish(Events.NotchShowMessage, "✨ Streeck Suite en ejecución");
+                SettingsWindow.Open(SettingsWindow.Page.Clock);
             };
         }
 
