@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Threading;
+using System.Windows.Forms;
 using StreeckSuite.Core;
 using Windows.UI.Notifications;
 using Windows.UI.Notifications.Management;
@@ -47,6 +48,22 @@ namespace StreeckSuite.Modules
         /// Llegó un aviso nuevo (en el hilo de segundo plano).
         /// </summary>
         public static event Action<IslandNotification> Arrived;
+
+        /// <summary>
+        /// Cambió el estado de No molestar / Pausar notificaciones.
+        /// </summary>
+        public static event Action<bool> DoNotDisturbChanged;
+
+        /// <summary>
+        /// Alterna la pausa de notificaciones y avisa a los oyentes.
+        /// </summary>
+        public static void ToggleDoNotDisturb()
+        {
+            SuiteSettings.DoNotDisturb = !SuiteSettings.DoNotDisturb;
+            SuiteSettings.Save();
+            Action<bool> handler = DoNotDisturbChanged;
+            if (handler != null) handler(SuiteSettings.DoNotDisturb);
+        }
 
         /// <summary>
         /// Historial actual, del más reciente al más antiguo.
@@ -330,6 +347,48 @@ namespace StreeckSuite.Modules
             {
                 Log.Error("[NotificationService] No se pudo guardar {0}: {1}", FilePath, ex.Message);
             }
+        }
+    }
+
+    /// <summary>
+    /// Atajo global Ctrl + Alt + N para alternar rápidamente la pausa de notificaciones (No molestar).
+    /// </summary>
+    internal class NotificationHotkey : NativeWindow, IDisposable
+    {
+        private const int HotkeyId = 0x534E; // 'S' 'N' (Streeck Notifications)
+        private const uint KeyN = 0x4E;
+        private readonly Action _pressed;
+        private bool _registered;
+
+        public NotificationHotkey(Action pressed)
+        {
+            _pressed = pressed;
+            CreateHandle(new CreateParams());
+        }
+
+        public bool Apply()
+        {
+            if (_registered) { NativeMethods.UnregisterHotKey(Handle, HotkeyId); _registered = false; }
+            _registered = NativeMethods.RegisterHotKey(Handle, HotkeyId,
+                NativeMethods.MOD_NOREPEAT | NativeMethods.MOD_CONTROL | NativeMethods.MOD_ALT, KeyN);
+            if (!_registered) Log.Error("[NotificationHotkey] Ctrl+Alt+N está ocupado por otro programa");
+            return _registered;
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == NativeMethods.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId && _pressed != null)
+            {
+                _pressed();
+            }
+            base.WndProc(ref m);
+        }
+
+        public void Dispose()
+        {
+            if (Handle == IntPtr.Zero) return;
+            if (_registered) NativeMethods.UnregisterHotKey(Handle, HotkeyId);
+            DestroyHandle();
         }
     }
 }

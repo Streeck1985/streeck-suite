@@ -10,6 +10,7 @@ namespace StreeckSuite
     public static class Program
     {
         private const string ExitEventName = @"Local\StreeckSuite.Exit";
+        private const string OpenSettingsEventName = @"Local\StreeckSuite.OpenSettings";
 
         [STAThread]
         public static void Main(string[] args)
@@ -182,16 +183,30 @@ namespace StreeckSuite
                         using (EventWaitHandle exit = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName)) exit.Set();
                         return;
                     }
-                    Log.Info("[Program] Ya hay una instancia en ejecución; se cierra esta");
-                    return;
+
+                    // Si ya está abierta, pedir a la instancia activa que traiga la ventana de Ajustes al frente
+                    try
+                    {
+                        using (EventWaitHandle open = EventWaitHandle.OpenExisting(OpenSettingsEventName))
+                        {
+                            open.Set();
+                            Log.Info("[Program] Ya hay una instancia en ejecución; se abrió la ventana de Ajustes");
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                        Log.Info("[Program] Ya hay una instancia en ejecución; se cierra esta");
+                        return;
+                    }
                 }
                 if (args != null && args.Length >= 1 && args[0] == "--salir") return;
 
-                Run();
+                Run(args);
             }
         }
 
-        private static void Run()
+        private static void Run(string[] args)
         {
             // Debe ir antes de crear cualquier ventana; sin esto Windows escala el notch como mapa de bits y se ve borroso
             NativeMethods.SetProcessDPIAware();
@@ -226,17 +241,35 @@ namespace StreeckSuite
             MemoryTrim.Start(); // Devuelve a Windows la memoria que ya no se usa
             Modules.UpdateService.StartAutomatic(); // Busca versiones nuevas en GitHub (al minuto y cada día)
 
-            // Cierre ordenado pedido desde fuera (--salir), en el hilo de la interfaz
+            // Cierre ordenado y apertura de ajustes pedidos desde fuera en el hilo de la interfaz
             using (Control exitTarget = new Control())
             using (EventWaitHandle exitRequested = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName))
+            using (EventWaitHandle settingsRequested = new EventWaitHandle(false, EventResetMode.AutoReset, OpenSettingsEventName))
             {
                 IntPtr exitHandle = exitTarget.Handle;
                 RegisteredWaitHandle exitWait = ThreadPool.RegisterWaitForSingleObject(exitRequested,
                     (state, timedOut) => exitTarget.BeginInvoke((Action)Application.Exit), null, Timeout.Infinite, true);
 
+                RegisteredWaitHandle settingsWait = ThreadPool.RegisterWaitForSingleObject(settingsRequested,
+                    (state, timedOut) => exitTarget.BeginInvoke((Action)(() => SettingsWindow.Open(SettingsWindow.Page.Clock))), null, Timeout.Infinite, false);
+
+                // Si se solicitó abrir ajustes directamente desde la línea de comandos
+                if (args != null && args.Length >= 1)
+                {
+                    if (args[0] == "--ajustes" || args[0] == "--reloj" || args[0] == "--open")
+                    {
+                        SettingsWindow.Open(SettingsWindow.Page.Clock);
+                    }
+                    else if (args[0] == "--avisos" || args[0] == "--notificaciones")
+                    {
+                        SettingsWindow.Open(SettingsWindow.Page.Notifications);
+                    }
+                }
+
                 // 5. Ciclo de vida nativo de Windows (Bandeja y overlays)
                 Application.Run();
                 exitWait.Unregister(null);
+                settingsWait.Unregister(null);
             }
 
             // 6. Limpieza al salir

@@ -28,6 +28,9 @@ namespace StreeckSuite.Modules
         private AssistantWindow _assistant;
         private AssistantHotkey _assistantHotkey;
         private bool _registeredAssistantHotkey;
+        private NotificationHotkey _notificationHotkey;
+        private Action<bool> _dndChangedHandler;
+        private bool _isGameActive;
 
         public DynamicNotchModule()
         {
@@ -76,6 +79,27 @@ namespace StreeckSuite.Modules
             _registeredAssistantHotkey = SuiteSettings.AssistantHotkey;
             if (!_assistantHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + A ya lo usa otro programa");
             SearchService.AssistantRequested += question => Assistant.ShowAssistant(question);
+
+            // Pausa de notificaciones (No molestar): Ctrl + Alt + N (se ignora durante juegos)
+            _notificationHotkey = new NotificationHotkey(() =>
+            {
+                if (_isGameActive) return;
+                NotificationService.ToggleDoNotDisturb();
+            });
+            if (!_notificationHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + N ya lo usa otro programa");
+
+            _dndChangedHandler = dnd =>
+            {
+                if (_overlayForm != null && !_overlayForm.IsDisposed)
+                {
+                    _overlayForm.BeginInvokeSafe(() =>
+                    {
+                        _overlayForm.ShowPeek(dnd ? "" : "", dnd ? "Avisos en pausa (Ctrl+Alt+N)" : "Avisos activos", dnd ? IslandPainter.Amber : IslandPainter.Sky);
+                    });
+                }
+            };
+            NotificationService.DoNotDisturbChanged += _dndChangedHandler;
+
             SuiteSettings.Changed += () =>
             {
                 if (_assistantHotkey == null || SuiteSettings.AssistantHotkey == _registeredAssistantHotkey) return;
@@ -103,6 +127,8 @@ namespace StreeckSuite.Modules
         public void Stop()
         {
             _isRunning = false;
+            if (_dndChangedHandler != null) { NotificationService.DoNotDisturbChanged -= _dndChangedHandler; _dndChangedHandler = null; }
+            if (_notificationHotkey != null) { _notificationHotkey.Dispose(); _notificationHotkey = null; }
             if (_assistantHotkey != null) { _assistantHotkey.Dispose(); _assistantHotkey = null; }
             if (_assistant != null && !_assistant.IsDisposed) _assistant.Hide();
             if (_searchHotkey != null) { _searchHotkey.Dispose(); _searchHotkey = null; }
@@ -124,10 +150,10 @@ namespace StreeckSuite.Modules
 
         private void OnGameModeActive(object payload)
         {
-            bool isGame = payload is bool && (bool)payload;
+            _isGameActive = payload is bool && (bool)payload;
             if (!_isRunning || _overlayForm == null || _overlayForm.IsDisposed) return;
 
-            if (isGame)
+            if (_isGameActive)
             {
                 _overlayForm.Hide(); // Suspender para 0% consumo en juegos
             }
@@ -343,7 +369,7 @@ namespace StreeckSuite.Modules
         }
 
         // Los avisos de audio llegan en otro hilo; la interfaz solo se toca desde el suyo
-        private void BeginInvokeSafe(Action action)
+        internal void BeginInvokeSafe(Action action)
         {
             if (IsDisposed || !IsHandleCreated) return;
             try
@@ -567,7 +593,7 @@ namespace StreeckSuite.Modules
         private DateTime _osdAppliedAt = DateTime.MinValue;
 
         // Píldora corta que se ensancha un momento; no tapa un aviso más importante que se esté viendo
-        private void ShowPeek(string glyph, string text, Color color)
+        internal void ShowPeek(string glyph, string text, Color color)
         {
             if (!Visible) return;
             if (_mode == Mode.Alert && _alertView != _peek && _alertView != _volumeAlert && DateTime.Now < _alertUntil) return;

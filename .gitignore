@@ -8,6 +8,8 @@ bin/
 config/settings.js
 
 # Cache y temporales
+scratch/
+dist/
 *.tmp
 *.log
 .vs/

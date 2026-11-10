@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Windows.Forms;
 using StreeckSuite.Core;
 
 namespace StreeckSuite.Modules
@@ -51,6 +52,7 @@ namespace StreeckSuite.Modules
         public string SamsungColor = "#ffffff";  // Color de los números
         public float SamsungMaxStretch = 0.65f;  // Altura máxima de un número estirado, en fracción de la pantalla
         public int SamsungWeight = 2;            // 0 fino, 1 normal, 2 grueso
+        public int MonitorIndex = 0;             // Pantalla donde se muestra el reloj (0 = primera/principal)
 
         private static string FilePath
         {
@@ -92,6 +94,7 @@ namespace StreeckSuite.Modules
                     else if (key == "colorSamsung" && value.Length > 0) settings.SamsungColor = value;
                     else if (key == "estiramientoSamsung" && isNumber) settings.SamsungMaxStretch = number;
                     else if (key == "grosorEstirado" && isNumber) settings.SamsungWeight = Math.Max(0, Math.Min(2, (int)number));
+                    else if (key == "monitor" && isNumber) settings.MonitorIndex = Math.Max(0, (int)number);
                     else if (key == "modo")
                     {
                         OcclusionMode mode;
@@ -124,7 +127,8 @@ namespace StreeckSuite.Modules
                     "segundos=" + (ShowSeconds ? "1" : "0"),
                     "colorSamsung=" + SamsungColor,
                     "estiramientoSamsung=" + SamsungMaxStretch.ToString("0.###", CultureInfo.InvariantCulture),
-                    "grosorEstirado=" + SamsungWeight
+                    "grosorEstirado=" + SamsungWeight,
+                    "monitor=" + MonitorIndex
                 });
             }
             catch (IOException ex)
@@ -265,14 +269,16 @@ namespace StreeckSuite.Modules
         private Size _screen;
 
         /// <summary>
-        /// Carga el fondo y lo analiza con las dos IA. Lento (~1 s): llamar desde un hilo en segundo plano.
+        /// Carga el fondo y lo analiza con las dos IA para la pantalla especificada. Lento (~1 s): llamar desde un hilo en segundo plano.
         /// </summary>
-        public static DepthClockLayers Analyze(string wallpaperPath, Size screen)
+        public static DepthClockLayers Analyze(string wallpaperPath, Screen targetScreen)
         {
+            if (targetScreen == null) targetScreen = Screen.PrimaryScreen;
+            Size screen = targetScreen.Bounds.Size;
             DepthClockLayers layers = new DepthClockLayers();
             using (Bitmap source = LoadWithoutLock(wallpaperPath))
             {
-                layers.Background = RenderLikeWindows(source, screen);
+                layers.Background = RenderLikeWindows(source, targetScreen);
             }
             layers._backgroundPixels = VisionModel.ReadPixels(layers.Background);
             layers._screen = screen;
@@ -284,8 +290,13 @@ namespace StreeckSuite.Modules
             // Reloj estirado: "cerca" se fija una vez por fondo (la mitad más lejana del fondo + margen), así no cambia
             // al mover la hora. Cielo y nubes quedan lejos; palmeras, casas y la isla, cerca.
             layers._nearThreshold = layers.DepthPercentile(0.5f) + 0.12f;
-            Log.Info("[DepthClockModule] Fondo analizado: {0} (sujeto principal: {1})", wallpaperPath, layers.SubjectFound ? "sí" : "no");
+            Log.Info("[DepthClockModule] Fondo analizado ({0}x{1}): {2} (sujeto principal: {3})", screen.Width, screen.Height, wallpaperPath, layers.SubjectFound ? "sí" : "no");
             return layers;
+        }
+
+        public static DepthClockLayers Analyze(string wallpaperPath, Size screen)
+        {
+            return Analyze(wallpaperPath, Screen.PrimaryScreen);
         }
 
         /// <summary>
@@ -400,9 +411,12 @@ namespace StreeckSuite.Modules
 
         /// <summary>
         /// Escala el fondo como lo hace Windows según el ajuste elegido (Rellenar por defecto).
+        /// En modo Extender (22), proyecta el fondo a lo largo del escritorio virtual sin comprimirlo en un solo monitor.
         /// </summary>
-        internal static Bitmap RenderLikeWindows(Bitmap source, Size screen)
+        internal static Bitmap RenderLikeWindows(Bitmap source, Screen targetScreen)
         {
+            if (targetScreen == null) targetScreen = Screen.PrimaryScreen;
+            Size screen = targetScreen.Bounds.Size;
             Bitmap result = new Bitmap(screen.Width, screen.Height, PixelFormat.Format32bppArgb);
             using (Graphics g = Graphics.FromImage(result))
             {
@@ -411,24 +425,46 @@ namespace StreeckSuite.Modules
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
                 int style = WallpaperInfo.GetStyle();
-                float scaleX = (float)screen.Width / source.Width;
-                float scaleY = (float)screen.Height / source.Height;
-                if (style == 2)
+                if (style == 22 && Screen.AllScreens.Length > 1)
                 {
-                    g.DrawImage(source, new Rectangle(0, 0, screen.Width, screen.Height)); // Expandir
-                }
-                else if (style == 0)
-                {
-                    g.DrawImage(source, (screen.Width - source.Width) / 2, (screen.Height - source.Height) / 2, source.Width, source.Height); // Centrar
+                    // Extender (Span): proyectar en el escritorio virtual completo y recortar solo la parte de targetScreen
+                    Rectangle virtualBounds = SystemInformation.VirtualScreen;
+                    float scale = Math.Max((float)virtualBounds.Width / source.Width, (float)virtualBounds.Height / source.Height);
+                    float scaledW = source.Width * scale;
+                    float scaledH = source.Height * scale;
+                    float originX = virtualBounds.Left + (virtualBounds.Width - scaledW) / 2f;
+                    float originY = virtualBounds.Top + (virtualBounds.Height - scaledH) / 2f;
+
+                    float destX = originX - targetScreen.Bounds.Left;
+                    float destY = originY - targetScreen.Bounds.Top;
+                    g.DrawImage(source, destX, destY, scaledW, scaledH);
                 }
                 else
                 {
-                    float scale = style == 6 ? Math.Min(scaleX, scaleY) : Math.Max(scaleX, scaleY); // Ajustar / Rellenar
-                    float w = source.Width * scale, h = source.Height * scale;
-                    g.DrawImage(source, (screen.Width - w) / 2, (screen.Height - h) / 2, w, h);
+                    float scaleX = (float)screen.Width / source.Width;
+                    float scaleY = (float)screen.Height / source.Height;
+                    if (style == 2)
+                    {
+                        g.DrawImage(source, new Rectangle(0, 0, screen.Width, screen.Height)); // Expandir
+                    }
+                    else if (style == 0)
+                    {
+                        g.DrawImage(source, (screen.Width - source.Width) / 2, (screen.Height - source.Height) / 2, source.Width, source.Height); // Centrar
+                    }
+                    else
+                    {
+                        float scale = style == 6 ? Math.Min(scaleX, scaleY) : Math.Max(scaleX, scaleY); // Ajustar / Rellenar
+                        float w = source.Width * scale, h = source.Height * scale;
+                        g.DrawImage(source, (screen.Width - w) / 2, (screen.Height - h) / 2, w, h);
+                    }
                 }
             }
             return result;
+        }
+
+        internal static Bitmap RenderLikeWindows(Bitmap source, Size screen)
+        {
+            return RenderLikeWindows(source, Screen.PrimaryScreen);
         }
 
         /// <summary>
@@ -505,7 +541,9 @@ namespace StreeckSuite.Modules
         /// </summary>
         private static float[] RefineEdges(int[] colorPixels, int[] alphaPixels, int width, int height)
         {
-            int step = Math.Max(1, height / GuidedFilterHeight);
+            int stepY = height / GuidedFilterHeight;
+            int stepX = width / 960;
+            int step = Math.Max(1, Math.Max(stepY, stepX));
             int sw = width / step, sh = height / step;
             int radius = Math.Max(2, sh / 68);
 
