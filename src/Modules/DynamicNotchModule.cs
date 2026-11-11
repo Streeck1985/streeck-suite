@@ -117,6 +117,14 @@ namespace StreeckSuite.Modules
                 if (!_clipboard.Visible) _clipboard.Toggle();
             };
             IslandTools.OpenPhone = () => Phone.ShowReceive();
+            IslandTools.SendToPhone = () =>
+            {
+                List<ClipItem> items = ClipboardHistory.Items;
+                if (items.Count > 0) Phone.SendItem(items[0]);
+                else _eventBus.Publish(Events.NotchShowMessage, "📱 Copia algo primero para mandarlo al celular");
+            };
+            CalculatorWindow calculator = null;
+            IslandTools.OpenCalculator = () => { if (calculator == null || calculator.IsDisposed) calculator = new CalculatorWindow(); calculator.Toggle(); };
             IslandTools.ToggleMic = () => { if (_overlayForm != null && !_overlayForm.IsDisposed) _overlayForm.ToggleMicFromHotkey(); };
             // Novedades: una vez, unos segundos después de arrancar tras una actualización
             System.Windows.Forms.Timer whatsNew = new System.Windows.Forms.Timer { Interval = 4000 };
@@ -387,7 +395,7 @@ namespace StreeckSuite.Modules
             _volumeKeys = new VolumeKeysHook(_audio, (level, muted) => BeginInvokeSafe(() => ShowVolume(level, muted)));
             _volumeKeys.Apply();
             // Como Bloom: el Centro de control va primero (fase J3)
-            _views = new List<IslandView> { new ControlCenterView(_audio), _music };
+            _views = new List<IslandView> { new ControlCenterView(_audio), new ToolsView(), _music };
             if (_audio != null) _views.Add(new AudioView(_audio));
             _views.Add(new WeatherView());
             _views.Add(new SystemView());
