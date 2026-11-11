@@ -54,7 +54,7 @@ namespace StreeckSuite.Modules
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             float x = p.Px(PadX), width = size.Width - 2 * x;
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color legend = IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha);
             _cells.Clear();
             _removeButtons.Clear();
@@ -112,7 +112,7 @@ namespace StreeckSuite.Modules
             {
                 RectangleF thumb = new RectangleF(cellX + (p.Px(CellWidth) - p.Px(ThumbSize)) / 2, p.Px(6), p.Px(ThumbSize), p.Px(ThumbSize));
                 using (GraphicsPath path = IslandPainter.RoundedRect(thumb, p.Px(14)))
-                using (Pen dashed = new Pen(Color.FromArgb(alpha * 64 / 255, Color.White), p.Px(1)))
+                using (Pen dashed = new Pen(Color.FromArgb(alpha * 64 / 255, IslandPainter.InkBase), p.Px(1)))
                 {
                     dashed.DashPattern = new float[] { 3, 3 };
                     g.DrawPath(dashed, path);

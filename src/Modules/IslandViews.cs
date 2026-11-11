@@ -137,7 +137,12 @@ namespace StreeckSuite.Modules
             get
             {
                 if (!Eyes) return new SizeF(330, 34);
-                return Busy ? new SizeF(230, 34) : new SizeF(150, 34);
+                if (Busy) return new SizeF(230, 34);
+                // Junto a los ojitos: crece según lo que se muestre (y el aviso del micrófono silenciado)
+                string side = SideText();
+                float mic = MicMuted ? 26 : 0;
+                if (side == null && mic == 0) return new SizeF(150, 34);
+                return new SizeF(Math.Min(340, 104 + mic + (side ?? "").Length * 7.2f), 34);
             }
         }
 
@@ -191,7 +196,7 @@ namespace StreeckSuite.Modules
             MediaInfo media = MediaService.Current;
             if (TimerService.IsActive)
             {
-                string remaining = TimerService.Format(TimerService.Remaining);
+                string remaining = TimerService.Format(TimerService.Shown);
                 float textWidth = g.MeasureString(remaining, p.TimeFont).Width;
                 float ringSize = p.Px(16);
                 float left = size.Width / 2f - (ringSize + p.Px(6) + textWidth) / 2;
@@ -204,11 +209,11 @@ namespace StreeckSuite.Modules
                 float titleWidth = Math.Min(maxWidth - bars - p.Px(8), g.MeasureString(media.Title, p.SmallFont).Width + p.Px(2));
                 float left = size.Width / 2f - (bars + p.Px(8) + titleWidth) / 2;
                 p.DrawBars(g, new RectangleF(left, midY - p.Px(7), bars, p.Px(14)), alpha, media.Accent, true);
-                p.DrawText(g, media.Title, p.SmallFont, Color.FromArgb(alpha, Color.White), new RectangleF(left + bars + p.Px(8), 0, titleWidth, size.Height), StringAlignment.Near);
+                p.DrawText(g, media.Title, p.SmallFont, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(left + bars + p.Px(8), 0, titleWidth, size.Height), StringAlignment.Near);
             }
             else
             {
-                p.DrawText(g, DateTime.Now.ToString("HH:mm"), p.TimeFont, Color.FromArgb(alpha, Color.White), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
+                p.DrawText(g, DateTime.Now.ToString("HH:mm"), p.TimeFont, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
             }
         }
 
@@ -232,7 +237,82 @@ namespace StreeckSuite.Modules
             }
             IslandEyes.Mood ambient = _networkGlyph == IslandPainter.GlyphOffline ? IslandEyes.Mood.Sad
                                     : MediaService.Current.IsPlaying ? IslandEyes.Mood.Happy : IslandEyes.Mood.Idle;
-            IslandEyes.Draw(g, new PointF(size.Width / 2, size.Height / 2), unit, alpha, ambient, idle);
+            string side = SideText();
+            bool micOff = MicMuted;
+            if (side == null && !micOff)
+            {
+                IslandEyes.Draw(g, new PointF(size.Width / 2, size.Height / 2), unit, alpha, ambient, idle);
+                return;
+            }
+            // Ojitos a la izquierda; luego el micrófono silenciado (en rojo) y lo elegido (clima, hora, fecha...)
+            float small = unit * 0.8f;
+            IslandEyes.Draw(g, new PointF(p.Px(16) + 26 * small, size.Height / 2), small, alpha, ambient, idle, true);
+            float textLeft = p.Px(16) + 52 * small + p.Px(10);
+            if (micOff)
+            {
+                Color red = Color.FromArgb(alpha, 255, 93, 108);
+                float dot = p.Px(6);
+                using (SolidBrush b = new SolidBrush(red)) g.FillEllipse(b, textLeft, (size.Height - dot) / 2, dot, dot);
+                p.DrawText(g, "", p.Glyph16, red, new RectangleF(textLeft + dot + p.Px(1), 0, p.Px(18), size.Height), StringAlignment.Center);
+                textLeft += p.Px(28);
+            }
+            if (side != null)
+                p.DrawText(g, side, p.SmallFont, Color.FromArgb(alpha, IslandPainter.InkBase),
+                    new RectangleF(textLeft, 0, size.Width - textLeft - p.Px(14), size.Height), StringAlignment.Center);
+        }
+
+        /// <summary>
+        /// La isla lo conecta con su servicio de audio. Se consulta como mucho una vez por segundo.
+        /// </summary>
+        internal static Func<bool> MicMutedProbe;
+        private static bool _micMuted;
+        private static DateTime _micReadAt = DateTime.MinValue;
+
+        private static bool MicMuted
+        {
+            get
+            {
+                if ((DateTime.Now - _micReadAt).TotalMilliseconds < 1000) return _micMuted;
+                _micReadAt = DateTime.Now;
+                try { _micMuted = MicMutedProbe != null && MicMutedProbe(); } catch (Exception) { _micMuted = false; }
+                return _micMuted;
+            }
+        }
+
+        private static readonly System.Globalization.CultureInfo Spanish = new System.Globalization.CultureInfo("es-MX");
+
+        /// <summary>
+        /// Lo que el usuario eligió poner junto a los ojitos (Ajustes › Ojitos), o null si no hay nada que mostrar.
+        /// </summary>
+        internal static string SideText()
+        {
+            // Un agente de IA trabajando (Claude Code) tiene prioridad: así se ve sin abrir nada
+            if (AgentNotifier.State == AgentNotifier.AgentState.Working && (DateTime.Now - AgentNotifier.StateSince).TotalHours < 2)
+                return "✳ Claude trabajando" + new string('.', 1 + (int)(DateTime.Now.TimeOfDay.TotalSeconds % 3));
+            WeatherService.Conditions weather = WeatherService.Shared.Current;
+            string temperature = weather != null ? string.Format("{0:0}°", weather.TemperatureC) : null;
+            switch (SuiteSettings.EyesSide)
+            {
+                case SuiteSettings.EyesSideKind.Weather: return temperature;
+                case SuiteSettings.EyesSideKind.Time: return DateTime.Now.ToString("HH:mm");
+                case SuiteSettings.EyesSideKind.TimeWeather: return DateTime.Now.ToString("HH:mm") + (temperature != null ? " · " + temperature : "");
+                case SuiteSettings.EyesSideKind.Date: return DateTime.Now.ToString("ddd d MMM", Spanish).Replace(".", "");
+                case SuiteSettings.EyesSideKind.System:
+                    SampleStats();
+                    TelemetrySampler.Snapshot stats = _stats;
+                    return stats == null ? null : string.Format("CPU {0:0} % · RAM {1:0} %", stats.CpuPercent, stats.RamPercent);
+                case SuiteSettings.EyesSideKind.NextEvent:
+                    DateTime now = DateTime.Now;
+                    foreach (AgendaEvent e in AgendaService.Events)
+                    {
+                        if (e.AllDay || e.End <= now || e.Start.Date != now.Date) continue;
+                        string title = e.Title ?? "";
+                        if (title.Length > 18) title = title.Substring(0, 17) + "…";
+                        return e.Start.ToString("HH:mm") + " " + title;
+                    }
+                    return "Sin eventos hoy";
+                default: return null;
+            }
         }
 
         private static void SampleStats()
@@ -402,7 +482,7 @@ namespace StreeckSuite.Modules
             _lineHits.Clear();
             if (_showLyrics && size.Width > playerWidth + p.Px(40))
             {
-                using (Pen divider = new Pen(Color.FromArgb(alpha * 26 / 255, Color.White), 1))
+                using (Pen divider = new Pen(Color.FromArgb(alpha * 26 / 255, IslandPainter.InkBase), 1))
                 {
                     g.DrawLine(divider, playerWidth, 0, playerWidth, size.Height);
                 }
@@ -447,7 +527,7 @@ namespace StreeckSuite.Modules
                 int lineAlpha = active ? alpha : alpha * Math.Max(45, 140 - distance * 35) / 255;
                 RectangleF row = new RectangleF(area.X, y, area.Width, lineHeight);
                 Font font = FittingFont(g, lines[i].Text, active ? 11.25f : 9.75f, active, area.Width, p);
-                p.DrawText(g, lines[i].Text, font, Color.FromArgb(lineAlpha, Color.White), row, StringAlignment.Near);
+                p.DrawText(g, lines[i].Text, font, Color.FromArgb(lineAlpha, IslandPainter.InkBase), row, StringAlignment.Near);
                 _lineHits.Add(new KeyValuePair<RectangleF, TimeSpan>(row, lines[i].Time));
             }
             g.Clip = clip;
@@ -475,7 +555,7 @@ namespace StreeckSuite.Modules
         {
             Color accent = media.Accent;
             float x = p.Px(PadX), width = size.Width - 2 * p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
             // Brillo ambiental del color de la portada detrás de ella (como Bloom)
@@ -516,7 +596,7 @@ namespace StreeckSuite.Modules
             float progress = media.Progress;
             float barY = p.Px(72);
             _progressBar = new RectangleF(x, barY - p.Px(6), width, p.Px(16)); // Zona de clic más alta que la barra
-            IslandPainter.DrawBar(g, new RectangleF(x, barY, width, p.Px(4)), Math.Max(0, progress), Color.FromArgb(alpha * 38 / 255, Color.White), white);
+            IslandPainter.DrawBar(g, new RectangleF(x, barY, width, p.Px(4)), Math.Max(0, progress), Color.FromArgb(alpha * 38 / 255, IslandPainter.InkBase), white);
             if (progress >= 0)
             {
                 TimeSpan position = TimeSpan.FromSeconds(media.Duration.TotalSeconds * progress);
@@ -542,7 +622,7 @@ namespace StreeckSuite.Modules
             if (hasLyrics)
             {
                 _lyricsButton = new RectangleF(_nextButton.Right + gap, controlsY + (button - p.Px(22)) / 2, labelWidth, p.Px(22));
-                IslandPainter.FillRounded(g, _lyricsButton, p.Px(11), _showLyrics ? Color.FromArgb(alpha * 40 / 255, Color.White) : white);
+                IslandPainter.FillRounded(g, _lyricsButton, p.Px(11), _showLyrics ? Color.FromArgb(alpha * 40 / 255, IslandPainter.InkBase) : white);
                 p.DrawText(g, label, p.Bold12, _showLyrics ? white : Color.FromArgb(alpha, Color.Black), _lyricsButton, StringAlignment.Center);
             }
         }
@@ -615,7 +695,7 @@ namespace StreeckSuite.Modules
         {
             WeatherService.Conditions weather = WeatherService.Shared.Current;
             float x = p.Px(PadX), width = size.Width - 2 * p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
             if (weather == null)
@@ -647,7 +727,7 @@ namespace StreeckSuite.Modules
             {
                 WeatherService.HourForecast hour = weather.NextHours[i];
                 RectangleF cell = new RectangleF(x + i * (cellWidth + gap), p.Px(72), cellWidth, p.Px(50));
-                IslandPainter.FillRounded(g, cell, p.Px(12), Color.FromArgb(alpha * 13 / 255, Color.White));
+                IslandPainter.FillRounded(g, cell, p.Px(12), Color.FromArgb(alpha * 13 / 255, IslandPainter.InkBase));
                 p.DrawText(g, hour.Time, p.Text12, gray, new RectangleF(cell.X, cell.Y + p.Px(7), cell.Width, p.Px(16)), StringAlignment.Center);
                 p.DrawText(g, string.Format("{0:0}°", hour.TemperatureC), p.Bold12, white, new RectangleF(cell.X, cell.Y + p.Px(26), cell.Width, p.Px(16)), StringAlignment.Center);
             }
@@ -788,13 +868,13 @@ namespace StreeckSuite.Modules
             {
                 BluetoothDevice device = devices[i];
                 RectangleF chip = new RectangleF(x + i * (chipWidth + gap), y, chipWidth, p.Px(46));
-                IslandPainter.FillRounded(g, chip, p.Px(12), Color.FromArgb(alpha * 13 / 255, Color.White));
+                IslandPainter.FillRounded(g, chip, p.Px(12), Color.FromArgb(alpha * 13 / 255, IslandPainter.InkBase));
                 RectangleF icon = new RectangleF(chip.X + p.Px(8), chip.Y, p.Px(22), chip.Height);
                 p.DrawText(g, BluetoothService.Glyph(device.Kind), p.Glyph16, IslandPainter.Fade(Color.FromArgb(195, 201, 212), alpha), icon, StringAlignment.Center);
 
                 float textX = icon.Right + p.Px(8);
                 float textWidth = chip.Right - p.Px(8) - textX;
-                p.DrawText(g, device.Name, p.Bold12, Color.FromArgb(alpha, Color.White), new RectangleF(textX, chip.Y + p.Px(5), textWidth, p.Px(18)), StringAlignment.Near);
+                p.DrawText(g, device.Name, p.Bold12, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(textX, chip.Y + p.Px(5), textWidth, p.Px(18)), StringAlignment.Near);
                 Color color = BatteryDrawing.ColorFor(device.Battery);
                 string percent = device.Battery + " %";
                 float percentWidth = g.MeasureString(percent, p.Bold12).Width;
@@ -809,8 +889,8 @@ namespace StreeckSuite.Modules
             float ring = p.Px(76);
             RectangleF ringRect = new RectangleF(x + (width - ring) / 2, 0, ring, ring);
             p.DrawRing(g, ringRect, Math.Max(0, percent) / 100f, color, alpha, p.Px(7));
-            p.DrawText(g, percent < 0 ? "N/D" : string.Format("{0:0}%", percent), p.Bold17, Color.FromArgb(alpha, Color.White), ringRect, StringAlignment.Center);
-            p.DrawText(g, label, p.Bold15, Color.FromArgb(alpha, Color.White), new RectangleF(x, ring + p.Px(6), width, p.Px(20)), StringAlignment.Center);
+            p.DrawText(g, percent < 0 ? "N/D" : string.Format("{0:0}%", percent), p.Bold17, Color.FromArgb(alpha, IslandPainter.InkBase), ringRect, StringAlignment.Center);
+            p.DrawText(g, label, p.Bold15, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(x, ring + p.Px(6), width, p.Px(20)), StringAlignment.Center);
             p.DrawText(g, detail, p.Text11, IslandPainter.Fade(IslandPainter.Gray, alpha), new RectangleF(x, ring + p.Px(26), width, p.Px(16)), StringAlignment.Center);
         }
     }
@@ -836,11 +916,11 @@ namespace StreeckSuite.Modules
             if (emoji != null) text = text.Substring(emoji.Length).TrimStart();
 
             RectangleF badge = new RectangleF(padX, 0, p.Px(36), size.Height);
-            p.DrawText(g, emoji ?? "✨", p.EmojiFont, Color.FromArgb(alpha, Color.White), badge, StringAlignment.Center);
+            p.DrawText(g, emoji ?? "✨", p.EmojiFont, Color.FromArgb(alpha, IslandPainter.InkBase), badge, StringAlignment.Center);
 
             float textX = badge.Right + p.Px(12);
             float textWidth = size.Width - textX - padX;
-            p.DrawText(g, Title, p.Bold15, Color.FromArgb(alpha, Color.White), new RectangleF(textX, p.Px(14), textWidth, p.Px(22)), StringAlignment.Near);
+            p.DrawText(g, Title, p.Bold15, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(textX, p.Px(14), textWidth, p.Px(22)), StringAlignment.Near);
 
             using (StringFormat wrap = new StringFormat())
             using (SolidBrush brush = new SolidBrush(IslandPainter.Fade(IslandPainter.Secondary, alpha)))

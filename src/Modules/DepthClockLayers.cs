@@ -364,13 +364,16 @@ namespace StreeckSuite.Modules
             int xStart = Math.Max(0, (int)(colLeft * size));
             int xEnd = Math.Min(size - 1, (int)(colRight * size));
             if (xEnd < xStart) xEnd = xStart;
+            // Un obstáculo debe ocupar buena parte del ancho del número: un cable o un poste delgado no lo frena
+            int needed = Math.Max(1, (int)Math.Ceiling((xEnd - xStart + 1) * 0.35f));
             for (int y = Math.Max(0, (int)(fromY * size)); y < size; y++)
             {
-                int row = y * size;
+                int row = y * size, hits = 0;
                 for (int x = xStart; x <= xEnd; x++)
                 {
-                    if (map[row + x] >= threshold) return (float)y / size;
+                    if (map[row + x] >= threshold) hits++;
                 }
+                if (hits >= needed) return (float)y / size;
             }
             return 1f;
         }
@@ -521,6 +524,7 @@ namespace StreeckSuite.Modules
 
             int[] colorPixels = (int[])_backgroundPixels.Clone();
             float[] refined = RefineEdges(colorPixels, alphaPixels, width, height);
+            OpenThinGaps(colorPixels, refined, width, height);
             for (int i = 0; i < colorPixels.Length; i++)
             {
                 // Más contraste en la máscara: cada píxel queda claramente delante o detrás, sin "fantasmas" grises
@@ -604,6 +608,132 @@ namespace StreeckSuite.Modules
                 }
             }
             return result;
+        }
+
+        /// <summary>
+        /// Detalle fino: la IA trabaja a baja resolución y une objetos delgados (cables, rejas, ramas) en una sola
+        /// mancha. Dentro de esa mancha, los píxeles del mismo color que el fondo que la rodea (el cielo entre los
+        /// cables) vuelven a quedar detrás de la hora. Solo se aplica donde la mancha es mayormente "fondo" con
+        /// líneas finas; un objeto sólido con zonas oscuras (el casco de una nave) no se agujerea.
+        /// </summary>
+        private static void OpenThinGaps(int[] colorPixels, float[] alpha, int width, int height)
+        {
+            int step = Math.Max(1, Math.Max(height / GuidedFilterHeight, width / 960));
+            int sw = width / step, sh = height / step;
+
+            float[] r = new float[sw * sh], gr = new float[sw * sh], bl = new float[sw * sh];
+            float[] isBack = new float[sw * sh], isFront = new float[sw * sh];
+            for (int y = 0; y < sh; y++)
+            {
+                for (int x = 0; x < sw; x++)
+                {
+                    int src = (y * step) * width + x * step, i = y * sw + x;
+                    int c = colorPixels[src];
+                    float a = alpha[src];
+                    float back = a < 0.25f ? 1f : 0f;
+                    isBack[i] = back;
+                    isFront[i] = a > 0.5f ? 1f : 0f;
+                    r[i] = ((c >> 16) & 0xFF) / 255f * back;
+                    gr[i] = ((c >> 8) & 0xFF) / 255f * back;
+                    bl[i] = (c & 0xFF) / 255f * back;
+                }
+            }
+
+            // Color del fondo cercano y del objeto cercano: primero en una ventana chica y, si ahí no hay, en otras mayores
+            float[] bgR, bgG, bgB, fgR, fgG, fgB;
+            bool[] known = LocalColor(colorPixels, width, step, sw, sh, isBack, r, gr, bl, out bgR, out bgG, out bgB);
+            // El color del objeto se toma solo de lo que claramente no es fondo (el rojo de los cables, no el cielo entre ellos)
+            float[] solid = new float[sw * sh], fr = new float[sw * sh], fg = new float[sw * sh], fb = new float[sw * sh];
+            for (int y = 0; y < sh; y++)
+            {
+                for (int x = 0; x < sw; x++)
+                {
+                    int i = y * sw + x, c = colorPixels[(y * step) * width + x * step];
+                    float w = isFront[i] > 0 && (!known[i] || ColorDistance(c, bgR[i], bgG[i], bgB[i]) > 0.15f) ? 1f : 0f;
+                    solid[i] = w;
+                    fr[i] = ((c >> 16) & 0xFF) / 255f * w;
+                    fg[i] = ((c >> 8) & 0xFF) / 255f * w;
+                    fb[i] = (c & 0xFF) / 255f * w;
+                }
+            }
+            bool[] knownFront = LocalColor(colorPixels, width, step, sw, sh, solid, fr, fg, fb, out fgR, out fgG, out fgB);
+            for (int i = 0; i < known.Length; i++) known[i] = known[i] && knownFront[i];
+
+            // Qué tanto de la mancha cercana se parece más al fondo que al objeto: alto entre cables, bajo en un objeto sólido
+            float[] match = new float[sw * sh];
+            for (int i = 0; i < match.Length; i++)
+            {
+                if (isFront[i] == 0 || !known[i]) continue;
+                int y = i / sw, x = i % sw;
+                int c = colorPixels[(y * step) * width + x * step];
+                match[i] = BackgroundLikeness(c, i, bgR, bgG, bgB, fgR, fgG, fgB) > 0.5f ? 1f : 0f;
+            }
+            int near = Math.Max(4, sh / 50);
+            float[] matchShare = BoxMean(match, sw, sh, near);
+            float[] frontShare = BoxMean(isFront, sw, sh, near);
+            float[] openness = new float[sw * sh];
+            for (int i = 0; i < openness.Length; i++)
+            {
+                float share = frontShare[i] > 0.01f ? matchShare[i] / frontShare[i] : 0f;
+                openness[i] = known[i] ? SmoothStep(0.3f, 0.55f, share) : 0f;
+            }
+            openness = BoxMean(openness, sw, sh, 2);
+
+            // A resolución completa: cada píxel compara su propio color (los cables miden 2-4 px) con el fondo cercano
+            for (int y = 0; y < height; y++)
+            {
+                int sy = Math.Min(sh - 1, y / step);
+                for (int x = 0; x < width; x++)
+                {
+                    int index = y * width + x;
+                    if (alpha[index] <= 0.02f) continue;
+                    int si = sy * sw + Math.Min(sw - 1, x / step);
+                    float open = openness[si];
+                    if (open <= 0) continue;
+                    float background = BackgroundLikeness(colorPixels[index], si, bgR, bgG, bgB, fgR, fgG, fgB);
+                    alpha[index] *= 1f - open * background;
+                }
+            }
+        }
+
+        // 0 = el píxel tiene el color del objeto cercano, 1 = el del fondo cercano
+        private static float BackgroundLikeness(int argb, int i, float[] bgR, float[] bgG, float[] bgB, float[] fgR, float[] fgG, float[] fgB)
+        {
+            float toBack = ColorDistance(argb, bgR[i], bgG[i], bgB[i]);
+            float toFront = ColorDistance(argb, fgR[i], fgG[i], fgB[i]);
+            return SmoothStep(-0.02f, 0.06f, toFront - toBack);
+        }
+
+        // Media local del color de los píxeles marcados en weight, en ventanas cada vez mayores hasta encontrar alguno
+        private static bool[] LocalColor(int[] colorPixels, int width, int step, int sw, int sh, float[] weight, float[] r, float[] g, float[] b,
+            out float[] meanR, out float[] meanG, out float[] meanB)
+        {
+            meanR = new float[sw * sh]; meanG = new float[sw * sh]; meanB = new float[sw * sh];
+            bool[] known = new bool[sw * sh];
+            foreach (int radius in new[] { Math.Max(3, sh / 40), Math.Max(6, sh / 15), Math.Max(12, sh / 6) })
+            {
+                float[] w = BoxMean(weight, sw, sh, radius);
+                float[] mr = BoxMean(r, sw, sh, radius), mg = BoxMean(g, sw, sh, radius), mb = BoxMean(b, sw, sh, radius);
+                for (int i = 0; i < known.Length; i++)
+                {
+                    if (known[i] || w[i] < 0.04f) continue;
+                    meanR[i] = mr[i] / w[i]; meanG[i] = mg[i] / w[i]; meanB[i] = mb[i] / w[i];
+                    known[i] = true;
+                }
+            }
+            return known;
+        }
+
+        private static float ColorDistance(int argb, float r, float g, float b)
+        {
+            float dr = ((argb >> 16) & 0xFF) / 255f - r, dg = ((argb >> 8) & 0xFF) / 255f - g, db = (argb & 0xFF) / 255f - b;
+            return (float)Math.Sqrt(dr * dr + dg * dg + db * db);
+        }
+
+        private static float SmoothStep(float edge0, float edge1, float x)
+        {
+            float t = Math.Max(0f, Math.Min(1f, (x - edge0) / (edge1 - edge0)));
+            return t * t * (3f - 2f * t);
         }
 
         private static float Luminance(int argb)

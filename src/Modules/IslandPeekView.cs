@@ -36,7 +36,7 @@ namespace StreeckSuite.Modules
         // Solo el letrero, sin icono (el usuario lo prefiere así)
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
-            p.DrawText(g, Text ?? "", p.Semibold13, Color.FromArgb(alpha, Color.White), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
+            p.DrawText(g, Text ?? "", p.Semibold13, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
         }
     }
 }

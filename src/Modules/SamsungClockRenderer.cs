@@ -7,15 +7,16 @@ namespace StreeckSuite.Modules
 {
     /// <summary>
     /// Reloj estirado, como el "Stretch Font" de One UI 8 (mockup R1): números rellenos de la fuente elegida; cada uno
-    /// se estira hacia abajo hasta quedar a 12 px de la silueta que la IA detecta en el fondo, y se encoge si no cabe.
-    /// Así la hora nunca tapa al sujeto. Los dos puntos quedan centrados en la altura normal de los números.
+    /// se estira hacia abajo hasta quedar a 12 px de la silueta que la IA detecta en el fondo. Si ni a tamaño normal
+    /// cabe, no se encoge: el sujeto pasa por delante. Los dos puntos quedan centrados en la altura normal de los números.
     /// </summary>
     internal static class SamsungClockRenderer
     {
         private const float Margin = 12f;      // Distancia mínima entre un número y la silueta
-        private const float MinScale = 0.25f;  // Lo más que se encoge un número sin sitio
-
-        public static void Draw(Graphics g, Size screen, ClockSettings settings, DepthClockLayers layers, DateTime now, CultureInfo spanish, WeatherService.Conditions weather)
+        private const float MinScale = 0.45f;  // Lo más que se acorta un número para no tocar la silueta
+        /// <param name="blocked">Recibe las celdas de los números que no cupieron sobre el sujeto: ahí se dibuja
+        /// el primer plano encima, como en el reloj clásico.</param>
+        public static void Draw(Graphics g, Size screen, ClockSettings settings, DepthClockLayers layers, DateTime now, CultureInfo spanish, WeatherService.Conditions weather, System.Collections.Generic.List<RectangleF> blocked)
         {
             if (settings == null) return;
             string time = now.ToString(DepthClockLayout.TimeFormat(settings));
@@ -38,6 +39,23 @@ namespace StreeckSuite.Modules
 
                 float maxH = Math.Max(digitH, screen.Height * settings.SamsungMaxStretch);
                 float x = settings.CenterX * screen.Width - total / 2;
+
+                // Si algún número no cabe a tamaño normal sobre la silueta (el techo de un auto justo debajo), el reloj
+                // sube lo necesario para pararse encima en vez de aplastarse. Solo si subir lo resuelve (una torre que
+                // llega hasta arriba no se arregla subiendo) y sin pasar de un 20 % de la pantalla
+                if (layers != null)
+                {
+                    float limit = settings.ShowDate
+                        ? DepthClockLayout.CaptionFontPx(screen, settings) * 1.6f + DepthClockLayout.CaptionGapPx(screen, settings)
+                        : screen.Height * 0.02f;
+                    float minRoom = MinRoom(layers, screen, time, x, top, zero.Width, colon.Width, gap);
+                    float shift = digitH - minRoom;
+                    if (shift > 0 && shift <= screen.Height * 0.2f && top - shift >= limit)
+                    {
+                        float raised = top - shift;
+                        if (MinRoom(layers, screen, time, x, raised, zero.Width, colon.Width, gap) >= digitH * 0.95f) top = raised;
+                    }
+                }
                 using (SolidBrush brush = new SolidBrush(color))
                 using (SolidBrush shadow = new SolidBrush(Color.FromArgb(60, 0, 0, 0)))
                 {
@@ -56,7 +74,11 @@ namespace StreeckSuite.Modules
                                 float obstacle = layers != null
                                     ? layers.GetColumnObstacleTop(x / screen.Width, (x + cell) / screen.Width, top / screen.Height) * screen.Height
                                     : screen.Height;
-                                height = Math.Max(digitH * MinScale, Math.Min(maxH, obstacle - Margin - top));
+                                // Se para sobre la silueta (más corto si hace falta, sin quedar como una rayita);
+                                // si ni así cabe, el sujeto le pasa por delante
+                                float room = obstacle - Margin - top;
+                                height = Math.Max(digitH * MinScale, Math.Min(maxH, room));
+                                if (room < digitH * MinScale && blocked != null) blocked.Add(new RectangleF(x - gap, top, cell + 2 * gap, height + Margin));
                             }
                             using (Matrix place = new Matrix())
                             {
@@ -94,6 +116,23 @@ namespace StreeckSuite.Modules
                     DesktopClockForm.DrawWeatherPill(g, weather, captionFont, centerX, top + digitH + captionGap);
                 }
             }
+        }
+
+        // El espacio libre más chico bajo los números (de la hora hasta la silueta), con la hora arriba en "top"
+        private static float MinRoom(DepthClockLayers layers, Size screen, string time, float x, float top, float digitW, float colonW, float gap)
+        {
+            float min = float.MaxValue;
+            foreach (char c in time)
+            {
+                float cell = c == ':' ? colonW : digitW;
+                if (c != ':')
+                {
+                    float obstacle = layers.GetColumnObstacleTop(x / screen.Width, (x + cell) / screen.Width, top / screen.Height) * screen.Height;
+                    min = Math.Min(min, obstacle - Margin - top);
+                }
+                x += cell + gap;
+            }
+            return min;
         }
 
         // Fino usa la variante "Light" de la fuente si existe; normal y grueso usan la fuente tal cual

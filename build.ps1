@@ -30,6 +30,11 @@ $RefArg += ",$SpeechDll"
 $WpfDir = "$env:windir\Microsoft.NET\Framework64\v4.0.30319\WPF"
 $RefArg += ",$WpfDir\UIAutomationClient.dll,$WpfDir\UIAutomationTypes.dll,$WpfDir\WindowsBase.dll"
 
+# WebView2 (Claude en la isla): libreria de Microsoft en lib\webview2; se copia junto al exe
+$WebView2Dir = "$PSScriptRoot\lib\webview2"
+$RefArg += ",$WebView2Dir\Microsoft.Web.WebView2.Core.dll,$WebView2Dir\Microsoft.Web.WebView2.WinForms.dll"
+Copy-Item "$WebView2Dir\*.dll" $OutputDir -Force
+
 # Windows ML (reloj 3D): metadatos WinRT que trae Windows y las fachadas de .NET para usarlos desde C#
 $FrameworkDir = Split-Path $Compiler
 $WinMetadata = "$env:SystemRoot\System32\WinMetadata"

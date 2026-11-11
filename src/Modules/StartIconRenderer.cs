@@ -73,7 +73,9 @@ namespace StreeckSuite.Modules
             // Ojitos: los mismos de la isla (estilo, color y extras), así que el nombre cambia con ellos
             string stamp = kind == Custom && File.Exists(CustomCopy) ? File.GetLastWriteTimeUtc(CustomCopy).Ticks.ToString()
                          : kind == Eyes ? string.Format("v2_{0}_{1}{2}{3}{4}",SuiteSettings.EyesStyle, SuiteSettings.EyesColor.TrimStart('#'),
-                               SuiteSettings.EyesMouth ? "b" : "", SuiteSettings.EyesBrows ? "c" : "", SuiteSettings.EyesBlush ? "r" : "")
+                               SuiteSettings.EyesMouth ? "b" : "", "", SuiteSettings.EyesBlush ? "r" : "") + "_sc" // Sin cejas: en el botón chiquito parecían un fleco
+                                 // Papel/Hielo (ojitos oscuros) y Terminal/Oro (verdes/dorados) cambian el color de los ojitos
+                                 + (IslandSkin.IsLight || IslandSkin.Current == IslandSkin.Terminal || IslandSkin.Current == IslandSkin.Gold ? "_s" + IslandSkin.Current : "")
                          : "1";
             string baseName = Path.Combine(Folder, "inicio_icono_" + kind + "_" + stamp);
             string file = kind == Eyes ? baseName + "_n.png" : baseName + ".png";
@@ -86,7 +88,16 @@ namespace StreeckSuite.Modules
                     {
                         string facePath = baseName + "_" + face + ".png";
                         if (File.Exists(facePath)) continue;
-                        using (Bitmap bitmap = IslandEyes.RenderStartIcon(128, face, false)) bitmap.Save(facePath, ImageFormat.Png);
+                        bool brows = SuiteSettings.EyesBrows;
+                        SuiteSettings.EyesBrows = false;
+                        try
+                        {
+                            using (Bitmap bitmap = IslandEyes.RenderStartIcon(128, face, false)) bitmap.Save(facePath, ImageFormat.Png);
+                        }
+                        finally
+                        {
+                            SuiteSettings.EyesBrows = brows;
+                        }
                     }
                     ClosedEyesFile = baseName + "_c.png";
                     FacesBase = baseName;

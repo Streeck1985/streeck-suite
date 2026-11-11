@@ -12,12 +12,50 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal static class IslandSkin
     {
-        public const int Glass = 0, Notch = 1, Dock = 2, Neon = 3, Ghost = 4, Line = 5, Aurora = 6, Aero7 = 7, Liquid = 8, Rgb = 9;
+        public const int Glass = 0, Notch = 1, Dock = 2, Neon = 3, Ghost = 4, Line = 5, Aurora = 6, Aero7 = 7, Liquid = 8, Rgb = 9,
+                         Graphite = 10, Paper = 11, Sunset = 12, Terminal = 13, Ice = 14, Gold = 15;
+        public const int Count = 16;
+        public static readonly string[] Names = { "Cristal", "Notch", "Dock", "Neón", "Fantasma", "Línea fina", "Aurora", "Aero 7", "Cristal líquido", "Gamer RGB",
+                                                   "Grafito", "Papel", "Atardecer", "Terminal", "Hielo", "Oro" };
+        private static readonly Color GoldColor = Color.FromArgb(232, 196, 106);
+        private static readonly Color TerminalGreen = Color.FromArgb(77, 255, 122);
+
+        /// <summary>
+        /// Para la galería de Ajustes: pinta con este skin en lugar del elegido.
+        /// </summary>
+        internal static int? PreviewOverride;
+
+        /// <summary>
+        /// Papel y Hielo son claros: la isla escribe en oscuro.
+        /// </summary>
+        public static bool IsLight
+        {
+            get { int s = Current; return s == Paper || s == Ice; }
+        }
+
+        /// <summary>
+        /// Color de acento del skin (barras, botones encendidos); null = el de siempre.
+        /// </summary>
+        public static Color? AccentColor
+        {
+            get
+            {
+                switch (Current)
+                {
+                    case Terminal: return TerminalGreen;
+                    case Gold: return GoldColor;
+                    case Paper: return Color.FromArgb(37, 99, 235);
+                    case Ice: return Color.FromArgb(14, 165, 233);
+                    case Graphite: return Color.FromArgb(161, 161, 170);
+                    default: return null;
+                }
+            }
+        }
         private static readonly Color Sky = Color.FromArgb(56, 189, 248);
 
         public static int Current
         {
-            get { return SuiteSettings.TaskbarEnabled ? SuiteSettings.TaskbarSkin : Notch; }
+            get { return PreviewOverride ?? (SuiteSettings.TaskbarEnabled ? SuiteSettings.TaskbarSkin : Notch); }
         }
 
         /// <summary>
@@ -25,7 +63,7 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static bool IsAnimated
         {
-            get { return Current == Rgb; }
+            get { return Current == Rgb || SuiteSettings.IslandBorder == SuiteSettings.BorderKind.Glow || (SuiteSettings.IslandBorder == SuiteSettings.BorderKind.Skin && Current == Gold); }
         }
 
         /// <summary>
@@ -33,6 +71,84 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static void Paint(Graphics g, GraphicsPath shape, GraphicsPath outline, RectangleF bounds, Color userFill)
         {
+            // Fondo cristal: el mismo skin, más transparente
+            float glassFactor = SuiteSettings.IslandGlass ? 0.62f : 1f;
+            _glass = glassFactor;
+            PaintFill(g, shape, outline, bounds, userFill, glassFactor);
+            PaintBorder(g, outline, bounds);
+        }
+
+        // Fill ya aplica el cristal a todos los rellenos sólidos
+        private static float _glass = 1f;
+
+        private static Color A(Color c, float factor)
+        {
+            return c;
+        }
+
+        // Borde elegido en Ajustes › Apariencia (o el propio del skin)
+        private static void PaintBorder(Graphics g, GraphicsPath outline, RectangleF bounds)
+        {
+            SuiteSettings.BorderKind border = SuiteSettings.IslandBorder;
+            int skin = Current;
+            if (border == SuiteSettings.BorderKind.Thin)
+            {
+                Stroke(g, outline, IsLight ? Color.FromArgb(40, 0, 0, 0) : Color.FromArgb(46, 255, 255, 255), 1);
+            }
+            else if (border == SuiteSettings.BorderKind.Glow || (border == SuiteSettings.BorderKind.Skin && skin == Gold))
+            {
+                // Brillo que recorre el contorno con el color del skin
+                Color main = skin == Gold ? GoldColor : AccentColor ?? Sky;
+                Color light = Color.FromArgb(255, Math.Min(255, main.R + 90), Math.Min(255, main.G + 90), Math.Min(255, main.B + 90));
+                float angle = (float)(DateTime.Now.TimeOfDay.TotalMilliseconds / 5000.0 * 360 % 360);
+                using (LinearGradientBrush brush = new LinearGradientBrush(bounds, main, light, angle))
+                {
+                    ColorBlend blend = new ColorBlend();
+                    blend.Colors = new[] { Color.FromArgb(90, main), light, main, Color.FromArgb(90, main) };
+                    blend.Positions = new[] { 0f, 0.35f, 0.65f, 1f };
+                    brush.InterpolationColors = blend;
+                    using (Pen halo = new Pen(Color.FromArgb(50, main), 4)) { halo.LineJoin = LineJoin.Round; g.DrawPath(halo, outline); }
+                    using (Pen pen = new Pen(brush, 1.6f)) { pen.LineJoin = LineJoin.Round; g.DrawPath(pen, outline); }
+                }
+            }
+        }
+
+        private static void PaintFill(Graphics g, GraphicsPath shape, GraphicsPath outline, RectangleF bounds, Color userFill, float k)
+        {
+            bool skinBorder = SuiteSettings.IslandBorder == SuiteSettings.BorderKind.Skin;
+            switch (Current)
+            {
+                case Graphite:
+                    Fill(g, shape, A(Color.FromArgb(240, 42, 44, 49), k));
+                    if (skinBorder) Stroke(g, outline, Color.FromArgb(26, 255, 255, 255), 1);
+                    return;
+                case Paper:
+                    Fill(g, shape, A(Color.FromArgb(245, 250, 250, 248), k));
+                    if (skinBorder) Stroke(g, outline, Color.FromArgb(30, 0, 0, 0), 1);
+                    return;
+                case Sunset:
+                    using (LinearGradientBrush brush = new LinearGradientBrush(bounds, Color.FromArgb((int)(240 * k), 255, 122, 69), Color.FromArgb((int)(240 * k), 122, 44, 255), 20f))
+                    {
+                        ColorBlend blend = new ColorBlend();
+                        blend.Colors = new[] { Color.FromArgb((int)(240 * k), 255, 122, 69), Color.FromArgb((int)(240 * k), 255, 61, 119), Color.FromArgb((int)(240 * k), 122, 44, 255) };
+                        blend.Positions = new[] { 0f, 0.55f, 1f };
+                        brush.InterpolationColors = blend;
+                        g.FillPath(brush, shape);
+                    }
+                    return;
+                case Terminal:
+                    Fill(g, shape, A(Color.FromArgb(245, 2, 7, 2), k));
+                    if (skinBorder) Stroke(g, outline, Color.FromArgb(90, TerminalGreen), 1);
+                    return;
+                case Ice:
+                    Fill(g, shape, A(Color.FromArgb(200, 214, 236, 255), k));
+                    if (skinBorder) Stroke(g, outline, Color.FromArgb(150, 255, 255, 255), 1);
+                    return;
+                case Gold:
+                    Fill(g, shape, A(Color.FromArgb(245, 10, 10, 10), k));
+                    return;
+            }
+            if (!skinBorder) { PaintClassicFillOnly(g, shape, bounds, userFill, k); return; }
             switch (Current)
             {
                 case Notch:
@@ -103,6 +219,26 @@ namespace StreeckSuite.Modules
             }
         }
 
+        // Los skins de siempre sin su borde (cuando el usuario elige otro borde)
+        private static void PaintClassicFillOnly(Graphics g, GraphicsPath shape, RectangleF bounds, Color userFill, float k)
+        {
+            switch (Current)
+            {
+                case Notch: Fill(g, shape, userFill); break;
+                case Dock: Fill(g, shape, A(Color.FromArgb(205, 28, 30, 38), k)); break;
+                case Neon: case Rgb: Fill(g, shape, A(Color.FromArgb(230, 8, 10, 20), k)); break;
+                case Ghost: Fill(g, shape, Color.FromArgb(90, 0, 0, 0)); break;
+                case Line: Fill(g, shape, A(Color.FromArgb(228, 10, 12, 18), k)); break;
+                case Aurora:
+                    using (LinearGradientBrush brush = new LinearGradientBrush(bounds, Color.FromArgb((int)(225 * k), 124, 58, 237), Color.FromArgb((int)(225 * k), 236, 72, 153), 35f))
+                        g.FillPath(brush, shape);
+                    break;
+                case Aero7: Fill(g, shape, A(Color.FromArgb(195, 20, 40, 80), k)); break;
+                case Liquid: Fill(g, shape, Color.FromArgb(70, 22, 24, 34)); break;
+                default: Fill(g, shape, A(Color.FromArgb(215, 14, 18, 28), k)); break;
+            }
+        }
+
         /// <summary>
         /// El fondo es casi sólido: las letras se pueden dibujar con ClearType (nítidas). En los skins muy
         /// transparentes (Fantasma, Cristal líquido) ClearType dejaría bordes de colores: van suavizadas en gris.
@@ -113,7 +249,8 @@ namespace StreeckSuite.Modules
             {
                 case Notch: return userFill.A >= 190;
                 case Ghost: case Liquid: return false;
-                default: return true;
+                case Paper: case Ice: return false; // Letra oscura sobre claro: suavizado en gris
+                default: if (SuiteSettings.IslandGlass) return false; return true;
             }
         }
 
@@ -165,6 +302,7 @@ namespace StreeckSuite.Modules
                 Color color = skin == Glass ? Sky
                             : skin == Neon ? Color.FromArgb(125, 211, 252)
                             : skin == Liquid ? Color.FromArgb(200, 255, 255, 255)
+                            : AccentColor.HasValue ? AccentColor.Value
                             : Color.White; // Notch, Dock, Fantasma, Línea fina
                 using (SolidBrush brush = new SolidBrush(IslandPainter.Fade(color, alpha))) g.FillPath(brush, path);
             }
@@ -172,7 +310,7 @@ namespace StreeckSuite.Modules
 
         private static void Fill(Graphics g, GraphicsPath shape, Color color)
         {
-            using (SolidBrush brush = new SolidBrush(color)) g.FillPath(brush, shape);
+            using (SolidBrush brush = new SolidBrush(Color.FromArgb((int)(color.A * _glass), color))) g.FillPath(brush, shape);
         }
 
         private static void Stroke(Graphics g, GraphicsPath outline, Color color, float width)

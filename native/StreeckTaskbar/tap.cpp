@@ -1,4 +1,4 @@
-// streeck_taskbar.dll: se carga dentro de explorer.exe y le da el skin de islas a la barra de tareas REAL de Windows 11.
+﻿// streeck_taskbar.dll: se carga dentro de explorer.exe y le da el skin de islas a la barra de tareas REAL de Windows 11.
 //
 // Cómo entra: la suite pone un gancho de ventana (SetWindowsHookEx) en el hilo de la barra; Windows carga esta DLL
 // en el Explorador, la DLL se fija para no descargarse y pide a Windows una sesión de diagnóstico XAML
@@ -16,6 +16,7 @@
 //   barra_skin.log / barra_arbol.txt             registro y volcado del árbol de piezas
 
 #define NOMINMAX
+#include <functional>
 #include <windows.h>
 #include <unknwn.h>
 #include <ocidl.h>
@@ -92,6 +93,9 @@ struct Settings
     std::wstring StartFacesBase;        // Ojitos: base de las caras (base_n.png, base_f.png...): imitan a la isla
     bool StartOpensSuite = true;        // El clic en Inicio abre el menú de Streeck (no el de Windows)
     int Edge = 3;                       // Borde de la barra: 0 izquierda, 1 arriba, 2 derecha, 3 abajo
+    int Line = 0;                       // Contorno (Ajustes › Apariencia): 0 el del skin, 1 sin borde, 2 fino, 3 brillo
+    bool Frosted = false;               // Fondo cristal: el skin más transparente
+    bool Rounded = false;               // Forma redondeada: esquinas suaves en lugar de píldora
 };
 
 // Una barra (la principal y una por cada monitor extra)
@@ -181,7 +185,10 @@ static void LoadSettings()
     g_settings.Edges = ToInt(values, L"extremos", 0) == 1;
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
     g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
-    g_settings.Skin = std::clamp(ToInt(values, L"skin", 1), 0, 9);
+    g_settings.Skin = std::clamp(ToInt(values, L"skin", 1), 0, 15);
+    g_settings.Line = std::clamp(ToInt(values, L"linea", 0), 0, 3);
+    g_settings.Frosted = ToInt(values, L"vidrio", 0) == 1;
+    g_settings.Rounded = ToInt(values, L"redondeada", 0) == 1;
     g_settings.StartIcon = std::clamp(ToInt(values, L"inicio_icono", 0), 0, 6);
     g_settings.StartSize = std::clamp(ToInt(values, L"inicio_tamano", 100), 70, 140);
     g_settings.StartHover = std::clamp(ToInt(values, L"inicio_efecto", 1), 0, 2);
@@ -306,7 +313,8 @@ static Color Argb(uint8_t a, uint8_t r, uint8_t g, uint8_t b)
 
 // Skins de la barra (galería aprobada por el usuario): Cristal, Notch, Dock, Neón, Fantasma, Línea fina, Aurora,
 // Aero 7, Cristal líquido y Gamer RGB. Grupo: 0 clima, 1 apps, 2 bandeja, 3 mini reproductor.
-enum Skin { SkinGlass = 0, SkinNotch, SkinDock, SkinNeon, SkinGhost, SkinLine, SkinAurora, SkinAero7, SkinLiquid, SkinRgb };
+enum Skin { SkinGlass = 0, SkinNotch, SkinDock, SkinNeon, SkinGhost, SkinLine, SkinAurora, SkinAero7, SkinLiquid, SkinRgb,
+            SkinGraphite, SkinPaper, SkinSunset, SkinTerminal, SkinIce, SkinGold };
 
 static std::vector<wuxm::Animation::Storyboard> g_animations;  // Bordes RGB en marcha (se paran al redibujar)
 
@@ -325,11 +333,25 @@ static wuxm::LinearGradientBrush Gradient(std::initializer_list<std::pair<double
     return brush;
 }
 
-// Arcoíris que gira (Gamer RGB): la animación la hace el compositor de Windows, casi sin gasto
+// Degradado que gira: la animación la hace el compositor de Windows, casi sin gasto
+static wuxm::Brush SpinningBrush(wuxm::LinearGradientBrush brush);
+
+// Arcoíris que gira (Gamer RGB)
 static wuxm::Brush RainbowBrush()
 {
-    wuxm::LinearGradientBrush brush = Gradient({ { 0.0, Argb(255, 255, 0, 76) }, { 0.2, Argb(255, 255, 184, 0) }, { 0.4, Argb(255, 61, 255, 110) },
-        { 0.6, Argb(255, 0, 194, 255) }, { 0.8, Argb(255, 157, 77, 255) }, { 1.0, Argb(255, 255, 0, 76) } }, false);
+    return SpinningBrush(Gradient({ { 0.0, Argb(255, 255, 0, 76) }, { 0.2, Argb(255, 255, 184, 0) }, { 0.4, Argb(255, 61, 255, 110) },
+        { 0.6, Argb(255, 0, 194, 255) }, { 0.8, Argb(255, 157, 77, 255) }, { 1.0, Argb(255, 255, 0, 76) } }, false));
+}
+
+// Brillo de un color que recorre el contorno (Oro y el borde «Brillo»)
+static wuxm::Brush GlowBrush(Color main)
+{
+    Color light = Argb(255, (uint8_t)std::min(255, main.R + 90), (uint8_t)std::min(255, main.G + 90), (uint8_t)std::min(255, main.B + 90));
+    return SpinningBrush(Gradient({ { 0.0, Color{ 90, main.R, main.G, main.B } }, { 0.35, light }, { 0.65, main }, { 1.0, Color{ 90, main.R, main.G, main.B } } }, false));
+}
+
+static wuxm::Brush SpinningBrush(wuxm::LinearGradientBrush brush)
+{
     wuxm::RotateTransform rotate;
     rotate.CenterX(0.5);
     rotate.CenterY(0.5);
@@ -364,14 +386,43 @@ static wuxm::Brush IslandFill(int group)
         case SkinAero7:
             return Gradient({ { 0, Argb(97, 255, 255, 255) }, { 0.48, Argb(20, 255, 255, 255) }, { 0.52, Argb(140, 20, 40, 80) }, { 1, Argb(190, 20, 40, 80) } }, true);
         case SkinLiquid: return wuxm::SolidColorBrush(Argb(26, 255, 255, 255));
+        case SkinGraphite: return wuxm::SolidColorBrush(Argb(235, 42, 44, 49));
+        case SkinPaper: return wuxm::SolidColorBrush(Argb(240, 250, 250, 248));
+        case SkinSunset: return Gradient({ { 0, Argb(235, 255, 122, 69) }, { 0.55, Argb(235, 255, 61, 119) }, { 1, Argb(235, 122, 44, 255) } }, false);
+        case SkinTerminal: return wuxm::SolidColorBrush(Argb(240, 2, 7, 2));
+        case SkinIce: return wuxm::SolidColorBrush(Argb(190, 214, 236, 255));
+        case SkinGold: return wuxm::SolidColorBrush(Argb(240, 10, 10, 10));
         default: return wuxm::SolidColorBrush(Argb(210, 14, 18, 28)); // Cristal
     }
 }
 
-static wuxm::Brush IslandStroke(int group)
+// Color propio del skin para el borde «Brillo»
+static Color SkinAccent()
 {
     switch (g_settings.Skin)
     {
+        case SkinTerminal: return Argb(255, 77, 255, 122);
+        case SkinGold: return Argb(255, 232, 196, 106);
+        case SkinPaper: return Argb(255, 37, 99, 235);
+        case SkinIce: return Argb(255, 14, 165, 233);
+        case SkinGraphite: return Argb(255, 161, 161, 170);
+        default: return Argb(255, 56, 189, 248);
+    }
+}
+
+static bool LightSkin() { return g_settings.Skin == SkinPaper || g_settings.Skin == SkinIce; }
+
+static wuxm::Brush IslandStroke(int group)
+{
+    if (g_settings.Line == 2) return wuxm::SolidColorBrush(LightSkin() ? Argb(40, 0, 0, 0) : Argb(46, 255, 255, 255));
+    if (g_settings.Line == 3) return GlowBrush(SkinAccent());
+    switch (g_settings.Skin)
+    {
+        case SkinGraphite: return wuxm::SolidColorBrush(Argb(26, 255, 255, 255));
+        case SkinPaper: return wuxm::SolidColorBrush(Argb(30, 0, 0, 0));
+        case SkinTerminal: return wuxm::SolidColorBrush(Argb(90, 77, 255, 122));
+        case SkinIce: return wuxm::SolidColorBrush(Argb(150, 255, 255, 255));
+        case SkinGold: return GlowBrush(SkinAccent());
         case SkinGlass: return wuxm::SolidColorBrush(Argb(41, 255, 255, 255));
         case SkinNeon: return wuxm::SolidColorBrush(group == 3 ? Argb(220, 244, 114, 182) : Argb(220, 56, 189, 248));
         case SkinAero7: return wuxm::SolidColorBrush(Argb(140, 255, 255, 255));
@@ -384,8 +435,13 @@ static wuxm::Brush IslandStroke(int group)
 
 static double StrokeWidth()
 {
+    if (g_settings.Line == 1) return 0;
+    if (g_settings.Line == 2) return 1;
+    if (g_settings.Line == 3) return 1.5;
     switch (g_settings.Skin)
     {
+        case SkinGold: return 1.5;
+        case SkinGraphite: case SkinPaper: case SkinTerminal: case SkinIce: return 1;
         case SkinNeon: return 1.5;
         case SkinRgb: return 2;
         case SkinGlass: case SkinAero7: case SkinLiquid: case SkinDock: return 1;
@@ -395,6 +451,7 @@ static double StrokeWidth()
 
 static double IslandRadius(double height)
 {
+    if (g_settings.Rounded) return std::min(10.0, height / 2);
     return g_settings.Skin == SkinAero7 ? 10 : height / 2;
 }
 
@@ -491,7 +548,9 @@ static void AddIsland(wuxc::Canvas const& canvas, double x, double y, double w, 
     rect.Height(std::max(0.0, h));
     rect.RadiusX(radius);
     rect.RadiusY(radius);
-    rect.Fill(IslandFill(group));
+    wuxm::Brush fill = IslandFill(group);
+    if (g_settings.Frosted) fill.Opacity(0.62);
+    rect.Fill(fill);
     double stroke = StrokeWidth();
     if (stroke > 0)
     {
@@ -537,6 +596,62 @@ static void StyleBackground(InstanceHandle handle)
 static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height);
 static void ApplyStartIcon(FrameState& state);
 
+// Skins claros (Papel, Hielo): las letras e iconos de Windows (hora, clima, bandeja) se pintan oscuros; al volver a
+// un skin oscuro se les quita el color y Windows pone el suyo
+static std::vector<winrt::weak_ref<wux::DependencyObject>> g_tinted;
+static bool g_tintOn = false;
+
+static void TintText(wux::DependencyObject const& node, wuxm::Brush const& ink, int depth = 0)
+{
+    if (depth > 60) return;
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(node);
+    for (int i = 0; i < count; i++)
+    {
+        wux::DependencyObject child = wuxm::VisualTreeHelper::GetChild(node, i);
+        if (auto text = child.try_as<wuxc::TextBlock>())
+        {
+            text.Foreground(ink);
+            g_tinted.push_back(winrt::make_weak(child));
+        }
+        else if (auto icon = child.try_as<wuxc::IconElement>())
+        {
+            icon.Foreground(ink);
+            g_tinted.push_back(winrt::make_weak(child));
+        }
+        TintText(child, ink, depth + 1);
+    }
+}
+
+static void ApplyInk(wux::FrameworkElement const& anyPiece)
+{
+    bool light = g_settings.Active && LightSkin();
+    if (!light && !g_tintOn) return;
+    if (!light)
+    {
+        for (auto& weak : g_tinted)
+        {
+            wux::DependencyObject element = weak.get();
+            if (!element) continue;
+            if (auto text = element.try_as<wuxc::TextBlock>()) text.ClearValue(wuxc::TextBlock::ForegroundProperty());
+            else if (auto icon = element.try_as<wuxc::IconElement>()) icon.ClearValue(wuxc::IconElement::ForegroundProperty());
+        }
+        g_tinted.clear();
+        g_tintOn = false;
+        return;
+    }
+    // Desde la raíz de la ventana de la barra: incluye la bandeja, el reloj y el clima
+    wux::DependencyObject top = anyPiece;
+    for (int i = 0; i < 80; i++)
+    {
+        wux::DependencyObject parent = wuxm::VisualTreeHelper::GetParent(top);
+        if (!parent) break;
+        top = parent;
+    }
+    g_tinted.clear();
+    TintText(top, wuxm::SolidColorBrush(Argb(255, 22, 24, 30)));
+    g_tintOn = true;
+}
+
 static void LayoutFrame(FrameState& state)
 {
     wuxc::Grid root = state.Root.get();
@@ -551,6 +666,7 @@ static void LayoutFrame(FrameState& state)
         DumpTree(L"barra_arbol_vertical.txt");
     }
     try { ApplyStartIcon(state); } catch (...) { }
+    try { ApplyInk(root); } catch (...) { }
 
     // Barra a un lado: todo se calcula «acostado» (y como x) y al final el dibujo se gira con una transposición
     const bool vertical = root.ActualHeight() > root.ActualWidth();
@@ -740,8 +856,8 @@ static void LayoutFrame(FrameState& state)
 
     // Firma de lo que hay que dibujar
     wchar_t signature[256];
-    swprintf_s(signature, L"%d|%d|%d|%d|%d|%x|%.0f|%.0f|%.0f,%.0f|%.0f,%.0f|%.0f,%.0f", g_settings.Active, g_settings.Format, g_settings.Gap,
-        g_settings.Edges, g_settings.Skin, *(uint32_t*)&g_settings.IslandColor, width, height, minX[0] + shiftOf[0], islandWidth[0], minX[1] + shiftOf[1], islandWidth[1],
+    swprintf_s(signature, L"%d|%d|%d|%d|%d.%d%d%d|%x|%.0f|%.0f|%.0f,%.0f|%.0f,%.0f|%.0f,%.0f", g_settings.Active, g_settings.Format, g_settings.Gap,
+        g_settings.Edges, g_settings.Skin, g_settings.Line, (int)g_settings.Frosted, (int)g_settings.Rounded, *(uint32_t*)&g_settings.IslandColor, width, height, minX[0] + shiftOf[0], islandWidth[0], minX[1] + shiftOf[1], islandWidth[1],
         minX[2] + shiftOf[2], islandWidth[2]);
     if (state.Drawn == signature) return;
     state.Drawn = signature;
@@ -1212,7 +1328,7 @@ static wux::FrameworkElement MakeStartIcon(double size)
     {
         // Ojitos de la isla: píldora negra y encima las caras (normal parpadeando, feliz, sorpresa, dormido...)
         wuxc::Border pill;
-        pill.Background(wuxm::SolidColorBrush(Argb(255, 0, 0, 0)));
+        pill.Background(wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 })); // Sin fondo propio: los ojitos van directo sobre la isla (con cualquier skin)
         pill.Height(size * 84 / 128);
         pill.CornerRadius(wux::CornerRadiusHelper::FromUniformRadius(size * 42 / 128));
         pill.VerticalAlignment(wux::VerticalAlignment::Center);
@@ -1264,7 +1380,7 @@ static wux::FrameworkElement MakeStartIcon(double size)
     {
         // Ojitos sin imagen de la suite (versión anterior): píldora negra con dos ojos blancos que parpadean
         wuxc::Border pill;
-        pill.Background(wuxm::SolidColorBrush(Argb(255, 0, 0, 0)));
+        pill.Background(wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 })); // Sin fondo propio: los ojitos van directo sobre la isla (con cualquier skin)
         pill.Height(size * 0.75);
         pill.CornerRadius(wux::CornerRadiusHelper::FromUniformRadius(size * 0.375));
         pill.VerticalAlignment(wux::VerticalAlignment::Center);
@@ -1462,7 +1578,16 @@ static void ApplyStartIcon(FrameState& state)
     }
     if (!wanted)
     {
-        if (!state.StartDrawn.empty()) icon.Opacity(1);
+        if (!state.StartDrawn.empty())
+        {
+            icon.Opacity(1);
+            icon.ClearValue(wux::UIElement::ClipProperty());
+            if (wux::FrameworkElement background = FindByName(button, L"BackgroundElement"))
+            {
+                background.Opacity(1);
+                background.ClearValue(wux::UIElement::ClipProperty());
+            }
+        }
         state.StartDrawn.clear();
         return;
     }
@@ -1482,6 +1607,22 @@ static void ApplyStartIcon(FrameState& state)
         Log(L"Icono de Inicio aplicado (" + signature + L")");
     }
     icon.Opacity(0); // Windows a veces lo vuelve a mostrar al animar el botón: se reaplica en cada pasada
+    // Al pasar el ratón, la animación de Windows le devuelve la opacidad un instante (se asomaba el logo arriba de
+    // los ojitos): además se recorta a nada, y eso la animación no lo toca
+    // El fondo del botón de Windows (BackgroundElement) trae un brillo fino arriba (relieve de Windows 11) que se veía
+    // como una rayita sobre los ojitos al pasar el ratón: se oculta igual que el logo
+    wux::FrameworkElement background = FindByName(button, L"BackgroundElement");
+    for (wux::FrameworkElement part : { icon, background })
+    {
+        if (!part) continue;
+        part.Opacity(0);
+        if (!part.Clip())
+        {
+            wuxm::RectangleGeometry nothing;
+            nothing.Rect(winrt::Windows::Foundation::Rect{ 0, 0, 0, 0 });
+            part.Clip(nothing);
+        }
+    }
 
     if (state.StartHookedButton.get() != button)
     {

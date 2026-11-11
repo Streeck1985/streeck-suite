@@ -63,7 +63,7 @@ namespace StreeckSuite.Modules
         private void DrawMonth(Graphics g, RectangleF area, int alpha, IslandPainter p)
         {
             DateTime today = DateTime.Today;
-            Color white = Color.FromArgb(alpha, Color.White), gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase), gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             string title = Spanish.TextInfo.ToTitleCase(today.ToString("MMMM yyyy", Spanish));
             p.DrawText(g, title, p.Bold15, white, new RectangleF(area.X, 0, area.Width, p.Px(22)), StringAlignment.Near);
 
@@ -99,14 +99,14 @@ namespace StreeckSuite.Modules
 
         private void DrawSide(Graphics g, RectangleF area, int alpha, IslandPainter p)
         {
-            Color white = Color.FromArgb(alpha, Color.White), gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase), gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             _taskHits.Clear();
             _eventHits.Clear();
 
             // Pomodoro: anillo con lo que falta; clic empieza o pausa
             float ringSize = p.Px(46);
             _ring = new RectangleF(area.X, 0, ringSize, ringSize);
-            using (Pen track = new Pen(Color.FromArgb(alpha * 30 / 255, Color.White), p.Px(4)))
+            using (Pen track = new Pen(Color.FromArgb(alpha * 30 / 255, IslandPainter.InkBase), p.Px(4)))
             using (Pen done = new Pen(Color.FromArgb(alpha, Orange), p.Px(4)))
             {
                 RectangleF ring = RectangleF.Inflate(_ring, -p.Px(2), -p.Px(2));
@@ -114,7 +114,7 @@ namespace StreeckSuite.Modules
                 float progress = TimerService.IsActive ? TimerService.Progress : 0;
                 if (progress > 0) g.DrawArc(done, ring, -90, 360 * progress);
             }
-            TimeSpan remaining = TimerService.IsActive ? TimerService.Remaining : TimerService.PhaseDuration(TimerService.CurrentPhase);
+            TimeSpan remaining = TimerService.IsActive ? TimerService.Shown : TimerService.PhaseDuration(TimerService.CurrentPhase);
             p.DrawText(g, TimerService.Format(remaining), p.Bold12, white, _ring, StringAlignment.Center);
             p.DrawText(g, "Pomodoro", p.Semibold13, white, new RectangleF(_ring.Right + p.Px(10), p.Px(4), area.Width - ringSize - p.Px(10), p.Px(18)), StringAlignment.Near);
             p.DrawText(g, TimerService.IsRunning ? "En marcha · clic para pausar" : "Clic en el anillo para empezar", p.Text11, gray,
@@ -157,7 +157,7 @@ namespace StreeckSuite.Modules
                 }
                 else
                 {
-                    using (Pen edge = new Pen(Color.FromArgb(alpha * 150 / 255, Color.White), 1)) g.DrawRectangle(edge, box.X, box.Y, box.Width, box.Height);
+                    using (Pen edge = new Pen(Color.FromArgb(alpha * 150 / 255, IslandPainter.InkBase), 1)) g.DrawRectangle(edge, box.X, box.Y, box.Width, box.Height);
                 }
                 string when = TasksService.TimeText(task);
                 bool late = !task.Done && task.Due != null && task.Due.Value < DateTime.Now;

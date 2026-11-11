@@ -27,6 +27,10 @@ $cmdArgs = @(
     "/resource:$(Join-Path $root 'StreeckSuite_512.png'),logo.png",
     "/resource:$suite,payload/StreeckSuite.exe",
     "/resource:$($dll.FullName),payload/$($dll.Name)",
+    # WebView2 (Claude en la isla): libreria de Microsoft
+    "/resource:$(Join-Path $root 'lib\webview2\Microsoft.Web.WebView2.Core.dll'),payload/Microsoft.Web.WebView2.Core.dll",
+    "/resource:$(Join-Path $root 'lib\webview2\Microsoft.Web.WebView2.WinForms.dll'),payload/Microsoft.Web.WebView2.WinForms.dll",
+    "/resource:$(Join-Path $root 'lib\webview2\WebView2Loader.dll'),payload/WebView2Loader.dll",
     (Join-Path $PSScriptRoot "Setup.cs"),
     $buildInfo
 )

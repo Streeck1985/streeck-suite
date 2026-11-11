@@ -16,11 +16,14 @@ namespace StreeckSuite.Modules
         public static readonly Color Break = Color.FromArgb(74, 222, 128);
         public static readonly Color BreakLight = Color.FromArgb(134, 239, 172);
         public static readonly Color Link = Color.FromArgb(125, 211, 252);
+        public static readonly Color Watch = Color.FromArgb(251, 191, 36);
+        public static readonly Color WatchLight = Color.FromArgb(253, 224, 71);
 
         public static Color Current
         {
             get
             {
+                if (TimerService.Mode == TimerService.TimerMode.Stopwatch) return Watch;
                 if (TimerService.Mode == TimerService.TimerMode.Timer) return IslandPainter.Sky;
                 return TimerService.CurrentPhase == TimerService.Phase.Focus ? Focus : Break;
             }
@@ -30,6 +33,7 @@ namespace StreeckSuite.Modules
         {
             get
             {
+                if (TimerService.Mode == TimerService.TimerMode.Stopwatch) return WatchLight;
                 if (TimerService.Mode == TimerService.TimerMode.Timer) return Link;
                 return TimerService.CurrentPhase == TimerService.Phase.Focus ? FocusLight : BreakLight;
             }
@@ -47,7 +51,7 @@ namespace StreeckSuite.Modules
         private const string GlyphReset = "";
         private static readonly int[] Presets = { 5, 10, 15, 25 };
 
-        private RectangleF _ring, _timerMode, _pomodoroMode, _play, _reset;
+        private RectangleF _ring, _timerMode, _pomodoroMode, _watchMode, _play, _reset;
         private readonly RectangleF[] _presets = new RectangleF[Presets.Length];
 
         public override string TabName { get { return "Tiempo"; } }
@@ -76,14 +80,14 @@ namespace StreeckSuite.Modules
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             float x = p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             Color accent = TimeColors.Current;
 
             // Anillo de 112 px con el tiempo restante y la fase
             _ring = new RectangleF(x, (size.Height - p.Px(112)) / 2, p.Px(112), p.Px(112));
             p.DrawRing(g, _ring, TimerService.Progress, accent, alpha, p.Px(8));
-            p.DrawText(g, TimerService.Format(TimerService.Remaining), p.Bold18, white,
+            p.DrawText(g, TimerService.Format(TimerService.Shown), p.Bold18, white,
                 new RectangleF(_ring.X, _ring.Y + p.Px(30), _ring.Width, p.Px(30)), StringAlignment.Center);
             p.DrawText(g, PhaseLabel(), p.Label11, IslandPainter.Fade(TimeColors.CurrentLight, alpha),
                 new RectangleF(_ring.X, _ring.Y + p.Px(60), _ring.Width, p.Px(16)), StringAlignment.Center);
@@ -91,16 +95,20 @@ namespace StreeckSuite.Modules
             float right = _ring.Right + p.Px(22);
             float width = size.Width - x - right;
 
-            // Temporizador | Pomodoro
+            // Temporizador | Pomodoro | Cronómetro
             RectangleF modes = new RectangleF(right, _ring.Y, width, p.Px(30));
-            IslandPainter.FillRounded(g, modes, p.Px(10), Color.FromArgb(alpha * 15 / 255, Color.White));
-            float half = (modes.Width - p.Px(10)) / 2;
-            _timerMode = new RectangleF(modes.X + p.Px(3), modes.Y + p.Px(3), half, modes.Height - p.Px(6));
-            _pomodoroMode = new RectangleF(_timerMode.Right + p.Px(4), _timerMode.Y, half, _timerMode.Height);
-            bool pomodoro = TimerService.Mode == TimerService.TimerMode.Pomodoro;
-            IslandPainter.FillRounded(g, pomodoro ? _pomodoroMode : _timerMode, p.Px(8), Color.FromArgb(alpha * 36 / 255, Color.White));
-            p.DrawText(g, "Temporizador", pomodoro ? p.Text12 : p.Tab12, pomodoro ? gray : white, _timerMode, StringAlignment.Center);
-            p.DrawText(g, "Pomodoro", pomodoro ? p.Tab12 : p.Text12, pomodoro ? white : gray, _pomodoroMode, StringAlignment.Center);
+            IslandPainter.FillRounded(g, modes, p.Px(10), Color.FromArgb(alpha * 15 / 255, IslandPainter.InkBase));
+            float third = (modes.Width - p.Px(14)) / 3;
+            _timerMode = new RectangleF(modes.X + p.Px(3), modes.Y + p.Px(3), third, modes.Height - p.Px(6));
+            _pomodoroMode = new RectangleF(_timerMode.Right + p.Px(4), _timerMode.Y, third, _timerMode.Height);
+            _watchMode = new RectangleF(_pomodoroMode.Right + p.Px(4), _timerMode.Y, third, _timerMode.Height);
+            TimerService.TimerMode mode = TimerService.Mode;
+            RectangleF selectedMode = mode == TimerService.TimerMode.Pomodoro ? _pomodoroMode : mode == TimerService.TimerMode.Stopwatch ? _watchMode : _timerMode;
+            IslandPainter.FillRounded(g, selectedMode, p.Px(8), Color.FromArgb(alpha * 36 / 255, IslandPainter.InkBase));
+            bool onTimer = mode == TimerService.TimerMode.Timer, onPomodoro = mode == TimerService.TimerMode.Pomodoro, onWatch = mode == TimerService.TimerMode.Stopwatch;
+            p.DrawText(g, "Temporizador", onTimer ? p.Tab12 : p.Text12, onTimer ? white : gray, _timerMode, StringAlignment.Center);
+            p.DrawText(g, "Pomodoro", onPomodoro ? p.Tab12 : p.Text12, onPomodoro ? white : gray, _pomodoroMode, StringAlignment.Center);
+            p.DrawText(g, "Cronómetro", onWatch ? p.Tab12 : p.Text12, onWatch ? white : gray, _watchMode, StringAlignment.Center);
 
             // Atajos de minutos
             float chipX = right, chipY = modes.Bottom + p.Px(10);
@@ -109,8 +117,8 @@ namespace StreeckSuite.Modules
                 string label = i == 0 ? Presets[i] + " min" : Presets[i].ToString();
                 float chipW = g.MeasureString(label, p.Text12).Width + p.Px(12);
                 _presets[i] = new RectangleF(chipX, chipY, chipW, p.Px(24));
-                bool selected = TimerService.Duration == TimeSpan.FromMinutes(Presets[i]);
-                IslandPainter.FillRounded(g, _presets[i], p.Px(9), selected ? Color.FromArgb(alpha * 51 / 255, accent) : Color.FromArgb(alpha * 15 / 255, Color.White));
+                bool selected = !onWatch && TimerService.Duration == TimeSpan.FromMinutes(Presets[i]);
+                IslandPainter.FillRounded(g, _presets[i], p.Px(9), selected ? Color.FromArgb(alpha * 51 / 255, accent) : Color.FromArgb(alpha * 15 / 255, IslandPainter.InkBase));
                 p.DrawText(g, label, selected ? p.Bold12 : p.Text12, selected ? IslandPainter.Fade(TimeColors.CurrentLight, alpha) : IslandPainter.Fade(Color.FromArgb(195, 201, 212), alpha),
                     _presets[i], StringAlignment.Center);
                 chipX = _presets[i].Right + p.Px(6);
@@ -119,18 +127,19 @@ namespace StreeckSuite.Modules
             // Iniciar/pausar, reiniciar y pista de la rueda
             float buttonsY = chipY + p.Px(32);
             _play = new RectangleF(right, buttonsY, p.Px(40), p.Px(40));
-            using (SolidBrush fill = new SolidBrush(Color.FromArgb(alpha, Color.White))) g.FillEllipse(fill, _play);
-            p.DrawText(g, TimerService.IsRunning ? GlyphPause : GlyphPlay, p.Glyph16, IslandPainter.Fade(Color.FromArgb(11, 15, 23), alpha), _play, StringAlignment.Center);
+            using (SolidBrush fill = new SolidBrush(Color.FromArgb(alpha, IslandPainter.InkBase))) g.FillEllipse(fill, _play);
+            p.DrawText(g, TimerService.IsRunning ? GlyphPause : GlyphPlay, p.Glyph16, IslandPainter.Fade(IslandPainter.InkContrast, alpha), _play, StringAlignment.Center);
             _reset = new RectangleF(_play.Right + p.Px(10), buttonsY + p.Px(4), p.Px(32), p.Px(32));
-            using (SolidBrush fill = new SolidBrush(Color.FromArgb(alpha * 20 / 255, Color.White))) g.FillEllipse(fill, _reset);
+            using (SolidBrush fill = new SolidBrush(Color.FromArgb(alpha * 20 / 255, IslandPainter.InkBase))) g.FillEllipse(fill, _reset);
             p.DrawText(g, GlyphReset, p.Glyph16, IslandPainter.Fade(Color.FromArgb(195, 201, 212), alpha), _reset, StringAlignment.Center);
-            p.DrawText(g, "Rueda sobre el anillo: ±1 min", p.Text11, IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha),
+            p.DrawText(g, onWatch ? "Cuenta hacia arriba desde 00:00" : "Rueda sobre el anillo: ±1 min", p.Text11, IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha),
                 new RectangleF(_reset.Right + p.Px(10), buttonsY, size.Width - x - _reset.Right - p.Px(10), p.Px(40)), StringAlignment.Near);
         }
 
         private static string PhaseLabel()
         {
             if (TimerService.Mode == TimerService.TimerMode.Timer) return TimerService.IsRunning ? "TEMPORIZADOR" : "EN PAUSA";
+            if (TimerService.Mode == TimerService.TimerMode.Stopwatch) return TimerService.IsRunning ? "CRONÓMETRO" : "EN PAUSA";
             switch (TimerService.CurrentPhase)
             {
                 case TimerService.Phase.ShortBreak: return "DESCANSO";
@@ -145,6 +154,7 @@ namespace StreeckSuite.Modules
             if (_reset.Contains(point)) { TimerService.Reset(); return true; }
             if (_timerMode.Contains(point)) { TimerService.SetMode(TimerService.TimerMode.Timer); return true; }
             if (_pomodoroMode.Contains(point)) { TimerService.SetMode(TimerService.TimerMode.Pomodoro); return true; }
+            if (_watchMode.Contains(point)) { TimerService.SetMode(TimerService.TimerMode.Stopwatch); return true; }
             for (int i = 0; i < Presets.Length; i++)
             {
                 if (_presets[i].Contains(point)) { TimerService.SetMinutes(Presets[i]); return true; }
@@ -154,7 +164,7 @@ namespace StreeckSuite.Modules
 
         public override bool OnWheel(PointF point, int delta)
         {
-            if (!_ring.Contains(point)) return false;
+            if (!_ring.Contains(point) || TimerService.Mode == TimerService.TimerMode.Stopwatch) return false;
             TimerService.AddMinutes(delta > 0 ? 1 : -1);
             return true;
         }
@@ -189,7 +199,7 @@ namespace StreeckSuite.Modules
 
             RectangleF badge = new RectangleF(x, (size.Height - p.Px(34)) / 2, p.Px(34), p.Px(34));
             IslandPainter.FillRounded(g, badge, p.Px(10), IslandPainter.Fade(Color.FromArgb(46, baseColor), alpha));
-            p.DrawText(g, !pomodoro ? "⏰" : BreakNext ? "☕" : "🎯", p.EmojiFont, Color.FromArgb(alpha, Color.White), badge, StringAlignment.Center);
+            p.DrawText(g, !pomodoro ? "⏰" : BreakNext ? "☕" : "🎯", p.EmojiFont, Color.FromArgb(alpha, IslandPainter.InkBase), badge, StringAlignment.Center);
 
             string title, detail;
             if (!pomodoro)
@@ -289,7 +299,7 @@ namespace StreeckSuite.Modules
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             float x = p.Px(PadX), width = size.Width - 2 * x;
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             Color legend = IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha);
             _rows.Clear();
@@ -340,7 +350,7 @@ namespace StreeckSuite.Modules
                     joinWidth = g.MeasureString("Unirse", p.Bold12).Width + p.Px(16);
                     RectangleF join = new RectangleF(row.Right - p.Px(10) - joinWidth, row.Y + (row.Height - p.Px(24)) / 2, joinWidth, p.Px(24));
                     IslandPainter.FillRounded(g, join, p.Px(8), IslandPainter.Fade(TimeColors.Link, alpha));
-                    p.DrawText(g, "Unirse", p.Bold12, IslandPainter.Fade(Color.FromArgb(11, 15, 23), alpha), join, StringAlignment.Center);
+                    p.DrawText(g, "Unirse", p.Bold12, IslandPainter.Fade(IslandPainter.InkContrast, alpha), join, StringAlignment.Center);
                     _joins.Add(new KeyValuePair<RectangleF, AgendaEvent>(join, e));
                     joinWidth += p.Px(14);
                 }
@@ -411,14 +421,14 @@ namespace StreeckSuite.Modules
                 float joinWidth = g.MeasureString("Unirse", p.Bold12).Width + p.Px(16);
                 _join = new RectangleF(right - joinWidth, (size.Height - p.Px(26)) / 2, joinWidth, p.Px(26));
                 IslandPainter.FillRounded(g, _join, p.Px(8), IslandPainter.Fade(TimeColors.Link, alpha));
-                p.DrawText(g, "Unirse", p.Bold12, IslandPainter.Fade(Color.FromArgb(11, 15, 23), alpha), _join, StringAlignment.Center);
+                p.DrawText(g, "Unirse", p.Bold12, IslandPainter.Fade(IslandPainter.InkContrast, alpha), _join, StringAlignment.Center);
                 right = _join.X - p.Px(12);
             }
 
             float textX = badge.Right + p.Px(14);
             string detail = AgendaService.WhenText(e) + " · " + e.Start.ToString("HH:mm") + (string.IsNullOrEmpty(e.Location) ? "" : " · " + e.Location);
             detail = detail.Substring(0, 1).ToUpperInvariant() + detail.Substring(1);
-            p.DrawText(g, e.Title, p.Bold15, Color.FromArgb(alpha, Color.White), new RectangleF(textX, p.Px(10), right - textX, p.Px(22)), StringAlignment.Near);
+            p.DrawText(g, e.Title, p.Bold15, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(textX, p.Px(10), right - textX, p.Px(22)), StringAlignment.Near);
             p.DrawText(g, detail, p.Text12, IslandPainter.Fade(IslandPainter.Gray, alpha), new RectangleF(textX, p.Px(32), right - textX, p.Px(18)), StringAlignment.Near);
         }
 

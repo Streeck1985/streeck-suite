@@ -29,6 +29,13 @@ namespace StreeckSuite.Modules
         private AssistantHotkey _assistantHotkey;
         private bool _registeredAssistantHotkey;
         private NotificationHotkey _notificationHotkey;
+        private WebDrawerHotkey _webHotkey;
+        private WebDrawerWindow _webDrawer;
+        private IslandHotkey _clipboardHotkey;
+        private ClipboardWindow _clipboard;
+        private IslandHotkey _phoneHotkey;
+        private IslandHotkey _micHotkey;
+        private PhoneWindow _phone;
         private Action<bool> _dndChangedHandler;
         private bool _isGameActive;
 
@@ -88,6 +95,77 @@ namespace StreeckSuite.Modules
             });
             if (!_notificationHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + N ya lo usa otro programa");
 
+            // Claude en la isla: Ctrl + Alt + C abre o esconde el cajón con claude.ai (se crea la primera vez)
+            _webHotkey = new WebDrawerHotkey(ToggleWebDrawer);
+            if (!_webHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + C ya lo usa otro programa");
+
+            // Historial del portapapeles: escucha desde el arranque; Ctrl + Alt + V lo muestra
+            ClipboardHistory.Start();
+            _clipboardHotkey = new IslandHotkey(0x5356, Keys.V, () =>
+            {
+                if (_isGameActive) return;
+                if (_clipboard == null || _clipboard.IsDisposed) _clipboard = new ClipboardWindow();
+                _clipboard.Toggle();
+            });
+            if (!_clipboardHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + V ya lo usa otro programa");
+
+            // Las herramientas también se abren con botones (Centro de control, Ajustes › Herramientas, Novedades)
+            IslandTools.OpenClaude = ToggleWebDrawer;
+            IslandTools.OpenClipboard = () =>
+            {
+                if (_clipboard == null || _clipboard.IsDisposed) _clipboard = new ClipboardWindow();
+                if (!_clipboard.Visible) _clipboard.Toggle();
+            };
+            IslandTools.OpenPhone = () => Phone.ShowReceive();
+            IslandTools.ToggleMic = () => { if (_overlayForm != null && !_overlayForm.IsDisposed) _overlayForm.ToggleMicFromHotkey(); };
+            // Novedades: una vez, unos segundos después de arrancar tras una actualización
+            System.Windows.Forms.Timer whatsNew = new System.Windows.Forms.Timer { Interval = 4000 };
+            whatsNew.Tick += (s, e) => { whatsNew.Stop(); whatsNew.Dispose(); try { WhatsNewWindow.ShowIfUpdated(); } catch (Exception ex) { Log.Error("[Novedades] {0}", ex.Message); } };
+            whatsNew.Start();
+            // Agentes de IA (Claude Code): trabajando junto a los ojitos; aviso al terminar o al pedir permiso
+            AgentNotifier.Start(_overlayForm);
+            AgentNotifier.Changed += state =>
+            {
+                if (_overlayForm == null || _overlayForm.IsDisposed) return;
+                if (state == AgentNotifier.AgentState.Done)
+                {
+                    _overlayForm.ShowAgentPeek("Claude terminó · clic para verlo", IslandPainter.Sky, 7);
+                    IslandEyes.React(IslandEyes.Mood.Happy, 3);
+                }
+                else if (state == AgentNotifier.AgentState.NeedsYou)
+                {
+                    string m = AgentNotifier.Message ?? "";
+                    string text = m.IndexOf("permission", StringComparison.OrdinalIgnoreCase) >= 0 ? "Claude necesita tu permiso · clic para verlo"
+                                : m.IndexOf("waiting", StringComparison.OrdinalIgnoreCase) >= 0 ? "Claude te espera · clic para verlo"
+                                : "Claude: " + m;
+                    _overlayForm.ShowAgentPeek(text, IslandPainter.Amber, 15);
+                    IslandEyes.React(IslandEyes.Mood.Surprised, 2);
+                }
+            };
+            // Micrófono: Ctrl + Alt + M lo silencia o lo activa desde cualquier lado
+            _micHotkey = new IslandHotkey(0x534D, Keys.M, () => { if (_overlayForm != null && !_overlayForm.IsDisposed) _overlayForm.ToggleMicFromHotkey(); });
+            if (!_micHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + M ya lo usa otro programa");
+            SystemTweaks.Start();
+            // Celular: Ctrl + Alt + R para recibir; el portapapeles manda cosas al celular
+            _phoneHotkey = new IslandHotkey(0x5352, Keys.R, () => { if (!_isGameActive) Phone.ShowReceive(); });
+            if (!_phoneHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + R ya lo usa otro programa");
+            ClipboardWindow.SendToPhone = item => Phone.SendItem(item);
+            PhoneLink.FileReceived += (path, size) =>
+            {
+                _eventBus.Publish(Events.NotchShowMessage, "📱 Llegó " + System.IO.Path.GetFileName(path) + " · " + PhoneWindow.SizeText(size));
+                IslandEyes.React(IslandEyes.Mood.Happy, 2.5);
+            };
+            PhoneLink.TextReceived += text =>
+            {
+                if (_overlayForm == null || _overlayForm.IsDisposed) return;
+                _overlayForm.BeginInvokeSafe(() =>
+                {
+                    try { Clipboard.SetText(text); } catch (Exception) { }
+                    _eventBus.Publish(Events.NotchShowMessage, "📱 Texto del celular copiado");
+                    IslandEyes.React(IslandEyes.Mood.Happy, 2.5);
+                });
+            };
+
             _dndChangedHandler = dnd =>
             {
                 if (_overlayForm != null && !_overlayForm.IsDisposed)
@@ -115,6 +193,23 @@ namespace StreeckSuite.Modules
             };
         }
 
+        private void ToggleWebDrawer()
+        {
+            if (_isGameActive) return;
+            if (_webDrawer == null || _webDrawer.IsDisposed) _webDrawer = WebDrawerWindow.TryCreate();
+            if (_webDrawer == null) { _eventBus.Publish(Events.NotchShowMessage, "⚠️ No se pudo abrir Claude en la isla"); return; }
+            _webDrawer.Toggle();
+        }
+
+        private PhoneWindow Phone
+        {
+            get
+            {
+                if (_phone == null || _phone.IsDisposed) _phone = new PhoneWindow();
+                return _phone;
+            }
+        }
+
         private AssistantWindow Assistant
         {
             get
@@ -129,6 +224,16 @@ namespace StreeckSuite.Modules
             _isRunning = false;
             if (_dndChangedHandler != null) { NotificationService.DoNotDisturbChanged -= _dndChangedHandler; _dndChangedHandler = null; }
             if (_notificationHotkey != null) { _notificationHotkey.Dispose(); _notificationHotkey = null; }
+            if (_webHotkey != null) { _webHotkey.Dispose(); _webHotkey = null; }
+            if (_clipboardHotkey != null) { _clipboardHotkey.Dispose(); _clipboardHotkey = null; }
+            ClipboardHistory.Stop();
+            if (_phoneHotkey != null) { _phoneHotkey.Dispose(); _phoneHotkey = null; }
+            if (_micHotkey != null) { _micHotkey.Dispose(); _micHotkey = null; }
+            SystemTweaks.Stop();
+            PhoneLink.Stop();
+            if (_phone != null && !_phone.IsDisposed) _phone.Hide();
+            if (_clipboard != null && !_clipboard.IsDisposed) _clipboard.Hide();
+            if (_webDrawer != null && !_webDrawer.IsDisposed) _webDrawer.HideDrawer();
             if (_assistantHotkey != null) { _assistantHotkey.Dispose(); _assistantHotkey = null; }
             if (_assistant != null && !_assistant.IsDisposed) _assistant.Hide();
             if (_searchHotkey != null) { _searchHotkey.Dispose(); _searchHotkey = null; }
@@ -273,10 +378,11 @@ namespace StreeckSuite.Modules
                 _dpiScale = screenGraphics.DpiX / 96f;
             }
             _scale = _dpiScale * SuiteSettings.IslandScalePercent / 100f;
-            _painter = new IslandPainter(_scale, SuiteSettings.IslandScalePercent / 100f);
+            _painter = new IslandPainter(_scale, SuiteSettings.IslandScalePercent / 100f, SuiteSettings.IslandFont);
             _settingsChanged = OnSettingsChanged;
             SuiteSettings.Changed += _settingsChanged;
             _audio = CreateAudioService();
+            CompactView.MicMutedProbe = () => _audio != null && _audio.HasMic && _audio.MicMuted;
             // Teclas de volumen atrapadas (como Bloom): la isla muestra su aviso y Windows no dibuja el suyo
             _volumeKeys = new VolumeKeysHook(_audio, (level, muted) => BeginInvokeSafe(() => ShowVolume(level, muted)));
             _volumeKeys.Apply();
@@ -389,16 +495,19 @@ namespace StreeckSuite.Modules
         /// </summary>
         private VolumeKeysHook _volumeKeys;
 
+        private SuiteSettings.FontKind _painterFont = SuiteSettings.IslandFont;
+
         private void OnSettingsChanged()
         {
             if (IsDisposed) return;
             if (_volumeKeys != null) _volumeKeys.Apply();
             float scale = _dpiScale * SuiteSettings.IslandScalePercent / 100f;
-            if (scale != _scale)
+            if (scale != _scale || SuiteSettings.IslandFont != _painterFont)
             {
                 _scale = scale;
+                _painterFont = SuiteSettings.IslandFont;
                 IslandPainter old = _painter;
-                _painter = new IslandPainter(_scale, SuiteSettings.IslandScalePercent / 100f);
+                _painter = new IslandPainter(_scale, SuiteSettings.IslandScalePercent / 100f, SuiteSettings.IslandFont);
                 old.Dispose();
                 SizeF target = TargetSize();
                 _width = target.Width;
@@ -593,6 +702,16 @@ namespace StreeckSuite.Modules
         private DateTime _osdAppliedAt = DateTime.MinValue;
 
         // Píldora corta que se ensancha un momento; no tapa un aviso más importante que se esté viendo
+        /// <summary>
+        /// Ctrl + Alt + M: silencia o activa el micrófono y lo dice en la isla.
+        /// </summary>
+        internal void ToggleMicFromHotkey()
+        {
+            if (_audio == null || !_audio.HasMic) { ShowPeek("\uE720", "No hay micrófono conectado", IslandPainter.Gray); return; }
+            _audio.ToggleMicMute();
+            bool muted = _audio.MicMuted;
+            ShowPeek("\uE720", muted ? "Micrófono silenciado (Ctrl+Alt+M)" : "Micrófono activo", muted ? Color.FromArgb(255, 93, 108) : IslandPainter.Sky);
+        }
         internal void ShowPeek(string glyph, string text, Color color)
         {
             if (!Visible) return;
@@ -606,6 +725,16 @@ namespace StreeckSuite.Modules
             UpdateMode();
         }
 
+        /// <summary>
+        /// Aviso de un agente de IA: dura más que un aviso normal y un clic vuelve a VS Code.
+        /// </summary>
+        internal void ShowAgentPeek(string text, Color color, int seconds)
+        {
+            ShowPeek("\u2733", text, color);
+            if (_alertView != _peek) return;
+            _peek.Click = AgentNotifier.FocusEditor;
+            _alertUntil = DateTime.Now.AddSeconds(seconds);
+        }
         // Versión nueva en GitHub: aviso más largo; un clic abre Acerca de para actualizar
         private void OnUpdateFound(string version)
         {
@@ -625,7 +754,7 @@ namespace StreeckSuite.Modules
             bool caps = Control.IsKeyLocked(Keys.CapsLock);
             if (_capsLock != null && caps != _capsLock.Value)
             {
-                ShowPeek("", caps ? "Bloq Mayús activado" : "Bloq Mayús desactivado", caps ? IslandPainter.Amber : Color.White);
+                ShowPeek("", caps ? "Bloq Mayús activado" : "Bloq Mayús desactivado", caps ? IslandPainter.Amber : IslandPainter.InkBase);
             }
             _capsLock = caps;
 
@@ -646,7 +775,7 @@ namespace StreeckSuite.Modules
                     int percent = (int)Math.Round(power.BatteryLifePercent * 100);
                     ShowPeek(line == PowerLineStatus.Online ? "" : "",
                         line == PowerLineStatus.Online ? "Cargando · " + percent + " %" : "Batería · " + percent + " %",
-                        line == PowerLineStatus.Online ? IslandPainter.Green : Color.White);
+                        line == PowerLineStatus.Online ? IslandPainter.Green : IslandPainter.InkBase);
                 }
                 _powerLine = line;
             }
@@ -851,6 +980,8 @@ namespace StreeckSuite.Modules
             if (_mode == Mode.Expanded || (_mode == Mode.Alert && (ActiveView == _alert || ActiveView == _notificationAlert))) radius = Px(Attached ? 22 : PanelRadius);
             else if (_mode == Mode.Alert) radius = Px(22);
             else radius = target.Height / 2;
+            // Redondeada: como la flotante, pero con esquinas suaves en lugar de píldora
+            if (SuiteSettings.IslandStyle == SuiteSettings.IslandStyleKind.Rounded) radius = Math.Min(radius, Px(_mode == Mode.Expanded ? 18 : 11));
             return Math.Min(radius, target.Height / 2);
         }
 
@@ -1436,7 +1567,7 @@ namespace StreeckSuite.Modules
                 float w = active ? activeDot : dot;
                 RectangleF shape = new RectangleF(x, y, w, dot);
                 int dotAlpha = active ? alpha : i == _hoveredTab ? alpha * 180 / 255 : alpha * 80 / 255;
-                IslandPainter.FillRounded(g, shape, dot / 2, Color.FromArgb(dotAlpha, Color.White));
+                IslandPainter.FillRounded(g, shape, dot / 2, Color.FromArgb(dotAlpha, IslandPainter.InkBase));
                 _tabRects.Add(RectangleF.Inflate(shape, gap / 2, Px(8))); // Zona de clic más generosa que el puntito
                 _tabViews.Add(available[i]);
                 x += w + gap;
@@ -1459,6 +1590,43 @@ namespace StreeckSuite.Modules
             List<KeyValuePair<string, Action>> states = new List<KeyValuePair<string, Action>>();
             states.Add(new KeyValuePair<string, Action>("compacta", () => { _mode = Mode.Compact; }));
             states.Add(new KeyValuePair<string, Action>("compacta-ojitos", () => { SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; _mode = Mode.Compact; }));
+            foreach (SuiteSettings.EyesSideKind side in Enum.GetValues(typeof(SuiteSettings.EyesSideKind)))
+            {
+                SuiteSettings.EyesSideKind s = side;
+                states.Add(new KeyValuePair<string, Action>("compacta-ojitos-" + s.ToString().ToLowerInvariant(), () =>
+                {
+                    SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; SuiteSettings.EyesSide = s; _mode = Mode.Compact;
+                }));
+            }
+            // Galería de skins (capturas para GitHub): cada skin con la isla cerrada y con el Centro de control abierto
+            for (int skin = 0; skin < IslandSkin.Count; skin++)
+            {
+                int s = skin;
+                string name = "skin-" + s.ToString("00") + "-" + IslandSkin.Names[s].ToLowerInvariant().Replace(' ', '-');
+                states.Add(new KeyValuePair<string, Action>(name + "-cerrada", () =>
+                {
+                    IslandSkin.PreviewOverride = s;
+                    SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; SuiteSettings.EyesSide = SuiteSettings.EyesSideKind.TimeWeather; _mode = Mode.Compact;
+                }));
+                states.Add(new KeyValuePair<string, Action>(name + "-abierta", () =>
+                {
+                    IslandSkin.PreviewOverride = s;
+                    _mode = Mode.Expanded; _viewIndex = _views.FindIndex(v => v is ControlCenterView);
+                }));
+            }
+            states.Add(new KeyValuePair<string, Action>("skin-fin", () => { IslandSkin.PreviewOverride = null; _mode = Mode.Compact; }));
+            states.Add(new KeyValuePair<string, Action>("compacta-mic-silenciado", () =>
+            {
+                Func<bool> real = CompactView.MicMutedProbe;
+                CompactView.MicMutedProbe = () => true;
+                SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; SuiteSettings.EyesSide = SuiteSettings.EyesSideKind.Weather; _mode = Mode.Compact;
+            }));
+            states.Add(new KeyValuePair<string, Action>("compacta-cronometro", () =>
+            {
+                TimerService.SetMode(TimerService.TimerMode.Stopwatch); TimerService.Toggle(); _mode = Mode.Compact;
+            }));
+            states.Add(new KeyValuePair<string, Action>("panel-tiempo-cronometro", () => { _mode = Mode.Expanded; _viewIndex = _views.FindIndex(v => v is TimerView); }));
+            states.Add(new KeyValuePair<string, Action>("reinicia-tiempo", () => { TimerService.SetMode(TimerService.TimerMode.Timer); _mode = Mode.Compact; }));
             states.Add(new KeyValuePair<string, Action>("compacta-widgets", () => { SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Widgets; _mode = Mode.Compact; }));
             // Música de ejemplo (con y sin letra), para revisar el diseño aunque no suene nada
             MediaInfo sample = new MediaInfo { Title = "Can't Stop", Artist = "Red Hot Chili Peppers", AppName = "Spotify", IsPlaying = true, IsAvailable = true,
@@ -1567,7 +1735,7 @@ namespace StreeckSuite.Modules
             IslandView current = CurrentExpandedView();
 
             RectangleF bar = new RectangleF(Px(18), Px(TabsTop), PillW - Px(36), Px(TabsHeight));
-            IslandPainter.FillRounded(g, bar, Px(12), Color.FromArgb(alpha * 13 / 255, Color.White));
+            IslandPainter.FillRounded(g, bar, Px(12), Color.FromArgb(alpha * 13 / 255, IslandPainter.InkBase));
 
             // Opción A del tablero D4: iconos de 38 px y la pestaña activa ocupa el resto con icono y nombre
             float inner = Px(4);
@@ -1579,10 +1747,10 @@ namespace StreeckSuite.Modules
                 bool active = available[i] == current;
                 RectangleF tab = new RectangleF(x, bar.Y + inner, active ? activeWidth : iconWidth, bar.Height - 2 * inner);
                 x = tab.Right + inner;
-                Color color = active ? Color.FromArgb(alpha, Color.White) : IslandPainter.Fade(IslandPainter.Gray, alpha);
+                Color color = active ? Color.FromArgb(alpha, IslandPainter.InkBase) : IslandPainter.Fade(IslandPainter.Gray, alpha);
                 if (active)
                 {
-                    IslandPainter.FillRounded(g, tab, Px(9), Color.FromArgb(alpha * 36 / 255, Color.White));
+                    IslandPainter.FillRounded(g, tab, Px(9), Color.FromArgb(alpha * 36 / 255, IslandPainter.InkBase));
                     // El ancho del icono se mide: algunos glifos (el monitor de Sistema) son más anchos que 16 px y se cortaban
                     SizeF name = g.MeasureString(available[i].TabName, _painter.Tab12);
                     float glyphWidth = g.MeasureString(available[i].TabGlyph, _painter.Glyph16).Width;
@@ -1593,7 +1761,7 @@ namespace StreeckSuite.Modules
                 }
                 else
                 {
-                    if (i == _hoveredTab) IslandPainter.FillRounded(g, tab, Px(9), Color.FromArgb(alpha * 15 / 255, Color.White));
+                    if (i == _hoveredTab) IslandPainter.FillRounded(g, tab, Px(9), Color.FromArgb(alpha * 15 / 255, IslandPainter.InkBase));
                     _painter.DrawText(g, available[i].TabGlyph, _painter.Glyph16, color, tab, StringAlignment.Center);
                 }
                 _tabRects.Add(tab);
@@ -1616,7 +1784,7 @@ namespace StreeckSuite.Modules
                 if (label.Right > bar.Right) label.X = bar.Right - label.Width;
                 if (label.X < bar.X) label.X = bar.X;
                 IslandPainter.FillRounded(g, label, Px(10), Color.FromArgb(alpha * 240 / 255, 42, 48, 64));
-                _painter.DrawText(g, name, _painter.Text12, Color.FromArgb(alpha, Color.White), label, StringAlignment.Center);
+                _painter.DrawText(g, name, _painter.Text12, Color.FromArgb(alpha, IslandPainter.InkBase), label, StringAlignment.Center);
             }
         }
 

@@ -309,8 +309,13 @@ namespace StreeckSuite.Modules
         {
             get
             {
-                try { return ColorTranslator.FromHtml(SuiteSettings.EyesColor); }
-                catch (Exception) { return Color.White; }
+                Color color;
+                try { color = ColorTranslator.FromHtml(SuiteSettings.EyesColor); }
+                catch (Exception) { color = Color.White; }
+                // En los skins claros (Papel, Hielo) unos ojitos blancos no se verían
+                int skin = IslandSkin.Current;
+                if (color.GetBrightness() > 0.85f && (IslandSkin.IsLight || skin == IslandSkin.Terminal || skin == IslandSkin.Gold)) return IslandPainter.InkBase;
+                return color;
             }
         }
 
@@ -458,7 +463,11 @@ namespace StreeckSuite.Modules
         #region Caras de cada estilo (unidades del mockup: ojos en x = ±15, centro en 0)
 
         private const float EL = -15, ER = 15;
-        private static readonly Color Dark = Color.FromArgb(11, 11, 16);
+        // Pupilas: oscuras sobre ojos claros; claras si el ojo es oscuro (skins Papel y Hielo)
+        private static Color Dark
+        {
+            get { return EyeColor.GetBrightness() < 0.4f ? Color.FromArgb(245, 247, 250) : Color.FromArgb(11, 11, 16); }
+        }
         private static readonly Color PinkHeart = Color.FromArgb(244, 114, 182);
         private static readonly Color Rose = Color.FromArgb(251, 113, 133);
         private static readonly Color Amber = Color.FromArgb(251, 191, 36);
@@ -590,6 +599,16 @@ namespace StreeckSuite.Modules
                 case SuiteSettings.EyesStyleKind.Owl: Owl(c, face); break;
                 case SuiteSettings.EyesStyleKind.Sleepy: Sleepy(c, face); break;
                 case SuiteSettings.EyesStyleKind.Cyber: Cyber(c, face); break;
+                case SuiteSettings.EyesStyleKind.Ghost: Ghost(c, face); break;
+                case SuiteSettings.EyesStyleKind.Kawaii: Kawaii(c, face); break;
+                case SuiteSettings.EyesStyleKind.Pirate: Pirate(c, face); break;
+                case SuiteSettings.EyesStyleKind.Hypno: Hypno(c, face); break;
+                case SuiteSettings.EyesStyleKind.Puppy: Puppy(c, face); break;
+                case SuiteSettings.EyesStyleKind.Monocle: Monocle(c, face); break;
+                case SuiteSettings.EyesStyleKind.Alien: Alien(c, face); break;
+                case SuiteSettings.EyesStyleKind.Panda: Panda(c, face); break;
+                case SuiteSettings.EyesStyleKind.Kaomoji: Kaomoji(c, face); break;
+                case SuiteSettings.EyesStyleKind.Zombie: Zombie(c, face); break;
                 default: Actual(c, face); break;
             }
         }
@@ -948,6 +967,276 @@ namespace StreeckSuite.Modules
                 case 'e': c.Both((x, s) => c.Poly(Red, x - 9, 5, x - 9, s < 0 ? -1 : -5, x + 9, s < 0 ? -5 : -1, x + 9, 5)); break;
                 case 'w': CyberEye(c, EL, 1); c.Rect(ER - 9, 0, 18, 2, Cyan); break;
                 default: c.Both((x, s) => CyberEye(c, x + c.LookX * 2, c.Open)); break;
+            }
+        }
+
+        // --- Estilos nuevos (mockup «10 ojitos nuevos») ---
+
+        private static readonly Color PatchGray = Color.FromArgb(70, 74, 86);
+        private static readonly Color PuppyBlue = Color.FromArgb(91, 140, 255);
+        private static readonly Color Gold = Color.FromArgb(232, 196, 106);
+        private static readonly Color AlienGreen = Color.FromArgb(141, 255, 158);
+        private static readonly Color Stitch = Color.FromArgb(154, 161, 178);
+
+        // Enojado: un triángulo negro tapa la parte de arriba hacia el centro (como el Búho)
+        private static void AngryCut(Face c, float x, int s, float top, float bottom, float half)
+        {
+            c.Poly(Color.Black, x - half, top, x + half, top, s < 0 ? x + half : x - half, bottom);
+        }
+
+        private static void HappyArc(Face c, float x, float r, float w, Color color) { c.Arc(x, r * 0.6f, r, 1.1f, 1.9f, w, color); }
+        private static void SleepArc(Face c, float x, float r, float w, Color color) { c.Arc(x, -r * 0.5f, r, 0.15f, 0.85f, w, color); }
+
+        private static void Ghost(Face c, char face)
+        {
+            Color w = c.Eye;
+            bool mouth = !SuiteSettings.EyesMouth; // Si el usuario ya tiene boquita, no se dibuja la propia
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 6, 3.5f, w)); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
+                case 's': c.Both((x, s) => c.Ell(x, -1, 6.5f, 11, w)); if (mouth) c.Ring(0, 11, 2.5f, 3.5f, w, 2); break;
+                case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); if (mouth) c.Dot(0, 10, 1.6f, w); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.75f)); if (mouth) c.Lines(2, w, -6, 11, -3, 9, 0, 11, 3, 9, 6, 11); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.1f * c.Pulse, PinkHeart)); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
+                case 'e': c.Both((x, s) => { c.Ell(x, 0, 5, 9, w); AngryCut(c, x, s, -11, 0, 7); }); if (mouth) c.Arc(0, 14, 4, 1.15f, 1.85f, 2.5f, w); break;
+                case 'w': c.Ell(EL, 0, 5, 9, w); HappyArc(c, ER, 6, 3.5f, w); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
+                default: c.Both((x, s) => c.Ell(x + c.LookX * 2, c.LookY * 2, 5, 9 * c.Open, w)); if (mouth) c.Ell(0, 10, 2, 2.4f, w); break;
+            }
+        }
+
+        private static void KawaiiEye(Face c, float x, float r, float lookScale)
+        {
+            c.Ell(x, 0, r, r * 1.08f * c.Open, c.Eye);
+            if (c.Open < 0.5f) return;
+            float px = x + c.LookX * 2.5f * lookScale, py = 1 + c.LookY * 2 * lookScale;
+            c.Ell(px, py, r * 0.7f, r * 0.76f, Dark);
+            c.Dot(px - r * 0.25f, py - r * 0.3f, r * 0.24f, Color.White);
+            c.Dot(px + r * 0.25f, py + r * 0.28f, r * 0.11f, Color.White);
+        }
+
+        private static void Kawaii(Face c, char face)
+        {
+            Color w = c.Eye;
+            if (face != 'd')
+            {
+                c.RR(-31, 7, 9, 4, 2, Rose, 0.55f);
+                c.RR(22, 7, 9, 4, 2, Rose, 0.55f);
+            }
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); break;
+                case 's': c.Both((x, s) => KawaiiEye(c, x, 11, 0)); break;
+                case 'd': c.Both((x, s) => SleepArc(c, x, 7, 3, w)); break;
+                case 'z': c.Both((x, s) => { c.Dot(x, 0, 9, w); c.Spiral(x, 0, Dark, false, 0.7f); }); break;
+                case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.4f * c.Pulse, PinkHeart); c.Dot(x - 4, -3, 1.8f, Color.White); }); break;
+                case 'e': c.Both((x, s) => { KawaiiEye(c, x, 9, 0.5f); AngryCut(c, x, s, -12, -1, 11); }); break;
+                case 'w': KawaiiEye(c, EL, 9, 1); c.Lines(3, w, ER - 7, -5, ER + 5, 0, ER - 7, 5); break;
+                default: c.Both((x, s) => KawaiiEye(c, x, 9, 1)); break;
+            }
+        }
+
+        private static void Pirate(Face c, char face)
+        {
+            Color w = c.Eye;
+            // El parche se queda en todas las caras
+            Color patch = Color.FromArgb(104, 110, 126);
+            c.Line(-34, -9, 0, -14, 2f, patch);
+            c.Ell(EL, 0, 9, 8, patch);
+            c.Ring(EL, 0, 9, 8, Color.FromArgb(140, 146, 160), 1);
+            switch (face)
+            {
+                case 'f': HappyArc(c, ER, 7, 3.5f, w); break;
+                case 's': c.RR(ER - 7, -12, 14, 24, 7, w); break;
+                case 'd': SleepArc(c, ER, 6, 3, w); break;
+                case 'z': c.Spiral(ER, 0, w); break;
+                case 'a': c.Heart(ER, 0, 1.3f * c.Pulse, PinkHeart); break;
+                case 'e': c.RR(ER - 6, -8, 12, 16, 6, w); AngryCut(c, ER, 1, -11, -1, 9); break;
+                case 'w': c.Arc(ER, -3, 6, 0.15f, 0.85f, 3, w); c.Lines(2.2f, w, -3, 13, 3, 14, 8, 11); break;
+                default: c.RR(ER - 6 + c.LookX * 2.5f, -8 * c.Open + c.LookY * 2, 12, 16 * c.Open, 6, w); break;
+            }
+        }
+
+        private static void Hypno(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); break;
+                case 's': c.Both((x, s) => { c.Dot(x, 0, 11, w); c.Spiral(x, 0, Dark, false, 0.95f); }); break;
+                case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 1.1f)); break;
+                case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart); }); break;
+                case 'e': c.Both((x, s) => { c.Dot(x, 0, 9, w); c.Spiral(x, 0, Red, false, 0.75f); AngryCut(c, x, s, -11, -1, 10); }); break;
+                case 'w': c.Dot(EL, 0, 9, w); c.Spiral(EL, 0, Dark, false, 0.75f); HappyArc(c, ER, 7, 3.5f, w); break;
+                default: c.Both((x, s) => { c.Ell(x, 0, 9, 9 * c.Open, w); if (c.Open > 0.5f) c.Spiral(x + c.LookX * 1.5f, c.LookY, Dark, false, 0.75f); }); break;
+            }
+        }
+
+        private static void PuppyEye(Face c, float x, float r, bool brow)
+        {
+            c.Ell(x, 0, r, r * 1.1f * c.Open, c.Eye);
+            if (c.Open < 0.5f) return;
+            float px = x + c.LookX * 2, py = 1.5f + c.LookY * 1.5f;
+            c.Dot(px, py, r * 0.74f, PuppyBlue);
+            c.Dot(px, py + 0.5f, r * 0.42f, Dark);
+            c.Dot(px - r * 0.28f, py - r * 0.32f, r * 0.27f, Color.White);
+            c.Dot(px + r * 0.3f, py + r * 0.3f, r * 0.12f, Color.White);
+        }
+
+        private static void PuppyBrows(Face c)
+        {
+            // Cejitas de ternura: el lado de adentro más alto
+            c.Both((x, s) => c.Line(x + s * 7, -13, x - s * 5, -17, 2.2f, c.Eye));
+        }
+
+        private static void Puppy(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); c.RR(-3, 7, 6, 6, 3, Rose); break;
+                case 's': c.Both((x, s) => PuppyEye(c, x, 11, false)); PuppyBrows(c); break;
+                case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); PuppyBrows(c); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.85f)); break;
+                case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart); c.Dot(x - 4, -3, 1.6f, Color.White); }); break;
+                case 'e': c.Both((x, s) => { PuppyEye(c, x, 9, false); AngryCut(c, x, s, -12, -1, 11); }); break;
+                case 'w': PuppyEye(c, EL, 9, false); HappyArc(c, ER, 7, 3.5f, w); c.RR(-3, 7, 6, 6, 3, Rose); break;
+                default: c.Both((x, s) => PuppyEye(c, x, 9, true)); PuppyBrows(c); break;
+            }
+        }
+
+        private static void Monocle(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 5, 2.8f, w)); break;
+                case 's': c.Both((x, s) => c.Dot(x, -1, 5, w)); break;
+                case 'd': c.Both((x, s) => c.Line(x - 5, 1, x + 5, 1, 2.6f, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.55f)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => { c.Dot(x, 1, 3.5f, w); c.Line(x - s * 7, -9, x + s * 5, -4, 2.4f, w); }); break;
+                case 'w': c.Dot(EL, 0, 3.5f, w); c.Line(ER - 5, 1, ER + 5, 1, 2.6f, w); break;
+                default: c.Both((x, s) => c.Ell(x + c.LookX * 2.5f, c.LookY * 2, 3.5f, 3.5f * c.Open + 0.4f, w)); break;
+            }
+            // Monóculo dorado con cadenita y bigote, en todas las caras
+            c.Ring(ER, 0, 9, 9, Gold, 2);
+            c.Line(ER + 6, 7, ER + 11, 17, 1.2f, Gold);
+            using (Pen p = Stroke(c.C(w), 2.6f))
+            {
+                c.G.DrawBezier(p, 0, 10, -4, 14, -9, 14, -12, 9);
+                c.G.DrawBezier(p, 0, 10, 4, 14, 9, 14, 12, 9);
+            }
+        }
+
+        private static void AlienEye(Face c, float x, int s, float rx, float ry, Color color)
+        {
+            c.Spin(x, 0, -s * 0.45, () => c.Ell(0, 0, rx, Math.Max(0.6f, ry), color));
+        }
+
+        private static void Alien(Face c, char face)
+        {
+            Color g = AlienGreen;
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, g)); break;
+                case 's': c.Both((x, s) => { AlienEye(c, x, s, 12, 7, g); c.Dot(x, 0, 2.2f, Dark); }); break;
+                case 'd': c.Both((x, s) => c.Spin(x, 0, -s * 0.45, () => c.Line(-9, 0, 9, 0, 2.6f, g))); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, g, false, 0.85f)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => { AlienEye(c, x, s, 10, 5, g); AngryCut(c, x, s, -10, 1, 12); }); break;
+                case 'w': AlienEye(c, EL, -1, 10, 5, g); c.Spin(ER, 0, -0.45, () => c.Line(-9, 0, 9, 0, 2.6f, g)); break;
+                default: c.Both((x, s) => AlienEye(c, x + c.LookX * 2, s, 10, 5 * c.Open, g)); break;
+            }
+        }
+
+        private static void Panda(Face c, char face)
+        {
+            Color w = c.Eye;
+            // Manchas de panda, en todas las caras
+            c.Both((x, s) => c.Spin(x, 1, s * 0.5, () => c.Ell(0, 0, 8.5f, 11.5f, PatchGray)));
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => HappyArc(c, x, 4.5f, 2.6f, w)); break;
+                case 's': c.Both((x, s) => { c.Dot(x, 0, 5, w); c.Dot(x, 0, 2.2f, Dark); }); break;
+                case 'd': c.Both((x, s) => c.Line(x - 4, 1, x + 4, 1, 2.4f, w)); break;
+                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.5f)); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
+                case 'e': c.Both((x, s) => { c.Dot(x, 1, 3.8f, w); c.Dot(x, 1.5f, 1.8f, Dark); c.Line(x - s * 6, -7, x + s * 4, -3, 2.2f, w); }); break;
+                case 'w': c.Dot(EL, 0, 3.8f, w); c.Dot(EL, 0.5f, 1.8f, Dark); c.Line(ER - 4, 1, ER + 4, 1, 2.4f, w); break;
+                default:
+                    c.Both((x, s) =>
+                    {
+                        float px = x + c.LookX * 2, py = c.LookY * 2;
+                        c.Ell(px, py, 3.8f, 3.8f * c.Open + 0.3f, w);
+                        if (c.Open > 0.5f) c.Dot(px + c.LookX, py + 0.5f, 1.8f, Dark);
+                    });
+                    break;
+            }
+        }
+
+        // Caritas de texto: cada ojo es un signo, centrado en su lugar
+        private static void Glyph(Face c, float x, string text, float size, Color color)
+        {
+            using (GraphicsPath path = new GraphicsPath())
+            using (FontFamily family = new FontFamily("Segoe UI"))
+            {
+                path.AddString(text, family, (int)FontStyle.Bold, size, PointF.Empty, StringFormat.GenericTypographic);
+                RectangleF b = path.GetBounds();
+                if (b.Width <= 0) return;
+                using (Matrix m = new Matrix())
+                {
+                    m.Translate(x - (b.X + b.Width / 2), -(b.Y + b.Height / 2));
+                    path.Transform(m);
+                }
+                using (SolidBrush brush = new SolidBrush(c.C(color))) c.G.FillPath(brush, path);
+            }
+        }
+
+        private static void Kaomoji(Face c, char face)
+        {
+            Color w = c.Eye;
+            switch (face)
+            {
+                case 'f': Glyph(c, EL, "^", 26, w); Glyph(c, ER, "^", 26, w); break;
+                case 's': Glyph(c, EL, "O", 20, w); Glyph(c, ER, "O", 20, w); break;
+                case 'd': Glyph(c, EL, "–", 22, w); Glyph(c, ER, "–", 22, w); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 180, () => Glyph(c, 0, "@", 20, w))); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.1f * c.Pulse, PinkHeart)); break;
+                case 'e': Glyph(c, EL, ">", 22, w); Glyph(c, ER, "<", 22, w); break;
+                case 'w': Glyph(c, EL, "•", 26, w); Glyph(c, ER, "~", 24, w); break;
+                default:
+                    if (c.Open < 0.5f) { Glyph(c, EL, "–", 22, w); Glyph(c, ER, "–", 22, w); }
+                    else { Glyph(c, EL + c.LookX * 2, "•", 28, w); Glyph(c, ER + c.LookX * 2, "•", 28, w); }
+                    break;
+            }
+        }
+
+        private static void Zombie(Face c, char face)
+        {
+            Color w = c.Eye;
+            // Puntadas sobre el ojo derecho, en todas las caras
+            c.Line(ER - 6, -15, ER + 11, -11, 1.4f, Stitch);
+            for (int i = 0; i < 3; i++) c.Line(ER - 2 + i * 5, -16 + i, ER - 3 + i * 5, -10 + i, 1.2f, Stitch);
+            switch (face)
+            {
+                case 'f': HappyArc(c, EL, 9, 3.5f, w); HappyArc(c, ER, 5, 3, w); break;
+                case 's': c.Dot(EL, 0, 12, w); c.Dot(EL + 2, -1, 3, Dark); c.Dot(ER, 1, 8, w); c.Dot(ER, 1, 2, Dark); break;
+                case 'd': SleepArc(c, EL, 8, 3, w); c.Line(ER - 4, -3, ER + 4, 5, 2.4f, w); c.Line(ER - 4, 5, ER + 4, -3, 2.4f, w); break;
+                case 'z': c.Spiral(EL, 0, w, false, 1); c.Spiral(ER, 1, w, false, 0.6f); break;
+                case 'a': c.Heart(EL, 0, 1.4f * c.Pulse, PinkHeart); c.Heart(ER, 1, 0.8f * c.Pulse, PinkHeart); break;
+                case 'e': c.Dot(EL, 0, 10, w); c.Dot(EL + 2, 1, 3, Dark); AngryCut(c, EL, -1, -11, -1, 11); c.Dot(ER, 1, 6, w); c.Dot(ER, 2, 2, Dark); break;
+                case 'w': c.Dot(EL, 0, 10, w); c.Dot(EL + 2, -2, 3, Dark); c.Line(ER - 6, 1, ER + 6, 1, 2.6f, w); break;
+                default:
+                    // Ojos desparejos: uno grande y otro chico, cada pupila mira a su ritmo
+                    c.Ell(EL, 0, 10, 10 * c.Open, w);
+                    c.Ell(ER, 1, 6, 6 * c.Open, w);
+                    if (c.Open > 0.5f)
+                    {
+                        c.Dot(EL + 2 + c.LookX * 3, -2 + c.LookY * 2, 3, Dark);
+                        c.Dot(ER + c.LookX * 1.5f, 1 + c.LookY, 2, Dark);
+                    }
+                    break;
             }
         }
 

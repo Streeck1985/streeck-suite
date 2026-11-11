@@ -25,15 +25,35 @@ namespace StreeckSuite.Modules
 
         public static readonly Color Background = Color.FromArgb(235, 10, 14, 22);
         public static readonly Color Border = Color.FromArgb(41, 255, 255, 255);
-        public static readonly Color Secondary = Color.FromArgb(184, 255, 255, 255);
-        public static readonly Color Muted = Color.FromArgb(115, 255, 255, 255);
+        public static Color Secondary { get { return Color.FromArgb(184, InkBase); } }
+        public static Color Muted { get { return Color.FromArgb(115, InkBase); } }
+
+        /// <summary>
+        /// Color de la letra de la isla: blanco, u oscuro con los skins claros (Papel, Hielo).
+        /// </summary>
+        public static Color InkBase
+        {
+            get
+            {
+                if (IslandSkin.IsLight) return Color.FromArgb(17, 20, 28);
+                int skin = IslandSkin.Current;
+                if (skin == IslandSkin.Terminal) return Color.FromArgb(77, 255, 122);
+                if (skin == IslandSkin.Gold) return Color.FromArgb(245, 230, 184);
+                return Color.White;
+            }
+        }
+
+        /// <summary>
+        /// Letra sobre un botón relleno con la tinta (p. ej. el ▶ dentro del círculo blanco).
+        /// </summary>
+        public static Color InkContrast { get { return IslandSkin.IsLight ? Color.White : Color.FromArgb(11, 15, 23); } }
         public static readonly Color Sky = Color.FromArgb(56, 189, 248);
         public static readonly Color Green = Color.FromArgb(34, 197, 94);
         public static readonly Color Violet = Color.FromArgb(168, 85, 247);
         public static readonly Color Amber = Color.FromArgb(251, 191, 36);
         // Colores de los mockups: texto secundario, pistas de las barras, silencio en naranja
-        public static readonly Color Gray = Color.FromArgb(154, 164, 181);
-        public static readonly Color Track = Color.FromArgb(42, 48, 64);
+        public static Color Gray { get { return IslandSkin.IsLight ? Color.FromArgb(84, 92, 108) : Color.FromArgb(154, 164, 181); } }
+        public static Color Track { get { return IslandSkin.IsLight ? Color.FromArgb(60, 0, 0, 0) : Color.FromArgb(42, 48, 64); } }
         public static readonly Color MutedFill = Color.FromArgb(75, 83, 99);
         public static readonly Color Orange = Color.FromArgb(253, 186, 116);
         public static readonly Color OrangeBack = Color.FromArgb(46, 251, 146, 60);
@@ -86,33 +106,49 @@ namespace StreeckSuite.Modules
         public readonly Font ThumbFont;
 
         private readonly float _scale;
+
+        // Cascadia Mono viene con Windows 11 y Terminal; si no está, Consolas
+        private static string MonoFamily()
+        {
+            foreach (FontFamily f in FontFamily.Families) if (f.Name == "Cascadia Mono") return f.Name;
+            return "Consolas";
+        }
         private readonly DateTime _startTime = DateTime.Now;
 
         /// <summary>
         /// scale: píxeles por unidad de diseño (PPP × tamaño de la isla); fontScale: solo el tamaño de la isla elegido
         /// en el panel, porque las fuentes en puntos ya siguen los PPP de la pantalla.
         /// </summary>
-        public IslandPainter(float scale, float fontScale)
+        public IslandPainter(float scale, float fontScale) : this(scale, fontScale, SuiteSettings.FontKind.Modern)
         {
+        }
+
+        /// <summary>
+        /// La isla elige su letra en Ajustes › Apariencia: Moderna (Segoe UI), Geométrica (Bahnschrift) o Terminal (Cascadia Mono).
+        /// </summary>
+        public IslandPainter(float scale, float fontScale, SuiteSettings.FontKind kind)
+        {
+            string family = kind == SuiteSettings.FontKind.Geometric ? "Bahnschrift" : kind == SuiteSettings.FontKind.Terminal ? MonoFamily() : "Segoe UI";
+            string semibold = kind == SuiteSettings.FontKind.Modern ? "Segoe UI Semibold" : kind == SuiteSettings.FontKind.Geometric ? "Bahnschrift SemiBold" : family;
             _scale = scale;
-            Label11 = new Font("Segoe UI", 8.25f * fontScale, FontStyle.Bold);
-            Text11 = new Font("Segoe UI", 8.25f * fontScale, FontStyle.Regular);
-            Tab12 = new Font("Segoe UI Semibold", 9f * fontScale, FontStyle.Regular);
-            Text12 = new Font("Segoe UI", 9f * fontScale, FontStyle.Regular);
-            Bold12 = new Font("Segoe UI", 9f * fontScale, FontStyle.Bold);
-            Text13 = new Font("Segoe UI", 9.75f * fontScale, FontStyle.Regular);
-            Semibold13 = new Font("Segoe UI Semibold", 9.75f * fontScale, FontStyle.Regular);
-            Bold15 = new Font("Segoe UI", 11.25f * fontScale, FontStyle.Bold);
-            Bold17 = new Font("Segoe UI", 12.75f * fontScale, FontStyle.Bold);
-            Bold18 = new Font("Segoe UI", 13.5f * fontScale, FontStyle.Bold);
-            Big44 = new Font("Segoe UI", 33f * fontScale, FontStyle.Bold);
+            Label11 = new Font(family, 8.25f * fontScale, FontStyle.Bold);
+            Text11 = new Font(family, 8.25f * fontScale, FontStyle.Regular);
+            Tab12 = new Font(semibold, 9f * fontScale, FontStyle.Regular);
+            Text12 = new Font(family, 9f * fontScale, FontStyle.Regular);
+            Bold12 = new Font(family, 9f * fontScale, FontStyle.Bold);
+            Text13 = new Font(family, 9.75f * fontScale, FontStyle.Regular);
+            Semibold13 = new Font(semibold, 9.75f * fontScale, FontStyle.Regular);
+            Bold15 = new Font(family, 11.25f * fontScale, FontStyle.Bold);
+            Bold17 = new Font(family, 12.75f * fontScale, FontStyle.Bold);
+            Bold18 = new Font(family, 13.5f * fontScale, FontStyle.Bold);
+            Big44 = new Font(family, 33f * fontScale, FontStyle.Bold);
             Glyph16 = new Font("Segoe Fluent Icons", 12f * fontScale, FontStyle.Regular);
             Glyph20 = new Font("Segoe Fluent Icons", 15f * fontScale, FontStyle.Regular);
-            TimeFont = new Font("Segoe UI", 9.75f * fontScale, FontStyle.Bold);
-            TitleFont = new Font("Segoe UI", 10.5f * fontScale, FontStyle.Bold);
-            BodyFont = new Font("Segoe UI", 9f * fontScale, FontStyle.Regular);
-            SmallFont = new Font("Segoe UI", 8.25f * fontScale, FontStyle.Regular);
-            BigFont = new Font("Segoe UI", 22f * fontScale, FontStyle.Bold);
+            TimeFont = new Font(family, 9.75f * fontScale, FontStyle.Bold);
+            TitleFont = new Font(family, 10.5f * fontScale, FontStyle.Bold);
+            BodyFont = new Font(family, 9f * fontScale, FontStyle.Regular);
+            SmallFont = new Font(family, 8.25f * fontScale, FontStyle.Regular);
+            BigFont = new Font(family, 22f * fontScale, FontStyle.Bold);
             IconFont = new Font("Segoe Fluent Icons", 9f * fontScale, FontStyle.Regular);
             ControlFont = new Font("Segoe Fluent Icons", 11f * fontScale, FontStyle.Regular);
             EmojiFont = new Font("Segoe UI Emoji", 17f * fontScale, FontStyle.Regular);

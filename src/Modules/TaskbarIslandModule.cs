@@ -146,6 +146,10 @@ namespace StreeckSuite.Modules
                     "cristal=" + (int)SuiteSettings.GlassStyle,
                     "miniplayer=" + (SuiteSettings.TaskbarMiniPlayer ? 1 : 0),
                     "skin=" + SuiteSettings.TaskbarSkin,
+                    // Apariencia: contorno, fondo cristal y forma redondeada (los mismos de la isla)
+                    "linea=" + (int)SuiteSettings.IslandBorder,
+                    "vidrio=" + (SuiteSettings.IslandGlass ? 1 : 0),
+                    "redondeada=" + (SuiteSettings.IslandStyle == SuiteSettings.IslandStyleKind.Rounded ? 1 : 0),
                     // Las islas de la barra imitan al notch: su color y su opacidad
                     "color=" + SuiteSettings.IslandColor,
                     "opacidad=" + SuiteSettings.IslandOpacityPercent,

@@ -279,9 +279,10 @@ namespace StreeckSuite.Modules
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.AntiAlias;
 
+            System.Collections.Generic.List<RectangleF> blocked = new System.Collections.Generic.List<RectangleF>();
             if (settings.Style == ClockStyle.Samsung)
             {
-                SamsungClockRenderer.Draw(g, screen, settings, layers, now, Spanish, weather);
+                SamsungClockRenderer.Draw(g, screen, settings, layers, now, Spanish, weather, blocked);
             }
             else
             {
@@ -306,8 +307,25 @@ namespace StreeckSuite.Modules
                 }
             }
 
-            // El estirado nunca queda detrás de nada: rodea los objetos en lugar de pasar por debajo
-            if (layers.Foreground != null && settings.Style != ClockStyle.Samsung) g.DrawImageUnscaled(layers.Foreground, 0, 0);
+            // El estirado rodea los objetos; solo un número que ni a tamaño normal cabe queda detrás del sujeto
+            if (layers.Foreground != null)
+            {
+                if (settings.Style != ClockStyle.Samsung)
+                {
+                    g.DrawImageUnscaled(layers.Foreground, 0, 0);
+                }
+                else
+                {
+                    foreach (RectangleF cell in blocked)
+                    {
+                        Region old = g.Clip;
+                        g.SetClip(cell);
+                        g.DrawImageUnscaled(layers.Foreground, 0, 0);
+                        g.Clip = old;
+                        old.Dispose();
+                    }
+                }
+            }
         }
 
         /// <summary>

@@ -429,7 +429,8 @@ namespace StreeckSuite.Modules
             if (path == null) return "none";
             DateTime stamp = File.Exists(TranscodedPath) ? File.GetLastWriteTimeUtc(TranscodedPath) : File.GetLastWriteTimeUtc(path);
             string screenKey = targetScreen != null ? targetScreen.Bounds.ToString() : Screen.PrimaryScreen.Bounds.ToString();
-            return path + "|" + stamp.Ticks + "|" + screenKey;
+            // El modo (Rellenar, Ajustar, Distribuir...) también cuenta: con la misma imagen cambia lo que se ve
+            return path + "|" + stamp.Ticks + "|" + screenKey + "|" + GetStyle();
         }
 
         /// <summary>
@@ -440,6 +441,31 @@ namespace StreeckSuite.Modules
             string style = Registry.GetValue(@"HKEY_CURRENT_USER\Control Panel\Desktop", "WallpaperStyle", "10") as string;
             int value;
             return int.TryParse(style, out value) ? value : 10;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+        private static extern bool SystemParametersInfo(uint action, uint param, string value, uint flags);
+
+        /// <summary>
+        /// Pone el fondo actual en «Extender» (una sola imagen de un monitor a otro), igual que Configuración.
+        /// </summary>
+        public static void ApplySpan()
+        {
+            string path = GetCurrentPath();
+            if (path == null) return;
+            try
+            {
+                Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Desktop", "WallpaperStyle", "22");
+                Registry.SetValue(@"HKEY_CURRENT_USER\Control Panel\Desktop", "TileWallpaper", "0");
+                const uint SPI_SETDESKWALLPAPER = 0x14, SPIF_UPDATEINIFILE = 1, SPIF_SENDCHANGE = 2;
+                if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
+                    Log.Error("[WallpaperInfo] Windows no aceptó el fondo extendido");
+                else Log.Info("[WallpaperInfo] Fondo en «Extender»: {0}", path);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[WallpaperInfo] No se pudo extender el fondo: {0}", ex.Message);
+            }
         }
     }
 }

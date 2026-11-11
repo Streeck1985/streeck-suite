@@ -12,7 +12,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal static class TimerService
     {
-        public enum TimerMode { Timer, Pomodoro }
+        public enum TimerMode { Timer, Pomodoro, Stopwatch }
         public enum Phase { Focus, ShortBreak, LongBreak }
 
         public const int CyclesPerLongBreak = 4;
@@ -24,19 +24,36 @@ namespace StreeckSuite.Modules
         private static TimeSpan _remainingWhenPaused = TimeSpan.FromMinutes(5);
         private static DateTime? _endsAt;                    // null = en pausa o parado
         private static SoundPlayer _player;
+        // Cronómetro: cuenta hacia arriba; tiempo juntado en pausas anteriores + desde cuándo corre
+        private static TimeSpan _watchElapsed = TimeSpan.Zero;
+        private static DateTime? _watchStartedAt;
 
         public static TimerMode Mode { get { return _mode; } }
         public static Phase CurrentPhase { get { return _phase; } }
         public static int Cycle { get { return _cycle; } }
         public static TimeSpan Duration { get { return _duration; } }
-        public static bool IsRunning { get { return _endsAt != null; } }
+        public static bool IsStopwatch { get { return _mode == TimerMode.Stopwatch; } }
+        public static bool IsRunning { get { return IsStopwatch ? _watchStartedAt != null : _endsAt != null; } }
 
         /// <summary>
         /// En marcha o en pausa a medias (la isla cerrada lo muestra).
         /// </summary>
         public static bool IsActive
         {
-            get { return IsRunning || Remaining < _duration; }
+            get { return IsStopwatch ? IsRunning || _watchElapsed > TimeSpan.Zero : IsRunning || Remaining < _duration; }
+        }
+
+        public static TimeSpan Elapsed
+        {
+            get { return _watchElapsed + (_watchStartedAt != null ? DateTime.Now - _watchStartedAt.Value : TimeSpan.Zero); }
+        }
+
+        /// <summary>
+        /// Lo que se muestra: el tiempo que falta, o el que lleva el cronómetro.
+        /// </summary>
+        public static TimeSpan Shown
+        {
+            get { return IsStopwatch ? Elapsed : Remaining; }
         }
 
         public static TimeSpan Remaining
@@ -51,12 +68,19 @@ namespace StreeckSuite.Modules
 
         public static float Progress
         {
-            get { return _duration.TotalSeconds <= 0 ? 0 : (float)(Remaining.TotalSeconds / _duration.TotalSeconds); }
+            get
+            {
+                if (IsStopwatch) return (float)(Elapsed.TotalSeconds % 60 / 60); // El anillo da una vuelta por minuto
+                return _duration.TotalSeconds <= 0 ? 0 : (float)(Remaining.TotalSeconds / _duration.TotalSeconds);
+            }
         }
 
         public static void SetMode(TimerMode mode)
         {
             _mode = mode;
+            _watchElapsed = TimeSpan.Zero;
+            _watchStartedAt = null;
+            if (mode == TimerMode.Stopwatch) { Reset(_duration); return; }
             _phase = Phase.Focus;
             _cycle = 1;
             Reset(mode == TimerMode.Pomodoro ? TimeSpan.FromMinutes(SuiteSettings.PomodoroFocusMin) : _duration);
@@ -68,11 +92,19 @@ namespace StreeckSuite.Modules
         public static void SetMinutes(int minutes)
         {
             _mode = TimerMode.Timer;
+            _watchElapsed = TimeSpan.Zero;
+            _watchStartedAt = null;
             Reset(TimeSpan.FromMinutes(minutes));
         }
 
         public static void Toggle()
         {
+            if (IsStopwatch)
+            {
+                if (_watchStartedAt != null) { _watchElapsed = Elapsed; _watchStartedAt = null; }
+                else _watchStartedAt = DateTime.Now;
+                return;
+            }
             if (IsRunning)
             {
                 _remainingWhenPaused = Remaining;
@@ -86,6 +118,8 @@ namespace StreeckSuite.Modules
 
         public static void Reset()
         {
+            _watchElapsed = TimeSpan.Zero;
+            _watchStartedAt = null;
             Reset(_duration);
         }
 
@@ -94,6 +128,7 @@ namespace StreeckSuite.Modules
         /// </summary>
         public static void AddMinutes(int minutes)
         {
+            if (IsStopwatch) return;
             TimeSpan delta = TimeSpan.FromMinutes(minutes);
             TimeSpan remaining = Remaining + delta;
             if (remaining < TimeSpan.FromMinutes(1) || remaining > TimeSpan.FromMinutes(180)) return;
@@ -162,7 +197,8 @@ namespace StreeckSuite.Modules
 
         public static string Format(TimeSpan time)
         {
-            int totalSeconds = (int)Math.Ceiling(time.TotalSeconds);
+            // La cuenta atrás redondea hacia arriba (no marca 00:00 antes de tiempo); el cronómetro, hacia abajo
+            int totalSeconds = IsStopwatch ? (int)Math.Floor(time.TotalSeconds) : (int)Math.Ceiling(time.TotalSeconds);
             return totalSeconds >= 3600
                 ? string.Format("{0}:{1:00}:{2:00}", totalSeconds / 3600, totalSeconds / 60 % 60, totalSeconds % 60)
                 : string.Format("{0:00}:{1:00}", totalSeconds / 60, totalSeconds % 60);

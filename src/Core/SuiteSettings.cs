@@ -14,7 +14,7 @@ namespace StreeckSuite.Core
     public static class SuiteSettings
     {
         public enum MaximizedBehavior { Tuck, AlwaysShow, AlertsOnly, Camouflage }  // Camuflaje: toma el color de las pestañas y se encoge
-        public enum IslandStyleKind { Attached, Floating }               // Pegada arriba (notch de Bloom) o flotante
+        public enum IslandStyleKind { Attached, Floating, Rounded }               // Pegada arriba (notch de Bloom) o flotante
         public enum SearchShortcut { CtrlAltS, CtrlShiftSpace, CtrlSpace }  // Alt+Espacio y similares los usa PowerToys
         public enum WebSearchEngine { Google, Bing, DuckDuckGo }
         public enum AssistantEngineKind { Local, Gemini }
@@ -48,6 +48,13 @@ namespace StreeckSuite.Core
         public static int StartIconSize = 100;          // 70..140 %
         public static int StartIconHover = 1;           // 0 nada, 1 crece, 2 gira
         public static bool StartButtonOpensSuite = true; // El clic en el botón de Inicio abre el menú de Streeck
+        public enum FontKind { Modern, Geometric, Terminal }        // Letra de la isla: Segoe UI, Bahnschrift, Cascadia Mono
+        public enum BorderKind { Skin, None, Thin, Glow }          // Borde: el del skin, sin borde, fino o brillo animado
+        public static FontKind IslandFont = FontKind.Modern;
+        public static BorderKind IslandBorder = BorderKind.Skin;
+        public static bool IslandGlass;
+        public static string LastSeenVersion = "";           // Para mostrar las novedades una vez después de actualizar
+        public static int WindowsModeBeforeLightSkin = -1;  // Modo de Windows que tenía el usuario antes de un skin claro (-1: no lo cambiamos)                    // Fondo cristal (más transparente) en lugar de sólido
         public static int TaskbarSkin = 1;              // 0 Cristal, 1 Notch, 2 Dock, 3 Neón, 4 Fantasma, 5 Línea fina, 6 Aurora, 7 Aero 7, 8 Cristal líquido, 9 Gamer RGB
 
         /// <summary>
@@ -65,8 +72,12 @@ namespace StreeckSuite.Core
         public static AnimationSpeed IslandAnimation = AnimationSpeed.Normal; // Velocidad al abrir/cambiar (Normal = la original)
 
         // Ojitos (mockup «Ojitos del notch»)
-        public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops, Hearts, Stars, Glasses, Owl, Sleepy, Cyber }
+        public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops, Hearts, Stars, Glasses, Owl, Sleepy, Cyber,
+            Ghost, Kawaii, Pirate, Hypno, Puppy, Monocle, Alien, Panda, Kaomoji, Zombie }
         public static EyesStyleKind EyesStyle = EyesStyleKind.Actual;
+        public enum EyesSideKind { None, Weather, Time, TimeWeather, Date, System, NextEvent }
+        public static bool NightLight;                 // Luz nocturna propia (controles rápidos)
+        public static EyesSideKind EyesSide = EyesSideKind.Weather; // Lo que va junto a los ojitos en la isla cerrada
         public static string EyesColor = "#FFFFFF";
         public static bool EyesBrows = true;
         public static bool EyesMouth = false;
@@ -171,7 +182,14 @@ namespace StreeckSuite.Core
                 DoNotDisturb = ReadBool(values, "isla.nomolestar", DoNotDisturb);
                 HideWindowsVolume = ReadBool(values, "isla.ocultarvolumenwindows", HideWindowsVolume);
                 TaskbarMiniPlayer = ReadBool(values, "barra.miniplayer", TaskbarMiniPlayer);
-                TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 9);
+                TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 15);
+                FontKind islandFont;
+                if (values.TryGetValue("isla.letra", out raw) && Enum.TryParse(raw, out islandFont)) IslandFont = islandFont;
+                BorderKind islandBorder;
+                if (values.TryGetValue("isla.borde", out raw) && Enum.TryParse(raw, out islandBorder)) IslandBorder = islandBorder;
+                IslandGlass = ReadBool(values, "isla.cristal", IslandGlass);
+                if (values.TryGetValue("version.vista", out raw)) LastSeenVersion = raw;
+                WindowsModeBeforeLightSkin = ReadInt(values, "windows.modoprevio", -1, -1, 1);
                 StartIcon = ReadInt(values, "barra.inicio.icono", StartIcon, 0, 6);
                 StartIconSize = ReadInt(values, "barra.inicio.tamano", StartIconSize, 70, 140);
                 StartIconHover = ReadInt(values, "barra.inicio.efecto", StartIconHover, 0, 2);
@@ -181,11 +199,14 @@ namespace StreeckSuite.Core
                 EyesStyleKind eyesStyle;
                 if (values.TryGetValue("ojos.estilo", out raw) && Enum.TryParse(raw, out eyesStyle)) EyesStyle = eyesStyle;
                 if (values.TryGetValue("ojos.color", out raw) && raw.Length > 0) EyesColor = raw;
+                EyesSideKind eyesSide;
+                if (values.TryGetValue("ojos.lado", out raw) && Enum.TryParse(raw, out eyesSide)) EyesSide = eyesSide;
                 EyesBrows = ReadBool(values, "ojos.cejas", EyesBrows);
                 EyesMouth = ReadBool(values, "ojos.boca", EyesMouth);
                 EyesBlush = ReadBool(values, "ojos.rubor", EyesBlush);
                 EyesMoods = ReadBool(values, "ojos.emociones", EyesMoods);
                 EyesFidgets = ReadBool(values, "ojos.sinuso", EyesFidgets);
+                NightLight = ReadBool(values, "luz.nocturna", NightLight);
                 UpdateAuto = ReadBool(values, "actualizar.auto", UpdateAuto);
                 AnimationSpeed animation;
                 if (values.TryGetValue("isla.animacion", out raw) && Enum.TryParse(raw, out animation)) IslandAnimation = animation;
@@ -274,6 +295,11 @@ namespace StreeckSuite.Core
                     "isla.ocultarvolumenwindows=" + (HideWindowsVolume ? 1 : 0),
                     "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
                     "barra.skin=" + TaskbarSkin,
+                    "isla.letra=" + IslandFont,
+                    "isla.borde=" + IslandBorder,
+                    "isla.cristal=" + (IslandGlass ? 1 : 0),
+                    "version.vista=" + LastSeenVersion,
+                    "windows.modoprevio=" + WindowsModeBeforeLightSkin,
                     "barra.inicio.icono=" + StartIcon,
                     "barra.inicio.tamano=" + StartIconSize,
                     "barra.inicio.efecto=" + StartIconHover,
@@ -281,11 +307,13 @@ namespace StreeckSuite.Core
                     "isla.cerrada=" + IslandIdle,
                     "ojos.estilo=" + EyesStyle,
                     "ojos.color=" + EyesColor,
+                    "ojos.lado=" + EyesSide,
                     "ojos.cejas=" + (EyesBrows ? 1 : 0),
                     "ojos.boca=" + (EyesMouth ? 1 : 0),
                     "ojos.rubor=" + (EyesBlush ? 1 : 0),
                     "ojos.emociones=" + (EyesMoods ? 1 : 0),
                     "ojos.sinuso=" + (EyesFidgets ? 1 : 0),
+                    "luz.nocturna=" + (NightLight ? 1 : 0),
                     "actualizar.auto=" + (UpdateAuto ? 1 : 0),
                     "isla.monitor=" + IslandMonitor,
                     "isla.animacion=" + IslandAnimation,

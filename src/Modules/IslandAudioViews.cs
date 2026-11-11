@@ -54,7 +54,7 @@ namespace StreeckSuite.Modules
         public override void Draw(Graphics g, SizeF size, int alpha, IslandPainter p)
         {
             float x = p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
             if (Muted)
@@ -169,7 +169,7 @@ namespace StreeckSuite.Modules
         {
             Refresh(false);
             float x = p.Px(PadX), width = size.Width - 2 * p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             Color label = IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha);
             float y = 0;
@@ -198,7 +198,7 @@ namespace StreeckSuite.Modules
             y += p.Px(6);
 
             // Separador
-            IslandPainter.FillRounded(g, new RectangleF(x, y, width, Math.Max(1, p.Px(1))), 0, Color.FromArgb(alpha * 20 / 255, Color.White));
+            IslandPainter.FillRounded(g, new RectangleF(x, y, width, Math.Max(1, p.Px(1))), 0, Color.FromArgb(alpha * 20 / 255, IslandPainter.InkBase));
             y += p.Px(15);
 
             // Volumen general
@@ -206,7 +206,7 @@ namespace StreeckSuite.Modules
             bool muted = _audio.Muted;
             _muteButton = new RectangleF(x, y, p.Px(40), p.Px(40));
             _masterRow = new RectangleF(x, y, width, p.Px(40));
-            IslandPainter.FillRounded(g, _muteButton, p.Px(12), muted ? IslandPainter.Fade(IslandPainter.OrangeBack, alpha) : Color.FromArgb(alpha * 20 / 255, Color.White));
+            IslandPainter.FillRounded(g, _muteButton, p.Px(12), muted ? IslandPainter.Fade(IslandPainter.OrangeBack, alpha) : Color.FromArgb(alpha * 20 / 255, IslandPainter.InkBase));
             p.DrawText(g, VolumeGlyphs.ForLevel(level, muted), p.Glyph16, muted ? IslandPainter.Fade(IslandPainter.Orange, alpha) : white, _muteButton, StringAlignment.Center);
 
             float masterX = _muteButton.Right + p.Px(12);
@@ -289,7 +289,7 @@ namespace StreeckSuite.Modules
             }
             Color tile = TileColors[Math.Abs(app.Name.GetHashCode()) % TileColors.Length];
             IslandPainter.FillRounded(g, rect, p.Px(8), Color.FromArgb(alpha, tile));
-            p.DrawText(g, app.Name.Substring(0, 1).ToUpperInvariant(), p.Bold12, Color.FromArgb(alpha, Color.White), rect, StringAlignment.Center);
+            p.DrawText(g, app.Name.Substring(0, 1).ToUpperInvariant(), p.Bold12, Color.FromArgb(alpha, IslandPainter.InkBase), rect, StringAlignment.Center);
         }
 
         public override bool OnClick(PointF point)

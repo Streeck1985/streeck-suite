@@ -20,7 +20,7 @@ namespace StreeckSuite.Modules
             // Sin icono: cuadro del color de la app con su inicial
             IslandPainter.FillRounded(g, rect, radius, IslandPainter.Fade(n.Accent, alpha));
             string initial = string.IsNullOrEmpty(n.AppName) ? "?" : n.AppName.Substring(0, 1).ToUpperInvariant();
-            p.DrawText(g, initial, p.Bold15, Color.FromArgb(alpha, Color.White), rect, StringAlignment.Center);
+            p.DrawText(g, initial, p.Bold15, Color.FromArgb(alpha, IslandPainter.InkBase), rect, StringAlignment.Center);
         }
 
         public static string RelativeTime(DateTime time)
@@ -88,7 +88,7 @@ namespace StreeckSuite.Modules
             IslandNotification n = Notification;
             if (n == null) return;
             float x = p.Px(PadX);
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
 
             RectangleF icon = new RectangleF(x, (size.Height - p.Px(IconSize)) / 2, p.Px(IconSize), p.Px(IconSize)); // Centrado en vertical
@@ -101,7 +101,7 @@ namespace StreeckSuite.Modules
                 badgeWidth = g.MeasureString(badgeText, p.Bold12).Width + p.Px(8);
                 RectangleF badge = new RectangleF(size.Width - x - badgeWidth, (size.Height - p.Px(18)) / 2, badgeWidth, p.Px(18));
                 IslandPainter.FillRounded(g, badge, badge.Height / 2, gray);
-                p.DrawText(g, badgeText, p.Bold12, IslandPainter.Fade(Color.FromArgb(11, 15, 23), alpha), badge, StringAlignment.Center);
+                p.DrawText(g, badgeText, p.Bold12, IslandPainter.Fade(IslandPainter.InkContrast, alpha), badge, StringAlignment.Center);
                 badgeWidth += p.Px(12);
             }
 
@@ -173,7 +173,7 @@ namespace StreeckSuite.Modules
         {
             List<IslandNotification> all = NotificationService.History;
             float x = p.Px(PadX), width = size.Width - 2 * x;
-            Color white = Color.FromArgb(alpha, Color.White);
+            Color white = Color.FromArgb(alpha, IslandPainter.InkBase);
             Color gray = IslandPainter.Fade(IslandPainter.Gray, alpha);
             Color legend = IslandPainter.Fade(Color.FromArgb(139, 147, 163), alpha);
             _rows.Clear();

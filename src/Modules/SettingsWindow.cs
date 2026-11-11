@@ -16,7 +16,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal class SettingsWindow : Form
     {
-        public enum Page { Privacy, Island, Notifications, Time, Tray, Assistant, Start, Taskbar, StartIcon, Widgets, Clock, Eyes, About }
+        public enum Page { Privacy, Island, Appearance, Tools, Notifications, Time, Tray, Assistant, Start, Taskbar, StartIcon, Widgets, Clock, Eyes, About }
 
         // Medidas del mockup (a 96 PPP)
         private const float W = 800, H = 808, SideW = 210, ContentX = 238, ContentW = 534;
@@ -51,7 +51,7 @@ namespace StreeckSuite.Modules
             Color.FromArgb(0, 210, 255), Color.FromArgb(34, 197, 94), Color.FromArgb(167, 139, 250),
             Color.FromArgb(251, 146, 60), Color.FromArgb(244, 114, 182)
         };
-        private static readonly string[] WidgetDescriptions = { "CPU, RAM y GPU", "Lo que suena en cualquier app", "Tu lista de notas.txt" };
+        private static readonly string[] WidgetDescriptions = { "Temperatura, máxima, mínima y próximas horas", "Tus eventos de hoy", "Lo que suena, con botones", "CPU, RAM, GPU y disco", "Tu lista de notas.txt (clic para editar)", "Días que faltan para una fecha (clic para cambiarla)" };
         private static readonly CultureInfo Spanish = new CultureInfo("es-ES");
 
         private static SettingsWindow _instance;
@@ -317,6 +317,8 @@ namespace StreeckSuite.Modules
             {
                 case Page.Privacy: DrawPrivacy(g); break;
                 case Page.Island: DrawIsland(g); break;
+                case Page.Appearance: DrawAppearance(g); break;
+                case Page.Tools: DrawTools(g); break;
                 case Page.Notifications: DrawNotifications(g); break;
                 case Page.Time: DrawTime(g); break;
                 case Page.Tray: DrawTray(g); break;
@@ -376,7 +378,7 @@ namespace StreeckSuite.Modules
             using (Pen line = new Pen(SideLine, 1)) g.DrawLine(line, SideW, 0, SideW, H);
             DrawText(g, "Streeck Suite", _bold15, TextColor, new RectangleF(22, 18, 180, 20), StringAlignment.Near);
 
-            string[] names = { "Privacidad", "Isla", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Botón de Inicio", "Widgets", "Reloj 3D", "Ojitos", "Acerca de" };
+            string[] names = { "Privacidad", "Isla", "Apariencia", "Herramientas", "Avisos", "Tiempo y agenda", "Bandeja y búsqueda", "Asistente IA", "Menú de inicio", "Barra de tareas", "Botón de Inicio", "Widgets", "Reloj 3D", "Ojitos", "Acerca de" };
             for (int i = 0; i < names.Length; i++)
             {
                 Page page = (Page)i;
@@ -433,6 +435,15 @@ namespace StreeckSuite.Modules
                     case Page.Island:
                         using (GraphicsPath pill = LayeredWindow.RoundedRect(new RectangleF(3, 3, 18, 8), 4)) g.DrawPath(pen, pill);
                         g.DrawLine(pen, 3, 17, 21, 17);
+                        break;
+                    case Page.Tools:
+                        g.DrawLine(pen, 5, 19, 13, 11);
+                        g.DrawEllipse(pen, 12, 4, 8, 8);
+                        break;
+                    case Page.Appearance:
+                        g.DrawEllipse(pen, 3, 3, 18, 18);
+                        g.DrawLine(pen, 12, 3, 12, 21);
+                        using (SolidBrush half = new SolidBrush(color)) g.FillPie(half, 3, 3, 18, 18, 90, 180);
                         break;
                     case Page.Widgets:
                         g.DrawRectangle(pen, 3, 3, 7, 7);
@@ -655,7 +666,7 @@ namespace StreeckSuite.Modules
             DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 101, 330, 34), new[] { "Widgets", "Ojitos" },
                 (int)SuiteSettings.IslandIdle, i => { SuiteSettings.IslandIdle = (SuiteSettings.IslandIdleKind)i; SuiteSettings.Save(); });
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y, 120, 56), StringAlignment.Near);
-            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba", "Flotante" },
+            DrawSegmented(g, new RectangleF(ContentRight - 16 - 330, y + 11, 330, 34), new[] { "Pegada arriba", "Flotante", "Redondeada" },
                 (int)SuiteSettings.IslandStyle, i => { SuiteSettings.IslandStyle = (SuiteSettings.IslandStyleKind)i; SuiteSettings.Save(); });
             DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 54, 120, 40), StringAlignment.Near);
             string[] colors = { "#000000", "#1c1c1e", "#0f172a", "#1e1b4b", "#2e1065", "#052e16", "#3f0d12" };
@@ -1017,6 +1028,20 @@ namespace StreeckSuite.Modules
             DrawCard(g, y, 58);
             DrawToggleRow(g, y, "Escuchar al abrir con Ctrl + Alt + A", "El micrófono se enciende solo; si empiezas a escribir, se apaga",
                 SuiteSettings.AssistantAutoListen, () => { SuiteSettings.AssistantAutoListen = !SuiteSettings.AssistantAutoListen; SuiteSettings.Save(); });
+
+            // Agentes de IA: la isla avisa cuando Claude Code trabaja, termina o pide permiso
+            y = 660;
+            DrawCard(g, y, 58);
+            bool connected = AgentNotifier.ClaudeConnected;
+            DrawAssistantRow(g, y + 4, "Avisos de Claude Code en la isla",
+                connected ? "Conectado · te avisa al terminar o al pedir permiso" : "La isla te avisa cuando termina o te pide permiso",
+                connected ? Color.FromArgb(74, 222, 128) : Gray, connected ? "Desconectar" : "Conectar",
+                () =>
+                {
+                    string error = AgentNotifier.ConnectClaude(!connected);
+                    if (error != null) EventBus.Instance.Publish(Core.Events.NotchShowMessage, "⚠️ No se pudo conectar con Claude Code");
+                    Invalidate();
+                });
         }
 
         // Fila con título, estado de color y un botón opcional a la derecha
@@ -1195,26 +1220,120 @@ namespace StreeckSuite.Modules
             DrawToggleRow(g, y + 4, "Mini reproductor en la barra", "Una isla más con la canción; la isla de arriba deja de mostrar música", SuiteSettings.TaskbarMiniPlayer,
                 () => { SuiteSettings.TaskbarMiniPlayer = !SuiteSettings.TaskbarMiniPlayer; SuiteSettings.Save(); });
 
-            // Skin de la barra (galería aprobada): 10 opciones en dos filas
+            // La skin (compartida con la isla) se elige en Apariencia, con vista previa
             y += 66 + 14;
-            DrawCard(g, y, 104);
-            DrawText(g, "Skin", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
-            string[] skins = { "Cristal", "Notch", "Dock", "Neón", "Fantasma", "Línea fina", "Aurora", "Aero 7", "Cristal líquido", "Gamer RGB" };
-            float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
-            for (int i = 0; i < skins.Length; i++)
+            DrawCard(g, y, 58);
+            DrawAssistantRow(g, y + 4, "Skin: " + IslandSkin.Names[Math.Max(0, Math.Min(IslandSkin.Count - 1, SuiteSettings.TaskbarSkin))],
+                "La misma para la isla y la barra", Gray, "Elegir en Apariencia", () => { _page = Page.Appearance; Invalidate(); });
+        }
+        #endregion
+
+        #region Página Herramientas (todo lo que tiene atajo, también con botón)
+
+        private void DrawTools(Graphics g)
+        {
+            DrawTitle(g, "Herramientas");
+            float y = 66;
+            var rows = new[]
             {
-                int index = i;
-                RectangleF chip = new RectangleF(InnerX + (i % 5) * (chipW + chipGap), y + 38 + (i / 5) * 32, chipW, 28);
-                bool selected = SuiteSettings.TaskbarSkin == i;
-                FillRound(g, chip, 8, selected ? Color.FromArgb(46, Accent) : Hover(chip) ? Color.FromArgb(40, 47, 62) : Field);
-                StrokeRound(g, chip, 8, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
-                DrawText(g, skins[i], _reg12, selected ? ValueColor : TextColor, chip, StringAlignment.Center);
-                AddHit(chip, () => { SuiteSettings.TaskbarSkin = index; SuiteSettings.Save(); });
+                new { Title = "Claude en la isla", Detail = "Ctrl + Alt + C · claude.ai con tu cuenta, sin API", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenClaude)) },
+                new { Title = "Historial del portapapeles", Detail = "Ctrl + Alt + V · lo último que copiaste, con buscador", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenClipboard)) },
+                new { Title = "Enviar y recibir con el celular", Detail = "Ctrl + Alt + R · QR por tu Wi-Fi, sin internet", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenPhone)) },
+                new { Title = "Silenciar el micrófono", Detail = "Ctrl + Alt + M · la isla muestra un aviso rojo mientras está silenciado", Button = "Probar", Action = (Action)(() => IslandTools.Run(IslandTools.ToggleMic)) },
+                new { Title = "Pausar avisos (No molestar)", Detail = "Ctrl + Alt + N", Button = SuiteSettings.DoNotDisturb ? "Reanudar" : "Pausar", Action = (Action)(() => NotificationService.ToggleDoNotDisturb()) },
+                new { Title = "Asistente IA", Detail = SuiteSettings.AssistantHotkey ? "Ctrl + Alt + A" : "Desde la búsqueda", Button = "Ajustes", Action = (Action)(() => { _page = Page.Assistant; }) },
+                new { Title = "Novedades de esta versión", Detail = "Lo nuevo de la " + AppInfo.Version + ", con botones para probarlo", Button = "Ver", Action = (Action)(() => new WhatsNewWindow().Show()) }
+            };
+            DrawCard(g, y, 8 + rows.Length * 56);
+            for (int i = 0; i < rows.Length; i++)
+            {
+                DrawAssistantRow(g, y + 4 + i * 56, rows[i].Title, rows[i].Detail, Gray, rows[i].Button, rows[i].Action);
+                if (i < rows.Length - 1) DrawRowDivider(g, y + 4 + i * 56 + 54);
             }
+            DrawText(g, "Los botones Claude, Portapapeles y Celular también están en el Centro de control de la isla.", _reg12, Gray,
+                new RectangleF(InnerX, y + 8 + rows.Length * 56 + 10, InnerW, 18), StringAlignment.Near);
         }
 
         #endregion
 
+        #region Página Apariencia (mockup «Skins de la isla y la barra»)
+
+        private void DrawAppearance(Graphics g)
+        {
+            DrawTitle(g, "Apariencia");
+
+            // Skins: 16 cuadros con una mini isla pintada por el skin real
+            float y = 66;
+            DrawCard(g, y, 300);
+            DrawText(g, "Skin de la isla y la barra", _semi14, TextColor, new RectangleF(InnerX, y + 10, 300, 20), StringAlignment.Near);
+            float gap = 8, tileW = (InnerW - 3 * gap) / 4, tileH = 58;
+            for (int i = 0; i < IslandSkin.Count; i++)
+            {
+                int index = i;
+                RectangleF tile = new RectangleF(InnerX + (i % 4) * (tileW + gap), y + 38 + (i / 4) * (tileH + 6), tileW, tileH);
+                bool selected = SuiteSettings.TaskbarSkin == i;
+                FillRound(g, tile, 10, selected ? Color.FromArgb(46, Accent) : Hover(tile) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, tile, 10, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                // Mini isla sobre un trocito de "fondo de pantalla"
+                RectangleF wall = new RectangleF(tile.X + 6, tile.Y + 6, tile.Width - 12, 30);
+                using (LinearGradientBrush sky = new LinearGradientBrush(wall, Color.FromArgb(91, 143, 214), Color.FromArgb(75, 43, 107), 90f))
+                using (GraphicsPath wallPath = LayeredWindow.RoundedRect(wall, 6)) g.FillPath(sky, wallPath);
+                RectangleF pill = new RectangleF(wall.X + 8, wall.Y + 4, wall.Width - 16, 22);
+                IslandSkin.PreviewOverride = i;
+                try
+                {
+                    using (GraphicsPath shape = LayeredWindow.RoundedRect(pill, 11))
+                    using (GraphicsPath outline = LayeredWindow.RoundedRect(RectangleF.Inflate(pill, -0.5f, -0.5f), 10.5f))
+                    {
+                        SmoothingMode old = g.SmoothingMode;
+                        g.SmoothingMode = SmoothingMode.AntiAlias;
+                        IslandSkin.Paint(g, shape, outline, pill, ColorTranslator.FromHtml(SuiteSettings.IslandColor));
+                        g.SmoothingMode = old;
+                    }
+                    IslandEyes.DrawPreview(g, new PointF(pill.X + 20, pill.Y + pill.Height / 2), 0.36f, IslandEyes.Mood.Idle);
+                    DrawText(g, "22°", _reg11, IslandPainter.InkBase, new RectangleF(pill.X + 34, pill.Y, pill.Width - 38, pill.Height), StringAlignment.Center);
+                }
+                finally
+                {
+                    IslandSkin.PreviewOverride = null;
+                }
+                DrawText(g, IslandSkin.Names[i], _reg12, selected ? ValueColor : TextColor, new RectangleF(tile.X, wall.Bottom, tile.Width, tile.Bottom - wall.Bottom), StringAlignment.Center);
+                AddHit(tile, () => { SuiteSettings.TaskbarSkin = index; SuiteSettings.Save(); });
+            }
+
+            // Forma, letra, borde y fondo
+            y += 300 + 14;
+            DrawCard(g, y, 204);
+            string[] labels = { "Forma", "Letra", "Borde", "Fondo" };
+            for (int r = 0; r < labels.Length; r++)
+            {
+                float row = y + 6 + r * 50;
+                DrawText(g, labels[r], _semi14, TextColor, new RectangleF(InnerX, row, 100, 40), StringAlignment.Near);
+                RectangleF seg = new RectangleF(ContentRight - 16 - 360, row + 4, 360, 32);
+                if (r == 0) DrawSegmented(g, seg, new[] { "Pegada arriba", "Flotante", "Redondeada" }, (int)SuiteSettings.IslandStyle,
+                    i => { SuiteSettings.IslandStyle = (SuiteSettings.IslandStyleKind)i; SuiteSettings.Save(); });
+                else if (r == 1) DrawSegmented(g, seg, new[] { "Moderna", "Geométrica", "Terminal" }, (int)SuiteSettings.IslandFont,
+                    i => { SuiteSettings.IslandFont = (SuiteSettings.FontKind)i; SuiteSettings.Save(); });
+                else if (r == 2) DrawSegmented(g, seg, new[] { "Del skin", "Sin borde", "Fino", "Brillo" }, (int)SuiteSettings.IslandBorder,
+                    i => { SuiteSettings.IslandBorder = (SuiteSettings.BorderKind)i; SuiteSettings.Save(); });
+                else DrawSegmented(g, seg, new[] { "Sólido", "Cristal" }, SuiteSettings.IslandGlass ? 1 : 0,
+                    i => { SuiteSettings.IslandGlass = i == 1; SuiteSettings.Save(); });
+                if (r < labels.Length - 1) DrawRowDivider(g, row + 46);
+            }
+
+            // Skins claros (Papel, Hielo): la suite pone Windows en modo claro y al volver deja el modo que tenías
+        }
+
+        private static bool WindowsLightTaskbar
+        {
+            get
+            {
+                object v = Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0);
+                return v is int && (int)v == 1;
+            }
+        }
+
+        #endregion
         #region Página Ojitos (mockup «Ojitos del notch»)
 
         private void DrawEyes(Graphics g)
@@ -1222,17 +1341,54 @@ namespace StreeckSuite.Modules
             DrawTitle(g, "Ojitos");
 
             float y = 66;
-            DrawCard(g, y, 58);
-            DrawToggleRow(g, y, "Ojitos en la isla cerrada", "En lugar de los widgets (también en la página Isla)",
-                SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes,
-                () =>
+
+            // Isla cerrada: widgets, o los ojitos con lo que va a su lado. Cuadros con vista previa, como los estilos
+            DrawCard(g, y, 156);
+            DrawText(g, "Isla cerrada", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
+            DrawText(g, "Un tiempo o la música reemplazan esto solos", _reg12, Gray, new RectangleF(InnerX + 110, y + 10, InnerW - 110, 20), StringAlignment.Far);
+            string[] sideNames = { "Widgets", "Solo ojitos", "Clima", "Hora", "Hora y clima", "Fecha", "CPU y RAM", "Próximo evento" };
+            WeatherService.Conditions weather = WeatherService.Shared.Current;
+            string temp = weather != null ? string.Format("{0:0}°", weather.TemperatureC) : "24°";
+            string[] sideSamples = { temp + "  CPU 12 %", null, temp, DateTime.Now.ToString("HH:mm"), DateTime.Now.ToString("HH:mm") + " · " + temp,
+                                     DateTime.Now.ToString("ddd d MMM", new System.Globalization.CultureInfo("es-MX")).Replace(".", ""), "CPU 12 %", "18:00 Gym" };
+            bool eyesOn = SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes;
+            float tileGap = 8, tileW = (InnerW - 3 * tileGap) / 4, tileH = 52;
+            for (int i = 0; i < sideNames.Length; i++)
+            {
+                int index = i;
+                RectangleF tile = new RectangleF(InnerX + (i % 4) * (tileW + tileGap), y + 38 + (i / 4) * (tileH + 8), tileW, tileH);
+                bool selected = i == 0 ? !eyesOn : eyesOn && (int)SuiteSettings.EyesSide == i - 1;
+                FillRound(g, tile, 10, selected ? Color.FromArgb(46, Accent) : Hover(tile) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, tile, 10, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+
+                // Mini isla de muestra
+                RectangleF pill = new RectangleF(tile.X + 6, tile.Y + 6, tile.Width - 12, 24);
+                FillRound(g, pill, 12, Color.Black);
+                string sample = sideSamples[i];
+                if (i == 0)
                 {
-                    SuiteSettings.IslandIdle = SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes ? SuiteSettings.IslandIdleKind.Widgets : SuiteSettings.IslandIdleKind.Eyes;
+                    DrawText(g, sample, _reg11, Color.White, pill, StringAlignment.Center);
+                }
+                else if (sample == null)
+                {
+                    IslandEyes.DrawPreview(g, new PointF(pill.X + pill.Width / 2, pill.Y + pill.Height / 2), 0.42f, IslandEyes.Mood.Idle);
+                }
+                else
+                {
+                    IslandEyes.DrawPreview(g, new PointF(pill.X + 20, pill.Y + pill.Height / 2), 0.34f, IslandEyes.Mood.Idle);
+                    DrawText(g, sample, _reg11, Color.White, new RectangleF(pill.X + 36, pill.Y, pill.Width - 40, pill.Height), StringAlignment.Center);
+                }
+                DrawText(g, sideNames[i], _reg12, selected ? ValueColor : TextColor, new RectangleF(tile.X, pill.Bottom + 2, tile.Width, 18), StringAlignment.Center);
+                AddHit(tile, () =>
+                {
+                    if (index == 0) SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Widgets;
+                    else { SuiteSettings.IslandIdle = SuiteSettings.IslandIdleKind.Eyes; SuiteSettings.EyesSide = (SuiteSettings.EyesSideKind)(index - 1); }
                     SuiteSettings.Save();
                 });
+            }
 
             // Muestra: el estilo elegido en cuatro estados
-            y += 58 + 14;
+            y += 156 + 14;
             DrawCard(g, y, 96);
             IslandEyes.Mood[] moods = { IslandEyes.Mood.Idle, IslandEyes.Mood.Happy, IslandEyes.Mood.Surprised, IslandEyes.Mood.Sleep };
             string[] moodNames = { "Normal", "Feliz", "Sorpresa", "Dormido" };
@@ -1245,12 +1401,13 @@ namespace StreeckSuite.Modules
                 DrawText(g, moodNames[i], _reg12, Gray, new RectangleF(InnerX + i * (cellW + 10), y + 64, cellW, 20), StringAlignment.Center);
             }
 
-            // Estilo: 15 opciones en tres filas
+            // Estilo: 25 opciones en cinco filas
             y += 96 + 14;
-            DrawCard(g, y, 142);
+            DrawCard(g, y, 206);
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
             string[] styles = { "Actual", "Con pupila", "Anime", "Gato", "Robot", "Puntitos", "Pixel", "Visor LED", "Cíclope",
-                                "Corazones", "Estrellas", "Lentes", "Búho", "Somnoliento", "Ciber" };
+                                "Corazones", "Estrellas", "Lentes", "Búho", "Somnoliento", "Ciber",
+                                "Fantasma", "Kawaii", "Pirata", "Espiral", "Cachorro", "Monóculo", "Alien", "Panda", "Kaomoji", "Zombi" };
             float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
             for (int i = 0; i < styles.Length; i++)
             {
@@ -1264,7 +1421,7 @@ namespace StreeckSuite.Modules
             }
 
             // Color y extras
-            y += 142 + 14;
+            y += 206 + 14;
             DrawCard(g, y, 96);
             DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 4, 120, 40), StringAlignment.Near);
             string[] colors = { "#FFFFFF", "#38BDF8", "#F472B6", "#A3E635", "#FBBF24" };
@@ -1519,8 +1676,8 @@ namespace StreeckSuite.Modules
             DrawTitle(g, "Widgets");
 
             float y = 66;
-            DrawCard(g, y, 170);
             string[] ids = WidgetVisibility.AllIds;
+            DrawCard(g, y, 8 + ids.Length * 54);
             for (int i = 0; i < ids.Length; i++)
             {
                 string id = ids[i];
@@ -1535,7 +1692,7 @@ namespace StreeckSuite.Modules
                 }
             }
 
-            y = 250;
+            y += 8 + ids.Length * 54 + 14;
             DrawCard(g, y, 96);
             DrawText(g, "Color de acento", _semi14, TextColor, new RectangleF(InnerX, y + 14, 300, 20), StringAlignment.Near);
             bool presetSelected = false;
@@ -1556,13 +1713,13 @@ namespace StreeckSuite.Modules
                 presetSelected ? (Color?)null : SuiteSettings.WidgetAccent,
                 () => PickColor(SuiteSettings.WidgetAccent, c => { SuiteSettings.WidgetAccent = c; SuiteSettings.Save(); }));
 
-            y = 360;
+            y += 96 + 14;
             DrawCard(g, y, 64);
             DrawLabelValue(g, y + 14, "Opacidad del cristal", SuiteSettings.WidgetGlassPercent + " %", _semi14, _bold14);
             DrawSlider(g, new RectangleF(InnerX, y + 44, InnerW, 6), SuiteSettings.WidgetGlassPercent / 100f,
                 f => { SuiteSettings.WidgetGlassPercent = (int)Math.Round(f * 100); SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
 
-            y = 438;
+            y += 64 + 14;
             const string resetText = "Recolocar widgets en su sitio";
             float buttonW = g.MeasureString(resetText, _reg13).Width + 28;
             RectangleF reset = new RectangleF(ContentRight - buttonW, y, buttonW, 34);
@@ -1593,6 +1750,19 @@ namespace StreeckSuite.Modules
             StrokeRound(g, move, 8, SoftBorder, 1, false);
             DrawText(g, moveText, _reg13, TextColor, move, StringAlignment.Center);
             AddHit(move, ClockPlacementWindow.Open);
+
+            // Con varios monitores y el fondo sin «Extender», Windows encoge o recorta la imagen panorámica en cada
+            // pantalla (y el reloj la copia igual): un clic la pone de un monitor a otro
+            if (Screen.AllScreens.Length > 1 && WallpaperInfo.GetStyle() != 22)
+            {
+                const string spanText = "Extender fondo en mis monitores";
+                float spanW = g.MeasureString(spanText, _reg13).Width + 24;
+                RectangleF span = new RectangleF(move.X - 10 - spanW, 22, spanW, 30);
+                FillRound(g, span, 8, Hover(span) ? Color.FromArgb(46, Accent) : Color.FromArgb(30, Accent));
+                StrokeRound(g, span, 8, Color.FromArgb(140, Accent), 1, false);
+                DrawText(g, spanText, _reg13, ValueColor, span, StringAlignment.Center);
+                AddHit(span, () => { WallpaperInfo.ApplySpan(); Invalidate(); });
+            }
 
             // Estilo: clásico (el sujeto pasa por delante) o estirado (estilo Samsung, mockup R1)
             bool stretched = s.Style == ClockStyle.Samsung;

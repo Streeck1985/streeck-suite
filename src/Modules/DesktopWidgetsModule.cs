@@ -29,6 +29,10 @@ namespace StreeckSuite.Modules
         private TelemetryWidget _telemetry;
         private MediaWidget _media;
         private NotesWidget _notes;
+        private WeatherWidget _weather;
+        private AgendaWidget _agenda;
+        private CountdownWidget _countdown;
+        private int _slowTicks; // Clima, agenda y cuenta regresiva cambian poco: se repintan cada ~minuto
         private WidgetLayout _layout;
         private TelemetrySampler _sampler;
         private System.Threading.Timer _sampleTimer;
@@ -51,7 +55,7 @@ namespace StreeckSuite.Modules
             _eventBus.Subscribe(Events.WidgetsResetLayout, payload =>
             {
                 if (_layout == null) return;
-                _layout.Reset(_telemetry, _media, _notes);
+                _layout.Reset(AllWidgets());
                 _eventBus.Publish(Events.NotchShowMessage, "🧩 Widgets recolocados");
             });
             // Acento y opacidad del cristal: se repintan al momento
@@ -83,7 +87,12 @@ namespace StreeckSuite.Modules
                 _telemetry = new TelemetryWidget(_layout, TelemetrySampler.GetCpuName(), TelemetrySampler.GetGpuName());
                 _media = new MediaWidget(_layout);
                 _notes = new NotesWidget(_layout);
-                _layout.PlaceDefaults(_telemetry, _media, _notes);
+                _weather = new WeatherWidget(_layout);
+                _agenda = new AgendaWidget(_layout);
+                _countdown = new CountdownWidget(_layout);
+                _layout.PlaceDefaults(AllWidgets());
+                WeatherService.Shared.Updated += () => RepaintOnUi(_weather);
+                AgendaService.Updated += () => RepaintOnUi(_agenda);
             }
             _sampler = new TelemetrySampler();
             _isRunning = true;
@@ -103,7 +112,19 @@ namespace StreeckSuite.Modules
 
         private IEnumerable<WidgetWindow> Widgets
         {
-            get { return new WidgetWindow[] { _telemetry, _media, _notes }; }
+            get { return AllWidgets(); }
+        }
+
+        // Orden de la columna por defecto (mockup «Widgets nuevos»)
+        private WidgetWindow[] AllWidgets()
+        {
+            return new WidgetWindow[] { _weather, _agenda, _media, _telemetry, _notes, _countdown };
+        }
+
+        private static void RepaintOnUi(WidgetWindow widget)
+        {
+            if (widget == null || widget.IsDisposed || !widget.IsHandleCreated) return;
+            try { widget.BeginInvoke((Action)(() => widget.RenderSurface())); } catch (InvalidOperationException) { }
         }
 
         private void OnGameModeActive(object payload)
@@ -158,11 +179,18 @@ namespace StreeckSuite.Modules
 
                 TelemetrySampler.Snapshot snapshot = sampler.Sample();
                 MediaInfo info = MediaService.Current;
+                bool slow = ++_slowTicks % 24 == 0;
+                WidgetWindow[] slowOnes = { notes, _weather, _agenda, _countdown };
                 telemetry.BeginInvoke((Action)(() =>
                 {
                     telemetry.UpdateData(snapshot);
                     media.UpdateData(info);
-                    notes.RenderSurface(); // Por si cambió el fondo de escritorio que se ve detrás
+                    if (!slow) return;
+                    // Por si cambió el fondo de escritorio que se ve detrás, la hora o el día
+                    foreach (WidgetWindow w in slowOnes)
+                    {
+                        if (w != null && !w.IsDisposed && w.Visible) w.RenderSurface();
+                    }
                 }));
             }
             catch (Exception ex)
@@ -181,7 +209,10 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal static class WidgetVisibility
     {
-        public static readonly string[] AllIds = { "telemetria", "reproductor", "tareas" };
+        public static readonly string[] AllIds = { "clima", "agenda", "reproductor", "telemetria", "tareas", "cuenta" };
+
+        // Estos empiezan ocultos; el archivo guarda "+id" cuando el usuario los enciende
+        private static readonly string[] OffByDefault = { "tareas", "cuenta" };
 
         private static readonly string FilePath = Path.Combine(Path.GetDirectoryName(Log.FilePath), "widgets_ocultos.txt");
         private static HashSet<string> _hidden;
@@ -190,21 +221,29 @@ namespace StreeckSuite.Modules
         {
             switch (id)
             {
-                case "telemetria": return "Telemetría";
-                case "reproductor": return "Reproductor";
-                case "tareas": return "Tareas pendientes";
+                case "clima": return "Clima";
+                case "agenda": return "Agenda de hoy";
+                case "telemetria": return "Equipo";
+                case "reproductor": return "Música";
+                case "tareas": return "Nota rápida";
+                case "cuenta": return "Cuenta regresiva";
                 default: return id;
             }
         }
 
         public static bool IsHidden(string id)
         {
+            if (Array.IndexOf(OffByDefault, id) >= 0) return !Hidden.Contains("+" + id);
             return Hidden.Contains(id);
         }
 
         public static void SetHidden(string id, bool hidden)
         {
-            if (hidden) Hidden.Add(id); else Hidden.Remove(id);
+            if (Array.IndexOf(OffByDefault, id) >= 0)
+            {
+                if (hidden) Hidden.Remove("+" + id); else Hidden.Add("+" + id);
+            }
+            else if (hidden) Hidden.Add(id); else Hidden.Remove(id);
             try
             {
                 File.WriteAllLines(FilePath, new List<string>(Hidden).ToArray());
@@ -281,19 +320,25 @@ namespace StreeckSuite.Modules
         public void PlaceDefaults(params WidgetWindow[] widgets)
         {
             Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            int y = area.Top + widgets[0].Px(DefaultTop);
+            int top = area.Top + widgets[0].Px(DefaultTop);
+            int y = top, right = area.Right - widgets[0].Px(DefaultMargin);
             foreach (WidgetWindow widget in widgets)
             {
                 Point saved;
                 if (_saved.TryGetValue(widget.WidgetId, out saved) && IsVisibleOnSomeScreen(new Rectangle(saved, widget.Size)))
                 {
                     widget.Location = saved;
+                    continue;
                 }
-                else
+                // Los ocultos no ocupan lugar; si la columna se llena, se abre otra a su izquierda
+                if (WidgetVisibility.IsHidden(widget.WidgetId)) { widget.Location = new Point(right - widget.Width, top); continue; }
+                if (y + widget.Height > area.Bottom - widget.Px(DefaultGap) && y > top)
                 {
-                    widget.Location = new Point(area.Right - widget.Px(DefaultMargin) - widget.Width, y);
+                    right -= widget.Width + widget.Px(DefaultGap) - widget.Px(28);
+                    y = top;
                 }
-                y += widget.Height + widget.Px(DefaultGap);
+                widget.Location = new Point(right - widget.Width, y);
+                y += widget.Height + widget.Px(DefaultGap) - widget.Px(28); // La ventana trae 14 px de sombra por lado
             }
         }
 
@@ -490,6 +535,16 @@ namespace StreeckSuite.Modules
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Right)
+            {
+                // Clic derecho: quitar este widget o recolocar todos
+                ContextMenuStrip menu = new ContextMenuStrip();
+                menu.Items.Add("Quitar " + WidgetVisibility.DisplayName(WidgetId), null, (s, a) => EventBus.Instance.Publish(StreeckSuite.Core.Events.WidgetToggle, WidgetId));
+                menu.Items.Add("Recolocar todos", null, (s, a) => EventBus.Instance.Publish(StreeckSuite.Core.Events.WidgetsResetLayout));
+                menu.Closed += (s, a) => BeginInvoke((Action)menu.Dispose);
+                menu.Show(Cursor.Position);
+                return;
+            }
             if (!_mouseDown) return;
             _mouseDown = false;
 
@@ -543,6 +598,20 @@ namespace StreeckSuite.Modules
         }
 
         protected abstract void PaintContent(Graphics g, Rectangle card);
+
+        /// <summary>
+        /// Desarrollo (--preview-widgets): la tarjeta dibujada en un bitmap, sin mostrar la ventana.
+        /// </summary>
+        internal Bitmap RenderPreview()
+        {
+            Bitmap bitmap = new Bitmap(Width, Height);
+            using (Graphics g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                DrawSurface(g);
+            }
+            return bitmap;
+        }
 
         protected Rectangle DrawHeader(Graphics g, Rectangle card, string title)
         {
@@ -607,7 +676,7 @@ namespace StreeckSuite.Modules
     }
 
     /// <summary>
-    /// Widget de telemetría: CPU, RAM y GPU reales, y lo que consume la propia suite.
+    /// Widget Equipo: CPU, RAM, GPU y disco del sistema reales.
     /// </summary>
     internal class TelemetryWidget : WidgetWindow
     {
@@ -620,7 +689,21 @@ namespace StreeckSuite.Modules
             _cpuName = cpuName;
             _gpuName = gpuName;
             int padding = Px(BasePadding);
-            SetCardHeight(padding + HeaderHeight + 3 * (Px(16) + Px(3) + Px(6)) + 2 * Px(10) + Px(12) + Px(16) + padding);
+            SetCardHeight(padding + HeaderHeight + 4 * (Px(16) + Px(3) + Px(6)) + 3 * Px(10) + padding);
+        }
+
+        // Disco del sistema: se lee aquí (es instantáneo) para no tocar el muestreador
+        private static float SystemDiskPercent()
+        {
+            try
+            {
+                DriveInfo drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory));
+                return drive.TotalSize <= 0 ? -1 : 100f * (drive.TotalSize - drive.TotalFreeSpace) / drive.TotalSize;
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
         }
 
         public void UpdateData(TelemetrySampler.Snapshot snapshot)
@@ -631,7 +714,7 @@ namespace StreeckSuite.Modules
 
         protected override void PaintContent(Graphics g, Rectangle card)
         {
-            Rectangle header = DrawHeader(g, card, "TELEMETRÍA");
+            Rectangle header = DrawHeader(g, card, "EQUIPO");
 
             // Punto de "en vivo" con halo
             int dot = Px(8);
@@ -650,13 +733,8 @@ namespace StreeckSuite.Modules
             y = DrawBar(g, card, y, "CPU (" + _cpuName + ")", s != null ? s.CpuPercent : 0);
             y = DrawBar(g, card, y + Px(10), ramLabel, s != null ? s.RamPercent : 0);
             y = DrawBar(g, card, y + Px(10), "GPU (" + _gpuName + ")", s != null ? s.GpuPercent : 0);
-
-            int padding = Px(BasePadding);
-            Rectangle footer = new Rectangle(card.X + padding, y + Px(12), card.Width - 2 * padding, Px(16));
-            string footprint = s != null
-                ? string.Format("Consumo Suite: {0:0} MB RAM • {1:0.0}% CPU", s.SuiteRamMb, s.SuiteCpuPercent)
-                : "Consumo Suite: midiendo…";
-            DrawText(g, footprint, SmallFont, Muted, footer, StringAlignment.Near);
+            string root = Path.GetPathRoot(Environment.SystemDirectory).TrimEnd('\\');
+            DrawBar(g, card, y + Px(10), "Disco " + root, SystemDiskPercent());
         }
 
         /// <summary>
@@ -703,7 +781,19 @@ namespace StreeckSuite.Modules
         public MediaWidget(WidgetLayout layout) : base(layout, "reproductor")
         {
             int padding = Px(BasePadding);
-            SetCardHeight(padding + HeaderHeight + Px(36) + padding);
+            SetCardHeight(padding + HeaderHeight + Px(36) + Px(12) + Px(4) + Px(8) + Px(26) + padding);
+        }
+
+        private Rectangle _prev, _play, _next;
+
+        protected override void OnCardClick(Point location)
+        {
+            // Botones del reproductor (cualquier app que suene); se repinta al momento para que se note
+            if (_play.Contains(location)) MediaService.TogglePlayPause();
+            else if (_prev.Contains(location)) MediaService.Previous();
+            else if (_next.Contains(location)) MediaService.Next();
+            else return;
+            RenderSurface();
         }
 
         public void UpdateData(MediaInfo media)
@@ -714,7 +804,7 @@ namespace StreeckSuite.Modules
 
         protected override void PaintContent(Graphics g, Rectangle card)
         {
-            Rectangle header = DrawHeader(g, card, "REPRODUCTOR");
+            Rectangle header = DrawHeader(g, card, "MÚSICA");
             DrawBadge(g, header, _media.IsAvailable ? _media.AppName : "Música");
 
             int rowY = header.Bottom + Px(12);
@@ -746,7 +836,42 @@ namespace StreeckSuite.Modules
             int textWidth = header.Right - textX;
             DrawText(g, _media.Title, _mediaTitleFont, Color.White, new Rectangle(textX, rowY, textWidth, thumb / 2), StringAlignment.Near);
             DrawText(g, _media.Subtitle, SmallFont, Muted, new Rectangle(textX, rowY + thumb / 2, textWidth, thumb / 2), StringAlignment.Near);
+
+            // Avance de la canción
+            Rectangle track = new Rectangle(header.X, thumbRect.Bottom + Px(12), header.Width, Px(4));
+            using (GraphicsPath trackPath = RoundedRect(track, track.Height / 2))
+            using (SolidBrush back = new SolidBrush(Color.FromArgb(26, 255, 255, 255)))
+            {
+                g.FillPath(back, trackPath);
+            }
+            double total = _media.Duration.TotalSeconds;
+            if (total > 0)
+            {
+                TimeSpan position = _media.Position + (_media.IsPlaying ? DateTime.Now - _media.PositionSampledAt : TimeSpan.Zero);
+                int fill = (int)(track.Width * Math.Max(0, Math.Min(1, position.TotalSeconds / total)));
+                if (fill >= track.Height)
+                {
+                    using (GraphicsPath fillPath = RoundedRect(new Rectangle(track.X, track.Y, fill, track.Height), track.Height / 2))
+                    using (SolidBrush brush = new SolidBrush(Accent))
+                    {
+                        g.FillPath(brush, fillPath);
+                    }
+                }
+            }
+
+            // Anterior, reproducir/pausar, siguiente
+            int size = Px(26), gap = Px(22);
+            int cx = card.X + card.Width / 2, cy = track.Bottom + Px(8);
+            _play = new Rectangle(cx - size / 2, cy, size, size);
+            _prev = new Rectangle(_play.X - gap - size, cy, size, size);
+            _next = new Rectangle(_play.Right + gap, cy, size, size);
+            using (SolidBrush white = new SolidBrush(Color.White)) g.FillEllipse(white, _play);
+            DrawText(g, _media.IsPlaying ? "\uE769" : "\uE768", _controlFont, Color.FromArgb(12, 16, 26), _play, StringAlignment.Center);
+            DrawText(g, "\uE892", _controlFont, Secondary, _prev, StringAlignment.Center);
+            DrawText(g, "\uE893", _controlFont, Secondary, _next, StringAlignment.Center);
         }
+
+        private readonly Font _controlFont = new Font("Segoe Fluent Icons", 9f, FontStyle.Regular);
 
         protected override void Dispose(bool disposing)
         {
@@ -818,7 +943,7 @@ namespace StreeckSuite.Modules
 
         protected override void PaintContent(Graphics g, Rectangle card)
         {
-            Rectangle header = DrawHeader(g, card, "TAREAS PENDIENTES");
+            Rectangle header = DrawHeader(g, card, "NOTA RÁPIDA");
             int pending = _tasks.FindAll(t => !t.Done).Count;
             DrawBadge(g, header, pending == 1 ? "1 pendiente" : pending + " pendientes");
 
