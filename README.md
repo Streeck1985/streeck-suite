@@ -17,8 +17,37 @@
 
 ---
 
-> ⚠️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
+> ℹ️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
 
+## ✨ Novedades de la 1.4.0
+
+### 16 skins para la isla y la barra
+Seis nuevas (**Grafito, Papel, Atardecer, Terminal, Hielo y Oro**) además de las 10 de siempre. En **Ajustes › Apariencia** también eliges la forma (pegada arriba, flotante o la nueva **redondeada**), la letra, el borde (fino o brillo animado) y el fondo sólido o cristal. Con Papel y Hielo la suite pone Windows en modo claro y, al volver a una skin oscura, deja tu configuración como estaba.
+
+<p align="center"><img src="imagenes/skins-isla.png" width="860" alt="Las 16 skins de la isla"></p>
+<p align="center"><img src="imagenes/skins-barra.png" width="860" alt="Las 16 skins en la barra de tareas"></p>
+<p align="center"><img src="imagenes/panel-apariencia.png" width="420" alt="Ajustes de Apariencia"></p>
+
+### Herramientas en la isla
+Una tarjeta nueva en el carrusel con todo a la mano, por categorías: **Claude** (pregúntale con tu cuenta de claude.ai, sin pagar API), **portapapeles** con historial y buscador, **calculadora**, **enviar y recibir con el celular** por QR y tu Wi-Fi (sin internet ni apps), **silenciar el micrófono**, **captura de pantalla** y **bloquear la PC**. Cada botón trae su atajo escrito.
+
+<p align="center">
+  <img src="imagenes/isla-herramientas.png" width="400" alt="Tarjeta de herramientas">
+  <img src="imagenes/portapapeles.png" width="400" alt="Historial del portapapeles">
+</p>
+
+### Y más
+- **Controles rápidos nuevos:** micrófono (Ctrl + Alt + M, con aviso rojo en la isla), luz nocturna y modo de energía.
+- **Widgets nuevos:** clima, agenda de hoy, música con botones, equipo y cuenta regresiva.
+- **25 estilos de ojitos** (10 nuevos) y lo que quieras junto a ellos: clima, hora, fecha, CPU, tu próximo evento o el **cronómetro**.
+- **Avisos de agentes de IA:** la isla te dice cuando Claude Code termina o te pide permiso.
+- **Reloj 3D:** en «Contorno» los números se paran sobre la silueta, y los fondos de dos monitores se ven completos.
+- Al actualizar, una ventana te muestra las **novedades** con botones para probarlas.
+
+<p align="center">
+  <img src="imagenes/isla-control.png" width="400" alt="Centro de control">
+  <img src="imagenes/widgets.png" width="400" alt="Widgets nuevos">
+</p>
 ## Isla dinámica
 
 Una isla negra arriba de la pantalla que se abre al pasar el ratón: música con letra, centro de control (Wi-Fi, Bluetooth, volumen y micrófono), calendario con pomodoro, clima, sistema y avisos.
@@ -41,7 +70,9 @@ Cuando la isla está cerrada puede mostrar unos ojitos que te siguen con la mira
 
 <p align="center"><img src="imagenes/ojitos.png" width="540" alt="Los 9 estilos de ojitos"></p>
 
-9 estilos (Actual, Con pupila, Anime, Gato, Robot, Puntitos, Pixel, Visor LED y Cíclope), 5 colores, cejas, boquita y rubor.
+25 estilos (Actual, Con pupila, Anime, Gato, Robot, Puntitos, Pixel, Visor LED, Cíclope, Corazones, Estrellas, Lentes, Búho, Somnoliento, Ciber, Fantasma, Kawaii, Pirata, Espiral, Cachorro, Monóculo, Alien, Panda, Kaomoji y Zombi), 5 colores, cejas, boquita y rubor.
+
+<p align="center"><img src="imagenes/ojitos-estilos.png" width="700" alt="Los 25 estilos con sus 8 caras"></p>
 
 Con música sonando, la carita se pone feliz junto al ecualizador:
 
@@ -49,7 +80,7 @@ Con música sonando, la carita se pone feliz junto al ecualizador:
 
 ## Barra de tareas con skins
 
-Le pone skin a **la barra real de Windows** (no es una barra falsa): islas a los extremos, 10 skins y un mini reproductor. Funciona en varios monitores.
+Le pone skin a **la barra real de Windows** (no es una barra falsa): islas a los extremos, 16 skins y un mini reproductor. Funciona en varios monitores.
 
 <p align="center"><img src="imagenes/barra.png" alt="Barra de tareas con skin"></p>
 
