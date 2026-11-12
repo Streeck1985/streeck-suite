@@ -1859,21 +1859,31 @@ namespace StreeckSuite.Modules
                 row += 46;
 
                 DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, row, 200, 46), StringAlignment.Near);
-                string[] colors = { "#ffffff", "#ffd666", "#ffebf0", "#26c6da", "#a78bfa" };
-                const float swatch = 22, swatchGap = 12;
-                float sx = ContentRight - 16 - (colors.Length * (swatch + swatchGap) - swatchGap);
+                // Colores rápidos (con negro) y uno personalizado, para fondos claros u oscuros
+                string[] colors = { "#ffffff", "#000000", "#ffd666", "#ffebf0", "#26c6da", "#a78bfa" };
+                const float swatch = 22, swatchGap = 10;
+                const float customW = 130;
+                float sx = ContentRight - 16 - customW - 12 - (colors.Length * (swatch + swatchGap) - swatchGap);
+                bool presetSelected = false;
                 foreach (string hex in colors)
                 {
                     RectangleF circle = new RectangleF(sx, row + 12, swatch, swatch);
                     using (SolidBrush fill = new SolidBrush(ColorTranslator.FromHtml(hex))) g.FillEllipse(fill, circle);
+                    using (Pen edge = new Pen(Color.FromArgb(60, 255, 255, 255), 1)) g.DrawEllipse(edge, circle); // Para ver el negro
                     if (string.Equals(s.SamsungColor, hex, StringComparison.OrdinalIgnoreCase))
                     {
+                        presetSelected = true;
                         using (Pen ring = new Pen(Accent, 2f)) g.DrawEllipse(ring, RectangleF.Inflate(circle, 3, 3));
                     }
                     string picked = hex;
                     AddHit(circle, () => ChangeClock(c => c.SamsungColor = picked));
                     sx += swatch + swatchGap;
                 }
+                Color currentColor;
+                try { currentColor = ColorTranslator.FromHtml(s.SamsungColor); } catch (Exception) { currentColor = Color.White; }
+                DrawCustomColorButton(g, new RectangleF(ContentRight - 16 - customW, row + 7, customW, 32), 16,
+                    presetSelected ? (Color?)null : currentColor,
+                    () => PickColor(currentColor, c => ChangeClock(cs => cs.SamsungColor = ColorTranslator.ToHtml(c))));
                 DrawRowDivider(g, row + 46);
                 row += 46;
             }

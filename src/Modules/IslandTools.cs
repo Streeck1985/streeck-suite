@@ -277,6 +277,7 @@ namespace StreeckSuite.Modules
             Text = "Novedades de Streeck Suite " + AppInfo.Version;
             using (Graphics g = CreateGraphics()) _scale = g.DpiX / 96f;
 
+            Add("", "Reloj 3D: color negro y personalizado", "Elige cualquier color para los números en el estilo Contorno", "Elegir", () => { SettingsWindow.Open(SettingsWindow.Page.Clock); Close(); });
             Add("", "Herramientas en la isla", "Una tarjeta del carrusel con todo a la mano: Claude, celular, captura, calculadora…", null, null);
             Add("", "Apariencia: 16 skins", "Grafito, Papel, Atardecer, Terminal, Hielo y Oro; forma redondeada, letra, borde y cristal", "Elegir",
                 () => { SettingsWindow.Open(SettingsWindow.Page.Appearance); Close(); });
