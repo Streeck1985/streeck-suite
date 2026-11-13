@@ -1547,6 +1547,9 @@ namespace StreeckSuite.Modules
                 // Panel abierto: la carita pequeña arriba a la izquierda (o abajo en el estilo flotante, junto a los puntitos)
                 float u = eyesUnit * 0.6f;
                 float cy = Attached ? Px(15) : PillH - Px(PanelBottom) / 2;
+                // Saiyajin y Ninja llevan cabello o banda arriba: en la franja de abajo del panel flotante se achican
+                // para no encimarse en la fila de iconos
+                if (!Attached && IslandEyes.TallStyle) { u *= 0.65f; cy += Px(2); }
                 IslandEyes.Draw(g, new PointF(Px(PadLeft) + 30 * u, cy), u, alpha, IslandEyes.Mood.Idle, CompactView.IdleSeconds(), true);
             }
             g.TranslateTransform(0, Px(ContentTop));
@@ -1745,10 +1748,21 @@ namespace StreeckSuite.Modules
             RectangleF bar = new RectangleF(Px(18), Px(TabsTop), PillW - Px(36), Px(TabsHeight));
             IslandPainter.FillRounded(g, bar, Px(12), Color.FromArgb(alpha * 13 / 255, IslandPainter.InkBase));
 
-            // Opción A del tablero D4: iconos de 38 px y la pestaña activa ocupa el resto con icono y nombre
+            // Opción A del tablero D4: iconos de 38 px y la pestaña activa ocupa el resto con icono y nombre.
+            // Con muchas pestañas el nombre ya no cabe: primero se angostan los iconos (hasta 28 px) y, si aun así no
+            // cabe, la activa muestra solo su icono (antes el nombre se salía de la isla por la izquierda)
             float inner = Px(4);
             float iconWidth = Px(38);
+            int others = Math.Max(1, available.Count - 1);
+            float activeNeeded = current == null ? 0
+                : g.MeasureString(current.TabGlyph, _painter.Glyph16).Width + Px(4) + g.MeasureString(current.TabName, _painter.Tab12).Width + Px(16);
             float activeWidth = bar.Width - 2 * inner - (available.Count - 1) * (iconWidth + inner);
+            if (activeWidth < activeNeeded && available.Count > 1)
+            {
+                iconWidth = Math.Max(Px(28), (bar.Width - 2 * inner - activeNeeded) / others - inner);
+                activeWidth = bar.Width - 2 * inner - (available.Count - 1) * (iconWidth + inner);
+            }
+            bool showName = activeWidth >= activeNeeded;
             float x = bar.X + inner;
             for (int i = 0; i < available.Count; i++)
             {
@@ -1762,10 +1776,17 @@ namespace StreeckSuite.Modules
                     // El ancho del icono se mide: algunos glifos (el monitor de Sistema) son más anchos que 16 px y se cortaban
                     SizeF name = g.MeasureString(available[i].TabName, _painter.Tab12);
                     float glyphWidth = g.MeasureString(available[i].TabGlyph, _painter.Glyph16).Width;
-                    float contentWidth = glyphWidth + Px(4) + name.Width;
-                    float left = tab.X + (tab.Width - contentWidth) / 2;
-                    _painter.DrawText(g, available[i].TabGlyph, _painter.Glyph16, color, new RectangleF(left, tab.Y, glyphWidth, tab.Height), StringAlignment.Center);
-                    _painter.DrawText(g, available[i].TabName, _painter.Tab12, color, new RectangleF(left + glyphWidth + Px(4), tab.Y, name.Width + Px(4), tab.Height), StringAlignment.Near);
+                    if (!showName)
+                    {
+                        _painter.DrawText(g, available[i].TabGlyph, _painter.Glyph16, color, tab, StringAlignment.Center);
+                    }
+                    else
+                    {
+                        float contentWidth = glyphWidth + Px(4) + name.Width;
+                        float left = tab.X + (tab.Width - contentWidth) / 2;
+                        _painter.DrawText(g, available[i].TabGlyph, _painter.Glyph16, color, new RectangleF(left, tab.Y, glyphWidth, tab.Height), StringAlignment.Center);
+                        _painter.DrawText(g, available[i].TabName, _painter.Tab12, color, new RectangleF(left + glyphWidth + Px(4), tab.Y, name.Width + Px(4), tab.Height), StringAlignment.Near);
+                    }
                 }
                 else
                 {

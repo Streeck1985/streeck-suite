@@ -464,6 +464,12 @@ namespace StreeckSuite.Modules
         #region Caras de cada estilo (unidades del mockup: ojos en x = ±15, centro en 0)
 
         private const float EL = -15, ER = 15;
+
+        /// <summary>Estilos con cabello o banda que suben más que los ojos (Saiyajin y Ninja).</summary>
+        public static bool TallStyle
+        {
+            get { return SuiteSettings.EyesStyle == SuiteSettings.EyesStyleKind.Saiyan || SuiteSettings.EyesStyle == SuiteSettings.EyesStyleKind.Ninja; }
+        }
         // Pupilas: oscuras sobre ojos claros; claras si el ojo es oscuro (skins Papel y Hielo)
         private static Color Dark
         {
@@ -1733,22 +1739,43 @@ namespace StreeckSuite.Modules
         private static readonly Color SaiTeal = Color.FromArgb(45, 212, 191);
         private static readonly Color Iris = Color.FromArgb(20, 184, 166);
 
-        private static void FillGold(Face c, Shape shape, float top, float bottom)
+        // Flamas doradas que suben detrás del cabello (enojado)
+        private static void SaiFlames(Face c)
+        {
+            for (int i = 0; i < 11; i++)
+            {
+                float x = -40 + i * 8, h = 16 + c.Sin(14, i * 1.9) * 6, tip = x + c.Sin(9, i) * 2;
+                Shape flame = new Shape().M(x - 6, 8).Q(x - 2, -h * 0.4f, tip, -h - 6).Q(x + 2, -h * 0.4f, x + 6, 8).Z();
+                using (flame)
+                using (LinearGradientBrush b = new LinearGradientBrush(new PointF(0, 9), new PointF(0, -h - 7), Color.Black, Color.Black))
+                {
+                    ColorBlend blend = new ColorBlend();
+                    blend.Colors = new[] { c.C(Color.FromArgb(0, 250, 204, 21)), c.C(Color.FromArgb(115, 250, 204, 21)), c.C(Color.FromArgb(217, 255, 251, 224)) };
+                    blend.Positions = new[] { 0f, 0.5f, 1f };
+                    b.InterpolationColors = blend;
+                    c.G.FillPath(b, flame.Path);
+                }
+            }
+        }
+
+        private static void FillGold(Face c, Shape shape, float top, float bottom, bool hot = false)
         {
             using (shape)
             using (LinearGradientBrush b = new LinearGradientBrush(new PointF(0, top - 1), new PointF(0, bottom + 1), Color.Black, Color.Black))
             {
                 ColorBlend blend = new ColorBlend();
-                blend.Colors = new[] { c.C(Color.FromArgb(246, 214, 107)), c.C(Color.FromArgb(226, 181, 56)), c.C(Color.FromArgb(184, 134, 15)) };
+                blend.Colors = hot
+                    ? new[] { c.C(Color.FromArgb(255, 251, 224)), c.C(Color.FromArgb(250, 204, 21)), c.C(Color.FromArgb(184, 134, 15)) }
+                    : new[] { c.C(Color.FromArgb(246, 214, 107)), c.C(Color.FromArgb(226, 181, 56)), c.C(Color.FromArgb(184, 134, 15)) };
                 blend.Positions = new[] { 0f, 0.55f, 1f };
                 b.InterpolationColors = blend;
                 c.G.FillPath(b, shape.Path);
             }
         }
 
-        private static void SaiHair(Face c, float k)
+        private static void SaiHair(Face c, float k, bool angry = false)
         {
-            float sw = c.Sin(5);
+            float sw = c.Sin(5) + (angry ? c.Sin(40) * 0.8f : 0); // Enojado: tiembla
             float[,] tips = { { -37, -13 }, { -32, -24 }, { -22, -30 }, { -12, -27 }, { -3, -35 }, { 7, -28 }, { 17, -33 }, { 27, -25 }, { 37, -13 } };
             float[] vals = { -15, -21, -22, -22, -23, -22, -22, -18 };
             Shape hair = new Shape().M(-31, -1);
@@ -1758,7 +1785,7 @@ namespace StreeckSuite.Modules
                 if (i < 8) hair.L(tips[i, 0] + 5, -6 + (vals[i] + 6) * k);
             }
             hair.L(31, -1).L(24, -9).L(14, -12).L(6, -10).L(0, -3).L(-5, -11).L(-16, -12).L(-24, -9).Z();
-            FillGold(c, hair, -6 - 30 * k, -1);
+            FillGold(c, hair, -6 - 30 * k, -1, angry);
             FillShape(c, new Shape().M(-6, -14).L(-3 + sw, -6 - 27 * k).L(1, -15).Z(), Color.FromArgb(115, 255, 246, 200));
         }
 
@@ -1767,7 +1794,7 @@ namespace StreeckSuite.Modules
             FillGold(c, new Shape().M(-30, -2).Q(-32, -22, -16, -25).L(16, -25).Q(25, -25, 27, -16).L(32, -4).L(24, -9).Q(0, -14, -23, -9).Z(), -25, -2);
         }
 
-        private static void SaiEye(Face c, float x, int s, float lx, float ly, float k)
+        private static void SaiEye(Face c, float x, int s, float lx, float ly, float k, bool glow = false)
         {
             GraphicsState st = c.G.Save();
             c.G.TranslateTransform(x, 1);
@@ -1778,6 +1805,7 @@ namespace StreeckSuite.Modules
             c.Line(-8.5f * k, -4.5f * k, 7.5f * k, -0.3f, 2.2f, SaiGold);
             c.G.Restore(st);
             float px = x + lx * 2 - s * 1.2f, py = 2.4f + ly;
+            if (glow) c.Dot(px, py, 4.4f * k, Color.FromArgb(89, 45, 212, 191)); // Ojos con brillo (enojado)
             c.Dot(px, py, 3.1f * k, Iris);
             c.Dot(px, py, 1.3f * k, Dark);
             c.Dot(px - 1, py - 1, 0.8f, Color.White);
@@ -1810,18 +1838,24 @@ namespace StreeckSuite.Modules
                     break;
                 case 'e':
                     {
-                        // Aura amarilla con rayos (sin cabello, como en la hoja)
-                        float p = 0.6f + 0.4f * Math.Abs(c.Sin(6));
-                        c.Ell(0, -1, 40, 20, Op(Color.FromArgb(250, 204, 21), 0.14f * p));
-                        for (int s = -1; s <= 1; s += 2)
+                        // Opción A del mockup «Saiyajin enojado» (Súper Saiyajin): rayitos alrededor, cabello más alto y
+                        // brillante que tiembla, ojos con brillo y dientes apretados
+                        for (int i = 0; i < 5; i++)
                         {
-                            float x = s * 33;
-                            c.Poly(Color.FromArgb(253, 224, 71), x + s * 2, -12, x - s * 4, 0, x + s * 1, 0, x - s * 3, 12, x + s * 6, -3, x + s * 1, -3, x + s * 5, -12);
+                            if (c.Sin(11, i * 2) < 0.3f) continue; // Aparecen y desaparecen
+                            double a = c.Sec * 3 + i * 1.3;
+                            float r = 34 + c.Sin(7, i) * 4;
+                            float x = (float)Math.Cos(a) * r, y = (float)Math.Sin(a) * r * 0.45f;
+                            c.Lines(1.4f, Yellow, x, y, x + 3, y - 2, x + 1, y + 1, x + 5, y - 1);
                         }
-                        SaiEye(c, EL, -1, 0, 0.3f, 0.95f);
-                        SaiEye(c, ER, 1, 0, 0.3f, 0.95f);
-                        c.Both((x, s) => c.Line(x - s * 9, -8, x + s * 6, -4, 2.2f, SaiGold));
-                        if (mouth) c.Arc(0, 14, 3.5f, 1.15f, 1.85f, 1.8f, Color.White);
+                        SaiHair(c, 1.18f, true);
+                        SaiEye(c, EL, -1, 0, 0.3f, 0.95f, true);
+                        SaiEye(c, ER, 1, 0, 0.3f, 0.95f, true);
+                        c.Rect(-5, 9, 10, 4, Color.White);
+                        Color gap = Color.FromArgb(85, 85, 85);
+                        c.Line(-5, 11, 5, 11, 0.8f, gap);
+                        c.Line(-2, 9, -2, 13, 0.8f, gap);
+                        c.Line(2, 9, 2, 13, 0.8f, gap);
                         break;
                     }
                 case 'a':
