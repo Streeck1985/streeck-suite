@@ -91,6 +91,7 @@ namespace StreeckSuite.Modules
                     {
                         Action<string> found = Found;
                         if (found != null) found(tag);
+                        if (SuiteSettings.UpdateInstallAuto) InstallWhenIdle();
                     }
                 }
                 catch (Exception ex)
@@ -108,6 +109,39 @@ namespace StreeckSuite.Modules
         /// Descarga el instalador nuevo y lo corre en modo actualización (cierra y reabre la suite).
         /// </summary>
         public static void Install()
+        {
+            Install(false);
+        }
+
+        private static System.Threading.Timer _idleTimer;
+        private static volatile bool _gameActive;
+        private static bool _watchingGames;
+
+        /// <summary>
+        /// Instalar sola (Acerca de): descarga en silencio y, ya descargada, instala cuando nadie usa la PC: unos
+        /// minutos sin tocar el ratón ni el teclado, sin juego ni pantalla completa y sin el cliente de League abierto.
+        /// Al volver, la suite muestra las novedades.
+        /// </summary>
+        public static void InstallWhenIdle()
+        {
+            if (!_watchingGames)
+            {
+                _watchingGames = true;
+                EventBus.Instance.Subscribe(StreeckSuite.Core.Events.GameModeActive, payload => _gameActive = payload is bool && (bool)payload);
+            }
+            Install(true);
+        }
+
+        private static bool NobodyUsingThePc()
+        {
+            if (_gameActive) return false;
+            if (CompactView.IdleSeconds() < 180) return false;
+            foreach (string name in new[] { "League of Legends", "LeagueClient", "LeagueClientUx", "VALORANT-Win64-Shipping" })
+                if (Process.GetProcessesByName(name).Length > 0) return false;
+            return true;
+        }
+
+        private static void Install(bool whenIdle)
         {
             if (Current != State.Available || _downloadUrl == null) return;
             if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0) return;
@@ -143,8 +177,22 @@ namespace StreeckSuite.Modules
                     }
                     Progress = 1;
                     Raise();
-                    Log.Info("[UpdateService] Instalando la versión {0}", LatestVersion);
-                    Process.Start(new ProcessStartInfo(target, "--update") { UseShellExecute = true });
+                    if (!whenIdle)
+                    {
+                        Log.Info("[UpdateService] Instalando la versión {0}", LatestVersion);
+                        Process.Start(new ProcessStartInfo(target, "--update") { UseShellExecute = true });
+                        return;
+                    }
+                    // Descargada: se instala en el primer momento en que nadie use la PC (se revisa cada 30 s)
+                    Log.Info("[UpdateService] Versión {0} descargada; se instalará cuando no uses la PC", LatestVersion);
+                    _idleTimer = new System.Threading.Timer(__ =>
+                    {
+                        if (!NobodyUsingThePc()) return;
+                        _idleTimer.Dispose();
+                        Log.Info("[UpdateService] Instalando sola la versión {0}", LatestVersion);
+                        try { Process.Start(new ProcessStartInfo(target, "--update") { UseShellExecute = true }); }
+                        catch (Exception ex) { Log.Error("[UpdateService] No se pudo instalar sola: {0}", ex.Message); }
+                    }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
                 }
                 catch (Exception ex)
                 {

@@ -889,6 +889,49 @@ namespace StreeckSuite.Modules
                 SuiteSettings.EventAlertMinutes == 0 ? "Sin aviso" : SuiteSettings.EventAlertMinutes + " min", _reg13, _bold13);
             DrawSlider(g, new RectangleF(InnerX, row + 76, InnerW, 6), SuiteSettings.EventAlertMinutes / 30f,
                 f => { SuiteSettings.EventAlertMinutes = (int)Math.Round(f * 6) * 5; SuiteSettings.NotifyChanged(); }, SuiteSettings.Save);
+
+            // Mi ciudad para el clima (isla, reloj 3D y widget): elegida por ti o adivinada por la conexión
+            float cityY = 286 + 196 + 32 * feeds.Count + 14;
+            DrawCard(g, cityY, 58);
+            bool manualCity = SuiteSettings.WeatherCity.Length > 0;
+            WeatherService.Conditions now = WeatherService.Shared.Current;
+            string autoCity = now != null && now.City.Length > 0 ? now.City : "tu zona";
+            DrawText(g, "Ciudad del clima", _semi14, TextColor, new RectangleF(InnerX, cityY + 10, 260, 18), StringAlignment.Near);
+            DrawText(g, manualCity ? "Mi ciudad · " + SuiteSettings.WeatherCity : "Automática por tu internet · " + autoCity, _reg12,
+                manualCity ? Color.FromArgb(74, 222, 128) : Gray, new RectangleF(InnerX, cityY + 30, 300, 16), StringAlignment.Near);
+            RectangleF choose = new RectangleF(ContentRight - 16 - 130, cityY + 13, 130, 32);
+            FillRound(g, choose, 9, Hover(choose) ? Color.FromArgb(40, 47, 62) : Field);
+            StrokeRound(g, choose, 9, SoftBorder, 1, false);
+            DrawText(g, manualCity ? "Cambiar ciudad" : "Elegir ciudad", _semi13, TextColor, choose, StringAlignment.Center);
+            AddHit(choose, () => ShowCityPicker(choose));
+            if (manualCity)
+            {
+                RectangleF auto = new RectangleF(choose.X - 10 - 104, choose.Y, 104, 32);
+                FillRound(g, auto, 9, Hover(auto) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, auto, 9, SoftBorder, 1, false);
+                DrawText(g, "Automática", _reg13, TextColor, auto, StringAlignment.Center);
+                AddHit(auto, () => SetWeatherCity(null));
+            }
+        }
+
+        private void ShowCityPicker(RectangleF logical)
+        {
+            Rectangle onScreen = RectangleToScreen(new Rectangle(Px(logical.X), Px(logical.Y), Px(logical.Width), Px(logical.Height)));
+            CityPicker picker = new CityPicker(_scale, SetWeatherCity);
+            picker.Width = Px(320);
+            picker.Location = new Point(onScreen.Right - picker.Width, onScreen.Bottom + Px(4));
+            picker.Show(this);
+        }
+
+        // null = volver a «Automática»
+        private void SetWeatherCity(WeatherService.Place place)
+        {
+            SuiteSettings.WeatherCity = place == null ? "" : place.Name + (place.Region.Length > 0 ? ", " + place.Region : "");
+            SuiteSettings.WeatherLat = place == null ? double.NaN : place.Latitude;
+            SuiteSettings.WeatherLon = place == null ? double.NaN : place.Longitude;
+            SuiteSettings.Save();
+            WeatherService.Shared.RefreshNow();
+            Invalidate();
         }
 
         private const int MaxIcalFeeds = 4; // Los que caben en la página
@@ -1632,10 +1675,13 @@ namespace StreeckSuite.Modules
                 y += 44 + count * 20 + 14;
             }
 
-            DrawCard(g, y, 58);
+            DrawCard(g, y, 118);
             DrawToggleRow(g, y, "Buscar solo al iniciar y cada día", "Revisa GitHub en segundo plano; si hay algo nuevo te avisa la isla", SuiteSettings.UpdateAuto,
                 () => { SuiteSettings.UpdateAuto = !SuiteSettings.UpdateAuto; SuiteSettings.Save(); });
-            y += 58 + 14;
+            DrawRowDivider(g, y + 59);
+            DrawToggleRow(g, y + 60, "Instalar sola", "Cuando no uses la PC (nunca a media partida) y al volver ves las novedades",
+                SuiteSettings.UpdateInstallAuto, () => { SuiteSettings.UpdateInstallAuto = !SuiteSettings.UpdateInstallAuto; SuiteSettings.Save(); });
+            y += 118 + 14;
 
             DrawCard(g, y, 52);
             DrawText(g, "github.com/" + AppInfo.GitHubRepo, _reg13, ValueColor, new RectangleF(InnerX, y, 360, 52), StringAlignment.Near);

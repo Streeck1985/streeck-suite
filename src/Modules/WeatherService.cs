@@ -38,6 +38,58 @@ namespace StreeckSuite.Modules
         private readonly Timer _timer;
         private double? _latitude, _longitude;
         private string _city = "";
+        private bool _usingManual;
+
+        /// <summary>
+        /// Vuelve a consultar ya (al cambiar Mi ciudad).
+        /// </summary>
+        public void RefreshNow()
+        {
+            try { _timer.Change(0, Timeout.Infinite); } catch (ObjectDisposedException) { }
+        }
+
+        /// <summary>
+        /// Una ciudad encontrada por nombre (buscador de Mi ciudad).
+        /// </summary>
+        public class Place
+        {
+            public string Name, Region, Country;
+            public double Latitude, Longitude;
+            public string Label { get { return Name + (Region.Length > 0 ? ", " + Region : "") + (Country.Length > 0 ? ", " + Country : ""); } }
+        }
+
+        /// <summary>
+        /// Busca ciudades por nombre con el geocodificador de Open-Meteo (gratis, sin clave). Lento: llamar en segundo plano.
+        /// </summary>
+        public static System.Collections.Generic.List<Place> SearchPlaces(string name)
+        {
+            System.Collections.Generic.List<Place> places = new System.Collections.Generic.List<Place>();
+            if (string.IsNullOrWhiteSpace(name) || name.Trim().Length < 2) return places;
+            ServicePointManager.SecurityProtocol |= (SecurityProtocolType)3072;
+            using (WebClient client = new WebClient())
+            {
+                client.Headers[HttpRequestHeader.UserAgent] = "StreeckSuite/1.0";
+                client.Encoding = System.Text.Encoding.UTF8;
+                string url = "https://geocoding-api.open-meteo.com/v1/search?count=8&language=es&format=json&name=" + Uri.EscapeDataString(name.Trim());
+                object data = new System.Web.Script.Serialization.JavaScriptSerializer().DeserializeObject(client.DownloadString(url));
+                System.Collections.Generic.Dictionary<string, object> root = data as System.Collections.Generic.Dictionary<string, object>;
+                if (root == null || !root.ContainsKey("results")) return places;
+                foreach (object item in (System.Collections.IEnumerable)root["results"])
+                {
+                    System.Collections.Generic.Dictionary<string, object> r = item as System.Collections.Generic.Dictionary<string, object>;
+                    if (r == null || !r.ContainsKey("latitude")) continue;
+                    places.Add(new Place
+                    {
+                        Name = Convert.ToString(r["name"]),
+                        Region = r.ContainsKey("admin1") ? Convert.ToString(r["admin1"]) : "",
+                        Country = r.ContainsKey("country") ? Convert.ToString(r["country"]) : "",
+                        Latitude = Convert.ToDouble(r["latitude"], CultureInfo.InvariantCulture),
+                        Longitude = Convert.ToDouble(r["longitude"], CultureInfo.InvariantCulture)
+                    });
+                }
+            }
+            return places;
+        }
 
         /// <summary>
         /// Instancia única compartida por el reloj y la isla (así no se consulta internet dos veces).
@@ -85,6 +137,20 @@ namespace StreeckSuite.Modules
                 using (WebClient client = new WebClient())
                 {
                     client.Headers[HttpRequestHeader.UserAgent] = "StreeckSuite/1.0";
+                    // Mi ciudad (Ajustes › Tiempo y agenda): fija; si no, se adivina por la conexión a internet
+                    bool manual = SuiteSettings.WeatherCity.Length > 0 && !double.IsNaN(SuiteSettings.WeatherLat) && !double.IsNaN(SuiteSettings.WeatherLon);
+                    if (manual)
+                    {
+                        _latitude = SuiteSettings.WeatherLat;
+                        _longitude = SuiteSettings.WeatherLon;
+                        _city = SuiteSettings.WeatherCity;
+                        _usingManual = true;
+                    }
+                    else if (_usingManual)
+                    {
+                        _latitude = null; // Se volvió a «Automática»: hay que adivinar otra vez
+                        _usingManual = false;
+                    }
                     if (_latitude == null)
                     {
                         string location = client.DownloadString("https://ipapi.co/json/");

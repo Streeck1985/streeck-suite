@@ -325,12 +325,25 @@ namespace StreeckSetup
                     _options[0] = run != null && run.GetValue("StreeckSuite") != null;
                 }
                 _options[1] = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Program.AppName + ".lnk"));
-                Install();
-                Process.Start(Path.Combine(InstallDir, "StreeckSuite.exe"));
             }
-            catch (Exception ex)
+            catch (Exception) { }
+
+            Exception error = null;
+            try { Install(); }
+            catch (Exception ex) { error = ex; }
+
+            // Pase lo que pase, la suite se vuelve a abrir. A veces el primer intento no quedaba abierto (justo después de
+            // reiniciar el Explorador): se comprueba y se reintenta hasta 3 veces
+            string exe = Path.Combine(InstallDir, "StreeckSuite.exe");
+            for (int attempt = 0; attempt < 3 && File.Exists(exe); attempt++)
             {
-                MessageBox.Show("No se pudo actualizar Streeck Suite: " + ex.Message, Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (Process.GetProcessesByName("StreeckSuite").Length > 0) break;
+                try { Process.Start(exe); } catch (Exception) { }
+                Thread.Sleep(6000);
+            }
+            if (error != null)
+            {
+                MessageBox.Show("No se pudo actualizar Streeck Suite: " + error.Message, Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 

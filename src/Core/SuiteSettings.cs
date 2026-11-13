@@ -86,6 +86,9 @@ namespace StreeckSuite.Core
         public static bool EyesFidgets = true;   // Cositas cuando no usas la PC (bostezo, cabeceo, silbar, estirarse)
 
         public static bool UpdateAuto = true;    // Buscar versiones nuevas en GitHub al iniciar y cada día
+        public static bool UpdateInstallAuto = true; // Instalar sola la versión nueva cuando no se usa la PC
+        public static string WeatherCity = "";        // Mi ciudad para el clima (vacía: automática por internet)
+        public static double WeatherLat = double.NaN, WeatherLon = double.NaN;
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -208,6 +211,11 @@ namespace StreeckSuite.Core
                 EyesFidgets = ReadBool(values, "ojos.sinuso", EyesFidgets);
                 NightLight = ReadBool(values, "luz.nocturna", NightLight);
                 UpdateAuto = ReadBool(values, "actualizar.auto", UpdateAuto);
+                UpdateInstallAuto = ReadBool(values, "actualizar.sola", UpdateInstallAuto);
+                if (values.TryGetValue("clima.ciudad", out raw)) WeatherCity = raw;
+                double coord;
+                if (values.TryGetValue("clima.lat", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLat = coord;
+                if (values.TryGetValue("clima.lon", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLon = coord;
                 AnimationSpeed animation;
                 if (values.TryGetValue("isla.animacion", out raw) && Enum.TryParse(raw, out animation)) IslandAnimation = animation;
                 IslandMonitorKind monitor;
@@ -315,6 +323,10 @@ namespace StreeckSuite.Core
                     "ojos.sinuso=" + (EyesFidgets ? 1 : 0),
                     "luz.nocturna=" + (NightLight ? 1 : 0),
                     "actualizar.auto=" + (UpdateAuto ? 1 : 0),
+                    "actualizar.sola=" + (UpdateInstallAuto ? 1 : 0),
+                    "clima.ciudad=" + WeatherCity,
+                    "clima.lat=" + (double.IsNaN(WeatherLat) ? "" : WeatherLat.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                    "clima.lon=" + (double.IsNaN(WeatherLon) ? "" : WeatherLon.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     "isla.monitor=" + IslandMonitor,
                     "isla.animacion=" + IslandAnimation,
                     "isla.tamano=" + IslandScalePercent,
