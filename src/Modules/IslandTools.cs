@@ -277,7 +277,8 @@ namespace StreeckSuite.Modules
             Text = "Novedades de Streeck Suite " + AppInfo.Version;
             using (Graphics g = CreateGraphics()) _scale = g.DpiX / 96f;
 
-            // Novedades de la 1.4.2
+            // Novedades de la 1.4.3 y la 1.4.2
+            Add("", "Arreglo para PCs con Snapdragon", "La suite ya no hace lenta la PC con procesador ARM al entrar a la barra", null, null);
             Add("\uE76E", "5 ojitos más: ya son 30", "Slime, Rana, Saiyajin, Ninja y Vampiro, cada uno con sus 8 caras", "Elegir",
                 () => { SettingsWindow.Open(SettingsWindow.Page.Eyes); Close(); });
             Add("\uE76E", "Feliz y mareado con personalidad", "Cada estilo festeja y se marea a su manera; el gato ahora es pura pupila", null, null);

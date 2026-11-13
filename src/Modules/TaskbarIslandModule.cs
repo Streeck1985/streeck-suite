@@ -125,8 +125,12 @@ namespace StreeckSuite.Modules
             WriteSettings(SuiteSettings.TaskbarEnabled);
             if (SuiteSettings.TaskbarEnabled)
             {
-                string result = Inject();
-                if (result != null) Log.Error("[Taskbar] No se pudo entrar a la barra: {0}", result);
+                if (IsArmPc()) ThreadPool.QueueUserWorkItem(_ => InjectArmOnce()); // Nunca en el hilo de la pantalla
+                else
+                {
+                    string result = Inject();
+                    if (result != null) Log.Error("[Taskbar] No se pudo entrar a la barra: {0}", result);
+                }
             }
             // La DLL tarda un momento en conectarse la primera vez: se avisa ahora y otra vez en unos segundos
             Signal();
@@ -205,10 +209,94 @@ namespace StreeckSuite.Modules
 
         // Windows carga la DLL en el Explorador al poner un gancho de ventana en el hilo de su barra; la DLL se fija
         // sola y el gancho se quita enseguida. Si ya estaba dentro, no hace nada (lo controla la propia DLL).
+        private static readonly object _armLock = new object();
+        private static uint _armTriedPid;
+
+        // PCs con ARM: un solo intento por cada Explorador (antes se reintentaba en cada cambio de ajustes y se
+        // trababa la PC). Primero la DLL ARM64 por rundll32; si no entra, la x64 (hay Exploradores ARM64EC que
+        // cargan piezas x64). Si ninguna entra, se deja de intentar hasta que el Explorador se reinicie.
+        private static void InjectArmOnce()
+        {
+            lock (_armLock)
+            {
+                try
+                {
+                    IntPtr tray = NativeMethods.FindWindow("Shell_TrayWnd", null);
+                    if (tray == IntPtr.Zero) return;
+                    uint pid;
+                    GetWindowThreadProcessId(tray, out pid);
+                    if (pid == 0 || pid == _armTriedPid) return;
+                    _armTriedPid = pid;
+                    if (SkinLoaded()) return;
+                    Log.Info("[Taskbar] ARM: Explorador {0} ({1})", pid, ProcessMachine(pid));
+
+                    string folder = Path.GetDirectoryName(Application.ExecutablePath);
+                    string arm = InjectArm(folder);
+                    if (WaitLoaded()) { Log.Info("[Taskbar] ARM: entró la DLL ARM64"); return; }
+                    Log.Error("[Taskbar] ARM: la DLL ARM64 no entró ({0}); se prueba la x64", arm ?? "sin error");
+
+                    string x64 = InjectX64(folder);
+                    if (WaitLoaded()) { Log.Info("[Taskbar] ARM: entró la DLL x64"); return; }
+                    Log.Error("[Taskbar] ARM: tampoco entró la x64 ({0}); no se vuelve a intentar hasta reiniciar el Explorador", x64 ?? "sin error");
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("[Taskbar] ARM: {0}", ex.Message);
+                }
+            }
+        }
+
+        // La DLL crea este mutex al entrar al Explorador
+        private static bool SkinLoaded()
+        {
+            IntPtr mutex = OpenMutex(0x00100000 /* SYNCHRONIZE */, false, @"Local\StreeckSuite.TaskbarSkin.Loaded");
+            if (mutex == IntPtr.Zero) return false;
+            CloseHandle(mutex);
+            return true;
+        }
+
+        private static bool WaitLoaded()
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                if (SkinLoaded()) return true;
+                Thread.Sleep(300);
+            }
+            return false;
+        }
+
+        private static string ProcessMachine(uint pid)
+        {
+            IntPtr process = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, pid);
+            if (process == IntPtr.Zero) return "no se pudo abrir";
+            try
+            {
+                ushort machine, native;
+                return IsWow64Process2(process, out machine, out native)
+                    ? string.Format("proceso 0x{0:X4}, equipo 0x{1:X4}", machine, native) : "sin datos";
+            }
+            finally
+            {
+                CloseHandle(process);
+            }
+        }
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr OpenMutex(uint access, bool inherit, string name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+
         private static string Inject()
         {
-            string folder = Path.GetDirectoryName(Application.ExecutablePath);
-            if (IsArmPc()) return InjectArm(folder);
+            return InjectX64(Path.GetDirectoryName(Application.ExecutablePath));
+        }
+
+        private static string InjectX64(string folder)
+        {
             string dll = Directory.GetFiles(folder, "streeck_taskbar_*.dll").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).LastOrDefault();
             if (dll == null) return "falta streeck_taskbar_*.dll junto a la suite (compílala con native\\build_tap.ps1)";
 
