@@ -19,6 +19,19 @@
 
 > ℹ️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
 
+## ✨ Novedades de la 1.4.2
+
+### 5 ojitos más: ya son 30
+**Slime, Rana, Saiyajin, Ninja y Vampiro**, cada uno con sus 8 caras. Y los 25 de antes estrenan **feliz y mareado con personalidad**: el fantasma flota y se derrite, el búho voltea la cabeza, el monóculo se resbala, el pirata enseña su diente de oro… El gato ahora es **pura pupila**.
+
+<p align="center"><img src="imagenes/ojitos-nuevos.png" width="860" alt="Los 5 ojitos nuevos con sus 8 caras"></p>
+
+### Y más
+- **Hora en 12 o 24 horas:** en automático usa el mismo formato que Windows (reloj 3D, isla, agenda y widgets). También puedes elegirlo en **Ajustes › Tiempo**.
+- **Mi ciudad para el clima:** si el clima automático te ubica mal, elige tu ciudad.
+- **Se actualiza sola:** las versiones nuevas se instalan cuando no estás usando la PC (y nunca a media partida).
+- **PCs con Snapdragon (ARM):** las islas de la barra de tareas ahora también funcionan ahí.
+- **Herramientas en Ajustes:** captura, calculadora y bloquear también desde **Ajustes › Herramientas**.
 ## ✨ Novedades de la 1.4.0
 
 ### 16 skins para la isla y la barra
@@ -70,9 +83,9 @@ Cuando la isla está cerrada puede mostrar unos ojitos que te siguen con la mira
 
 <p align="center"><img src="imagenes/ojitos.png" width="540" alt="Los 9 estilos de ojitos"></p>
 
-25 estilos (Actual, Con pupila, Anime, Gato, Robot, Puntitos, Pixel, Visor LED, Cíclope, Corazones, Estrellas, Lentes, Búho, Somnoliento, Ciber, Fantasma, Kawaii, Pirata, Espiral, Cachorro, Monóculo, Alien, Panda, Kaomoji y Zombi), 5 colores, cejas, boquita y rubor.
+30 estilos (Actual, Con pupila, Anime, Gato, Robot, Puntitos, Pixel, Visor LED, Cíclope, Corazones, Estrellas, Lentes, Búho, Somnoliento, Ciber, Fantasma, Kawaii, Pirata, Espiral, Cachorro, Monóculo, Alien, Panda, Kaomoji, Zombi, Slime, Rana, Saiyajin, Ninja y Vampiro), 5 colores, cejas, boquita y rubor.
 
-<p align="center"><img src="imagenes/ojitos-estilos.png" width="700" alt="Los 25 estilos con sus 8 caras"></p>
+<p align="center"><img src="imagenes/ojitos-estilos.png" width="700" alt="Los 30 estilos con sus 8 caras"></p>
 
 Con música sonando, la carita se pone feliz junto al ecualizador:
 
