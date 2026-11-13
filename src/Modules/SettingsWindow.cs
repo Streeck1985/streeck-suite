@@ -912,6 +912,27 @@ namespace StreeckSuite.Modules
                 DrawText(g, "Automática", _reg13, TextColor, auto, StringAlignment.Center);
                 AddHit(auto, () => SetWeatherCity(null));
             }
+
+            // Formato de hora: reloj 3D, isla, agenda y widgets
+            float formatY = cityY + 58 + 14;
+            DrawCard(g, formatY, 58);
+            DrawText(g, "Formato de hora", _semi14, TextColor, new RectangleF(InnerX, formatY + 10, 220, 18), StringAlignment.Near);
+            string example = SuiteSettings.TimeFormat == SuiteSettings.TimeFormatKind.Auto
+                ? "Como Windows · ahora " + (TimeText.WindowsUses12h() ? "12 h" : "24 h")
+                : "Ejemplo · " + TimeText.Short(DateTime.Now);
+            DrawText(g, example, _reg12, Gray, new RectangleF(InnerX, formatY + 30, 220, 16), StringAlignment.Near);
+            string[] formatNames = { "Automático", "24 h", "12 h" };
+            float segW = 92, segX = ContentRight - 16 - 3 * segW - 2 * 6;
+            for (int i = 0; i < formatNames.Length; i++)
+            {
+                SuiteSettings.TimeFormatKind kind = (SuiteSettings.TimeFormatKind)i;
+                RectangleF seg = new RectangleF(segX + i * (segW + 6), formatY + 13, segW, 32);
+                bool selected = SuiteSettings.TimeFormat == kind;
+                FillRound(g, seg, 9, selected ? Color.FromArgb(46, Accent) : Hover(seg) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, seg, 9, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                DrawText(g, formatNames[i], _reg13, selected ? ValueColor : TextColor, seg, StringAlignment.Center);
+                AddHit(seg, () => { SuiteSettings.TimeFormat = kind; SuiteSettings.Save(); SuiteSettings.NotifyChanged(); });
+            }
         }
 
         private void ShowCityPicker(RectangleF logical)
@@ -1395,7 +1416,7 @@ namespace StreeckSuite.Modules
             string[] sideNames = { "Widgets", "Solo ojitos", "Clima", "Hora", "Hora y clima", "Fecha", "CPU y RAM", "Próximo evento" };
             WeatherService.Conditions weather = WeatherService.Shared.Current;
             string temp = weather != null ? string.Format("{0:0}°", weather.TemperatureC) : "24°";
-            string[] sideSamples = { temp + "  CPU 12 %", null, temp, DateTime.Now.ToString("HH:mm"), DateTime.Now.ToString("HH:mm") + " · " + temp,
+            string[] sideSamples = { temp + "  CPU 12 %", null, temp, TimeText.Short(DateTime.Now), TimeText.Short(DateTime.Now) + " · " + temp,
                                      DateTime.Now.ToString("ddd d MMM", new System.Globalization.CultureInfo("es-MX")).Replace(".", ""), "CPU 12 %", "18:00 Gym" };
             bool eyesOn = SuiteSettings.IslandIdle == SuiteSettings.IslandIdleKind.Eyes;
             float tileGap = 8, tileW = (InnerW - 3 * tileGap) / 4, tileH = 52;
@@ -1447,13 +1468,14 @@ namespace StreeckSuite.Modules
                 DrawText(g, moodNames[i], _reg12, Gray, new RectangleF(InnerX + i * (cellW + 10), y + 64, cellW, 20), StringAlignment.Center);
             }
 
-            // Estilo: 25 opciones en cinco filas
+            // Estilo: 30 opciones en seis filas
             y += 96 + 14;
-            DrawCard(g, y, 206);
+            DrawCard(g, y, 238);
             DrawText(g, "Estilo", _semi14, TextColor, new RectangleF(InnerX, y + 10, 200, 20), StringAlignment.Near);
             string[] styles = { "Actual", "Con pupila", "Anime", "Gato", "Robot", "Puntitos", "Pixel", "Visor LED", "Cíclope",
                                 "Corazones", "Estrellas", "Lentes", "Búho", "Somnoliento", "Ciber",
-                                "Fantasma", "Kawaii", "Pirata", "Espiral", "Cachorro", "Monóculo", "Alien", "Panda", "Kaomoji", "Zombi" };
+                                "Fantasma", "Kawaii", "Pirata", "Espiral", "Cachorro", "Monóculo", "Alien", "Panda", "Kaomoji", "Zombi",
+                                "Slime", "Rana", "Saiyajin", "Ninja", "Vampiro" };
             float chipGap = 6, chipW = (InnerW - 4 * chipGap) / 5;
             for (int i = 0; i < styles.Length; i++)
             {
@@ -1467,7 +1489,7 @@ namespace StreeckSuite.Modules
             }
 
             // Color y extras
-            y += 206 + 14;
+            y += 238 + 14;
             DrawCard(g, y, 96);
             DrawText(g, "Color", _semi14, TextColor, new RectangleF(InnerX, y + 4, 120, 40), StringAlignment.Near);
             string[] colors = { "#FFFFFF", "#38BDF8", "#F472B6", "#A3E635", "#FBBF24" };

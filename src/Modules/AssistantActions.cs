@@ -61,7 +61,7 @@ namespace StreeckSuite.Modules
                     else if (due < DateTime.Now) due = due.AddDays(1);
                     string what = OriginalWords(phrase, text, m.Groups["what"].Value);
                     TasksService.Add(what, due);
-                    return new AssistantAction { Glyph = "", Title = "Tarea: «" + what + "»", Detail = "Te aviso en la isla " + (due.Date == DateTime.Today ? "hoy" : "mañana") + " a las " + due.ToString("HH:mm") };
+                    return new AssistantAction { Glyph = "", Title = "Tarea: «" + what + "»", Detail = "Te aviso en la isla " + (due.Date == DateTime.Today ? "hoy" : "mañana") + " a las " + TimeText.Short(due) };
                 }
             }
             m = Regex.Match(text, @"^(?:anota(?: una tarea)?|agrega(?:r)?(?: una)? tarea|nueva tarea)\s+(?:que\s+)?(?<what>.+)$");

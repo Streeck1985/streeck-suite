@@ -208,6 +208,7 @@ namespace StreeckSuite.Modules
         private static string Inject()
         {
             string folder = Path.GetDirectoryName(Application.ExecutablePath);
+            if (IsArmPc()) return InjectArm(folder);
             string dll = Directory.GetFiles(folder, "streeck_taskbar_*.dll").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).LastOrDefault();
             if (dll == null) return "falta streeck_taskbar_*.dll junto a la suite (compílala con native\\build_tap.ps1)";
 
@@ -227,6 +228,53 @@ namespace StreeckSuite.Modules
             UnhookWindowsHookEx(hook);
             return null;
         }
+
+        // PCs con ARM (Snapdragon): el Explorador es ARM64 y la suite corre emulada como x64, así que no puede cargar
+        // la DLL ARM64 ni poner su gancho. El rundll32 de Windows sí es ARM64: él llama a StreeckInject de la DLL.
+        private static string InjectArm(string folder)
+        {
+            string dll = Directory.GetFiles(folder, "streeck_arm64_*.dll").OrderBy(f => f, StringComparer.OrdinalIgnoreCase).LastOrDefault();
+            if (dll == null) return "falta streeck_arm64_*.dll para PCs con ARM";
+            string rundll = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "rundll32.exe");
+            try
+            {
+                System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo(rundll, "\"" + dll + "\",StreeckInject");
+                info.UseShellExecute = false;
+                info.CreateNoWindow = true;
+                using (System.Diagnostics.Process p = System.Diagnostics.Process.Start(info))
+                {
+                    if (!p.WaitForExit(8000)) return "rundll32 no terminó a tiempo";
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                return "rundll32 falló: " + ex.Message;
+            }
+        }
+
+        private static bool? _armPc;
+
+        public static bool IsArmPc()
+        {
+            if (_armPc.HasValue) return _armPc.Value;
+            bool arm = false;
+            try
+            {
+                ushort process, native;
+                if (IsWow64Process2(System.Diagnostics.Process.GetCurrentProcess().Handle, out process, out native)) arm = native == 0xAA64; // IMAGE_FILE_MACHINE_ARM64
+            }
+            catch (EntryPointNotFoundException)
+            {
+                // Windows viejo sin IsWow64Process2: no hay Windows 11 en ARM ahí
+            }
+            _armPc = arm;
+            Log.Info("[Taskbar] PC {0}", arm ? "ARM64 (Snapdragon): se usa la DLL ARM64" : "x64");
+            return arm;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool IsWow64Process2(IntPtr process, out ushort processMachine, out ushort nativeMachine);
 
         private const int WhCallWndProc = 4;
 

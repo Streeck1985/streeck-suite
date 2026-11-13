@@ -73,7 +73,8 @@ namespace StreeckSuite.Core
 
         // Ojitos (mockup «Ojitos del notch»)
         public enum EyesStyleKind { Actual, Pupil, Anime, Cat, Robot, Dots, Pixel, Visor, Cyclops, Hearts, Stars, Glasses, Owl, Sleepy, Cyber,
-            Ghost, Kawaii, Pirate, Hypno, Puppy, Monocle, Alien, Panda, Kaomoji, Zombie }
+            Ghost, Kawaii, Pirate, Hypno, Puppy, Monocle, Alien, Panda, Kaomoji, Zombie,
+            Slime, Frog, Saiyan, Ninja, Vampire }
         public static EyesStyleKind EyesStyle = EyesStyleKind.Actual;
         public enum EyesSideKind { None, Weather, Time, TimeWeather, Date, System, NextEvent }
         public static bool NightLight;                 // Luz nocturna propia (controles rápidos)
@@ -89,6 +90,8 @@ namespace StreeckSuite.Core
         public static bool UpdateInstallAuto = true; // Instalar sola la versión nueva cuando no se usa la PC
         public static string WeatherCity = "";        // Mi ciudad para el clima (vacía: automática por internet)
         public static double WeatherLat = double.NaN, WeatherLon = double.NaN;
+        public enum TimeFormatKind { Auto, H24, H12 }
+        public static TimeFormatKind TimeFormat = TimeFormatKind.Auto; // Automático: el mismo que tiene Windows
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -213,6 +216,8 @@ namespace StreeckSuite.Core
                 UpdateAuto = ReadBool(values, "actualizar.auto", UpdateAuto);
                 UpdateInstallAuto = ReadBool(values, "actualizar.sola", UpdateInstallAuto);
                 if (values.TryGetValue("clima.ciudad", out raw)) WeatherCity = raw;
+                TimeFormatKind timeFormat;
+                if (values.TryGetValue("hora.formato", out raw) && Enum.TryParse(raw, out timeFormat)) TimeFormat = timeFormat;
                 double coord;
                 if (values.TryGetValue("clima.lat", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLat = coord;
                 if (values.TryGetValue("clima.lon", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLon = coord;
@@ -325,6 +330,7 @@ namespace StreeckSuite.Core
                     "actualizar.auto=" + (UpdateAuto ? 1 : 0),
                     "actualizar.sola=" + (UpdateInstallAuto ? 1 : 0),
                     "clima.ciudad=" + WeatherCity,
+                    "hora.formato=" + TimeFormat,
                     "clima.lat=" + (double.IsNaN(WeatherLat) ? "" : WeatherLat.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     "clima.lon=" + (double.IsNaN(WeatherLon) ? "" : WeatherLon.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     "isla.monitor=" + IslandMonitor,

@@ -277,20 +277,18 @@ namespace StreeckSuite.Modules
             Text = "Novedades de Streeck Suite " + AppInfo.Version;
             using (Graphics g = CreateGraphics()) _scale = g.DpiX / 96f;
 
-            Add("", "Reloj 3D: color negro y personalizado", "Elige cualquier color para los números en el estilo Contorno", "Elegir", () => { SettingsWindow.Open(SettingsWindow.Page.Clock); Close(); });
-            Add("", "Herramientas en la isla", "Una tarjeta del carrusel con todo a la mano: Claude, celular, captura, calculadora…", null, null);
-            Add("", "Apariencia: 16 skins", "Grafito, Papel, Atardecer, Terminal, Hielo y Oro; forma redondeada, letra, borde y cristal", "Elegir",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Appearance); Close(); });
-            Add("✳", "Claude en la isla", "Pregúntale a Claude con tu cuenta, sin pagar API · Ctrl + Alt + C", "Abrir", () => { Close(); IslandTools.Run(IslandTools.OpenClaude); });
-            Add("", "Historial del portapapeles", "Lo último que copiaste, con buscador y fijados · Ctrl + Alt + V", "Abrir", () => { Close(); IslandTools.Run(IslandTools.OpenClipboard); });
-            Add("", "Enviar y recibir con el celular", "Por QR y tu Wi-Fi, sin internet ni apps · Ctrl + Alt + R", "Probar", () => { Close(); IslandTools.Run(IslandTools.OpenPhone); });
-            Add("", "Controles rápidos nuevos", "Silenciar micrófono (Ctrl + Alt + M), luz nocturna y modo de energía", null, null);
-            Add("", "Widgets nuevos", "Clima, agenda de hoy, música con botones, equipo y cuenta regresiva", "Elegir",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Widgets); Close(); });
-            Add("", "10 ojitos nuevos y junto a los ojitos", "Fantasma, Kawaii, Pirata… y clima, hora o cronómetro al lado", "Elegir",
+            // Novedades de la 1.4.2
+            Add("\uE76E", "5 ojitos más: ya son 30", "Slime, Rana, Saiyajin, Ninja y Vampiro, cada uno con sus 8 caras", "Elegir",
                 () => { SettingsWindow.Open(SettingsWindow.Page.Eyes); Close(); });
-            Add("", "Avisos de agentes de IA", "La isla te dice cuando Claude Code termina o pide permiso", "Conectar",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Assistant); Close(); });
+            Add("\uE76E", "Feliz y mareado con personalidad", "Cada estilo festeja y se marea a su manera; el gato ahora es pura pupila", null, null);
+            Add("\uE917", "Hora en 12 o 24 horas", "Automático como Windows, o elígelo tú: reloj 3D, isla, agenda y widgets", "Elegir",
+                () => { SettingsWindow.Open(SettingsWindow.Page.Time); Close(); });
+            Add("\uE707", "Mi ciudad para el clima", "Si el clima automático te ubica mal, elige tu ciudad", "Elegir",
+                () => { SettingsWindow.Open(SettingsWindow.Page.Time); Close(); });
+            Add("\uE777", "Se actualiza sola", "Las versiones nuevas se instalan cuando no estás usando la PC", null, null);
+            Add("\uE7F8", "Barra de tareas en PCs con Snapdragon", "Las islas de la barra ahora funcionan en Windows con procesador ARM", null, null);
+            Add("\uE90F", "Herramientas también en Ajustes", "Captura, calculadora y bloquear desde Ajustes › Herramientas", "Abrir",
+                () => { SettingsWindow.Open(SettingsWindow.Page.Tools); Close(); });
 
             int w = (int)Px(W), h = (int)Px(Pad + 70 + _items.Count * Row + 64);
             Size = new Size(w, h);

@@ -1953,3 +1953,20 @@ extern "C" LRESULT CALLBACK StreeckHookProc(int code, WPARAM wParam, LPARAM lPar
 {
     return CallNextHookEx(nullptr, code, wParam, lParam);
 }
+
+// PCs con ARM (Snapdragon): la suite corre emulada como x64 y no puede poner un gancho de una DLL ARM64. Ahí la
+// suite llama «rundll32.exe streeck_arm64_*.dll,StreeckInject» (el rundll32 de Windows ya es ARM64) y esto hace
+// lo mismo que TaskbarIslandModule.Inject: un gancho en el hilo de la barra para que el Explorador cargue la DLL.
+extern "C" void CALLBACK StreeckInject(HWND, HINSTANCE, LPSTR, int)
+{
+    HWND tray = FindWindowW(L"Shell_TrayWnd", nullptr);
+    if (!tray) return;
+    DWORD pid = 0;
+    DWORD thread = GetWindowThreadProcessId(tray, &pid);
+    HHOOK hook = SetWindowsHookExW(WH_CALLWNDPROC, StreeckHookProc, g_module, thread);
+    if (!hook) return;
+    DWORD_PTR ignored;
+    SendMessageTimeoutW(tray, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 3000, &ignored);
+    Sleep(300);
+    UnhookWindowsHookEx(hook);
+}

@@ -6,7 +6,7 @@ namespace StreeckSuite.Core
     /// </summary>
     internal static class AppInfo
     {
-        public const string Version = "1.4.1";
+        public const string Version = "1.4.2";
 
         /// <summary>
         /// Repositorio público con los instaladores (las versiones se publican como «releases»).

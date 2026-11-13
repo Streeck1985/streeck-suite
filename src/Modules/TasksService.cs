@@ -92,7 +92,7 @@ namespace StreeckSuite.Modules
         {
             if (task.Due == null) return "";
             DateTime due = task.Due.Value;
-            string time = due.ToString("HH:mm");
+            string time = StreeckSuite.Core.TimeText.Short(due);
             if (due.Date == DateTime.Today) return time;
             if (due.Date == DateTime.Today.AddDays(1)) return "mañana " + time;
             return due.ToString("d MMM", new CultureInfo("es-MX")) + " " + time;

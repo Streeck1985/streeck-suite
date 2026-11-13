@@ -654,7 +654,7 @@ namespace StreeckSuite.Modules
             // Tareas con hora (fase J4): aviso en la isla al llegar su hora
             foreach (TasksService.TaskItem task in TasksService.TakeDue())
             {
-                _alert.Text = "✓ Tarea: " + task.Text + " · " + task.Due.Value.ToString("HH:mm");
+                _alert.Text = "✓ Tarea: " + task.Text + " · " + TimeText.Short(task.Due.Value);
                 _alertView = _alert;
                 _alertUntil = now.AddMilliseconds(EventAlertMs);
                 UpdateMode();

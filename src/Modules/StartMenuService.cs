@@ -270,8 +270,8 @@ namespace StreeckSuite.Modules
         {
             TimeSpan age = DateTime.Now - when;
             if (age.TotalMinutes < 60) return "Hace " + Math.Max(1, (int)age.TotalMinutes) + " min";
-            if (when.Date == DateTime.Today) return "Hoy " + when.ToString("HH:mm");
-            if (when.Date == DateTime.Today.AddDays(-1)) return "Ayer " + when.ToString("HH:mm");
+            if (when.Date == DateTime.Today) return "Hoy " + TimeText.Short(when);
+            if (when.Date == DateTime.Today.AddDays(-1)) return "Ayer " + TimeText.Short(when);
             if (age.TotalDays < 7) return when.ToString("dddd", new System.Globalization.CultureInfo("es-MX"));
             return when.ToString("d 'de' MMM", new System.Globalization.CultureInfo("es-MX"));
         }

@@ -213,7 +213,7 @@ namespace StreeckSuite.Modules
             }
             else
             {
-                p.DrawText(g, DateTime.Now.ToString("HH:mm"), p.TimeFont, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
+                p.DrawText(g, TimeText.Short(DateTime.Now), p.TimeFont, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(0, 0, size.Width, size.Height), StringAlignment.Center);
             }
         }
 
@@ -294,8 +294,8 @@ namespace StreeckSuite.Modules
             switch (SuiteSettings.EyesSide)
             {
                 case SuiteSettings.EyesSideKind.Weather: return temperature;
-                case SuiteSettings.EyesSideKind.Time: return DateTime.Now.ToString("HH:mm");
-                case SuiteSettings.EyesSideKind.TimeWeather: return DateTime.Now.ToString("HH:mm") + (temperature != null ? " · " + temperature : "");
+                case SuiteSettings.EyesSideKind.Time: return TimeText.Short(DateTime.Now);
+                case SuiteSettings.EyesSideKind.TimeWeather: return TimeText.Short(DateTime.Now) + (temperature != null ? " · " + temperature : "");
                 case SuiteSettings.EyesSideKind.Date: return DateTime.Now.ToString("ddd d MMM", Spanish).Replace(".", "");
                 case SuiteSettings.EyesSideKind.System:
                     SampleStats();
@@ -308,7 +308,7 @@ namespace StreeckSuite.Modules
                         if (e.AllDay || e.End <= now || e.Start.Date != now.Date) continue;
                         string title = e.Title ?? "";
                         if (title.Length > 18) title = title.Substring(0, 17) + "…";
-                        return e.Start.ToString("HH:mm") + " " + title;
+                        return TimeText.Short(e.Start) + " " + title;
                     }
                     return "Sin eventos hoy";
                 default: return null;

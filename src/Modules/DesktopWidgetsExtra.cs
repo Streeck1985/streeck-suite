@@ -105,7 +105,7 @@ namespace StreeckSuite.Modules
                 AgendaEvent e = today[i];
                 int dot = Px(6);
                 using (SolidBrush b = new SolidBrush(e.Color.IsEmpty ? Accent : e.Color)) g.FillEllipse(b, header.X, y + (Px(18) - dot) / 2, dot, dot);
-                string time = e.AllDay ? "Todo el día" : e.Start.ToString("HH:mm");
+                string time = e.AllDay ? "Todo el día" : TimeText.Short(e.Start);
                 int timeW = e.AllDay ? Px(70) : Px(40);
                 DrawText(g, time, ValueFont, Accent, new Rectangle(header.X + Px(12), y, timeW, Px(18)), StringAlignment.Near);
                 DrawText(g, e.Title, LabelFont, Secondary, new Rectangle(header.X + Px(12) + timeW, y, header.Right - header.X - Px(12) - timeW, Px(18)), StringAlignment.Near);

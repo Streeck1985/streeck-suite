@@ -356,7 +356,8 @@ namespace StreeckSetup
             Directory.CreateDirectory(InstallDir);
             bool oldBarLoaded = false;
             Assembly payloads = Assembly.GetExecutingAssembly();
-            foreach (string old in Directory.GetFiles(InstallDir, "streeck_taskbar_*.dll"))
+            // x64 (streeck_taskbar_*) y ARM64 para Snapdragon (streeck_arm64_*)
+            foreach (string old in Directory.GetFiles(InstallDir, "streeck_taskbar_*.dll").Concat(Directory.GetFiles(InstallDir, "streeck_arm64_*.dll")))
             {
                 // La misma DLL que trae este instalador (mismo nombre): se queda, aunque el Explorador la esté usando
                 if (payloads.GetManifestResourceNames().Contains("payload/" + Path.GetFileName(old))) continue;

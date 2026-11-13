@@ -338,7 +338,7 @@ namespace StreeckSuite.Modules
                 }
                 else
                 {
-                    p.DrawText(g, e.Start.ToString("HH:mm"), p.Bold12, white, new RectangleF(timeX, row.Y + p.Px(3), p.Px(80), p.Px(18)), StringAlignment.Near);
+                    p.DrawText(g, TimeText.Short(e.Start), p.Bold12, white, new RectangleF(timeX, row.Y + p.Px(3), p.Px(80), p.Px(18)), StringAlignment.Near);
                     p.DrawText(g, AgendaService.WhenText(e), e == next ? p.Bold12 : p.Text11, e == next ? IslandPainter.Fade(TimeColors.Link, alpha) : legend,
                         new RectangleF(timeX, row.Y + p.Px(20), p.Px(80), p.Px(16)), StringAlignment.Near);
                 }
@@ -426,7 +426,7 @@ namespace StreeckSuite.Modules
             }
 
             float textX = badge.Right + p.Px(14);
-            string detail = AgendaService.WhenText(e) + " · " + e.Start.ToString("HH:mm") + (string.IsNullOrEmpty(e.Location) ? "" : " · " + e.Location);
+            string detail = AgendaService.WhenText(e) + " · " + TimeText.Short(e.Start) + (string.IsNullOrEmpty(e.Location) ? "" : " · " + e.Location);
             detail = detail.Substring(0, 1).ToUpperInvariant() + detail.Substring(1);
             p.DrawText(g, e.Title, p.Bold15, Color.FromArgb(alpha, IslandPainter.InkBase), new RectangleF(textX, p.Px(10), right - textX, p.Px(22)), StringAlignment.Near);
             p.DrawText(g, detail, p.Text12, IslandPainter.Fade(IslandPainter.Gray, alpha), new RectangleF(textX, p.Px(32), right - textX, p.Px(18)), StringAlignment.Near);

@@ -7,6 +7,8 @@ $suite = Join-Path $root "bin\StreeckSuite.exe"
 $dll = Get-ChildItem (Join-Path $root "bin") -Filter "streeck_taskbar_*.dll" | Sort-Object Name | Select-Object -Last 1
 if (-not (Test-Path $suite)) { throw "Falta bin\StreeckSuite.exe: compila primero con build.ps1" }
 if (-not $dll) { throw "Falta la DLL de la barra: compila con native\build_tap.ps1" }
+$dllArm = Get-ChildItem (Join-Path $root "bin") -Filter "streeck_arm64_*.dll" | Sort-Object Name | Select-Object -Last 1
+if (-not $dllArm) { throw "Falta la DLL ARM64 de la barra: compila con native\build_tap.ps1" }
 
 # Version: la misma de la suite (src\Core\AppInfo.cs)
 $appInfo = [IO.File]::ReadAllText((Join-Path $root "src\Core\AppInfo.cs"))
@@ -27,6 +29,7 @@ $cmdArgs = @(
     "/resource:$(Join-Path $root 'StreeckSuite_512.png'),logo.png",
     "/resource:$suite,payload/StreeckSuite.exe",
     "/resource:$($dll.FullName),payload/$($dll.Name)",
+    "/resource:$($dllArm.FullName),payload/$($dllArm.Name)",
     # WebView2 (Claude en la isla): libreria de Microsoft
     "/resource:$(Join-Path $root 'lib\webview2\Microsoft.Web.WebView2.Core.dll'),payload/Microsoft.Web.WebView2.Core.dll",
     "/resource:$(Join-Path $root 'lib\webview2\Microsoft.Web.WebView2.WinForms.dll'),payload/Microsoft.Web.WebView2.WinForms.dll",

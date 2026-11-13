@@ -370,7 +370,8 @@ namespace StreeckSuite.Modules
                 g.Restore(faceState);
 
                 // Cejas
-                if (SuiteSettings.EyesBrows && (mood == Mood.Angry || mood == Mood.Focus || mood == Mood.Sad || mood == Mood.Surprised))
+                bool ownBrows = style >= SuiteSettings.EyesStyleKind.Slime; // Los 5 últimos traen cejas, banda o cabello propios
+                if (SuiteSettings.EyesBrows && !ownBrows && (mood == Mood.Angry || mood == Mood.Focus || mood == Mood.Sad || mood == Mood.Surprised))
                 {
                     float slant = mood == Mood.Angry ? 4 : mood == Mood.Focus ? 2 : mood == Mood.Sad ? -4 : 0;
                     float browY = y + (mood == Mood.Surprised ? -19 : -14) * (cyclops ? 1.4f : 1);
@@ -578,6 +579,85 @@ namespace StreeckSuite.Modules
                 G.Restore(s);
             }
             public void Both(Action<float, int> draw) { draw(EL, -1); draw(ER, 1); }
+
+            // --- Ayudas del mockup «Caras de los ojitos» (t en segundos, como en el mockup) ---
+            public double Sec { get { return T / 1000.0; } }
+            public float Sin(double k, double phase = 0) { return (float)Math.Sin(Sec * k + phase); }
+            public float Cos(double k, double phase = 0) { return (float)Math.Cos(Sec * k + phase); }
+            public void Up(float x, float y, float r, float w, Color color) { Arc(x, y + r * 0.6f, r, 1.1f, 1.9f, w, color); }
+            public void Sparkle(float x, float y, float r, Color color)
+            {
+                if (r <= 0.2f) return;
+                PointF center = new PointF(x, y);
+                using (GraphicsPath p = new GraphicsPath())
+                {
+                    Quad(p, new PointF(x, y - r), center, new PointF(x + r, y));
+                    Quad(p, new PointF(x + r, y), center, new PointF(x, y + r));
+                    Quad(p, new PointF(x, y + r), center, new PointF(x - r, y));
+                    Quad(p, new PointF(x - r, y), center, new PointF(x, y - r));
+                    p.CloseFigure();
+                    using (SolidBrush b = new SolidBrush(C(color))) G.FillPath(b, p);
+                }
+            }
+            // Espiral del mockup: 2½ vueltas que giran con «rot»
+            public void Swirl(float x, float y, float r, double rot, float w, Color color)
+            {
+                List<PointF> points = new List<PointF>();
+                for (double a = 0; a < Math.PI * 5; a += 0.2)
+                {
+                    float rr = (float)(r * a / (Math.PI * 5));
+                    points.Add(new PointF(x + (float)Math.Cos(a + rot) * rr, y + (float)Math.Sin(a + rot) * rr));
+                }
+                using (Pen p = Stroke(C(color), w)) G.DrawLines(p, points.ToArray());
+            }
+            // Pupila de gato sola (rasgada, sin contorno)
+            public void Slit(float x, float y, float halfWidth, float halfHeight, Color color)
+            {
+                if (halfHeight <= 0.3f) { Line(x - 3, y, x + 3, y, 2.4f, color); return; }
+                using (GraphicsPath p = new GraphicsPath())
+                {
+                    Quad(p, new PointF(x, y - halfHeight), new PointF(x + halfWidth, y), new PointF(x, y + halfHeight));
+                    Quad(p, new PointF(x, y + halfHeight), new PointF(x - halfWidth, y), new PointF(x, y - halfHeight));
+                    p.CloseFigure();
+                    using (SolidBrush b = new SolidBrush(C(color))) G.FillPath(b, p);
+                }
+            }
+            public void FillHalfTop(float x, float y, float rx, float ry, Color color)
+            {
+                using (SolidBrush b = new SolidBrush(C(color))) G.FillPie(b, x - rx, y - ry, 2 * rx, 2 * ry, 180, 180);
+            }
+            public void FillHalfBottom(float x, float y, float r, Color color)
+            {
+                using (SolidBrush b = new SolidBrush(C(color))) G.FillPie(b, x - r, y - r, 2 * r, 2 * r, 0, 180);
+            }
+        }
+
+        // Curva cuadrática del canvas pasada a Bézier cúbica
+        private static void Quad(GraphicsPath p, PointF a, PointF ctrl, PointF b)
+        {
+            p.AddBezier(a, new PointF(a.X + 2f / 3 * (ctrl.X - a.X), a.Y + 2f / 3 * (ctrl.Y - a.Y)),
+                new PointF(b.X + 2f / 3 * (ctrl.X - b.X), b.Y + 2f / 3 * (ctrl.Y - b.Y)), b);
+        }
+
+        private static Color Op(Color color, float opacity)
+        {
+            return Color.FromArgb(Math.Max(0, Math.Min(255, (int)(color.A * opacity))), color);
+        }
+
+        private static Color Hsl(double h, double s, double l)
+        {
+            h = ((h % 360) + 360) % 360 / 360;
+            Func<double, double, double, double> hue = (p, q, t) =>
+            {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1.0 / 6) return p + (q - p) * 6 * t;
+                if (t < 0.5) return q;
+                if (t < 2.0 / 3) return p + (q - p) * (2.0 / 3 - t) * 6;
+                return p;
+            };
+            double q2 = l < 0.5 ? l * (1 + s) : l + s - l * s, p2 = 2 * l - q2;
+            return Color.FromArgb((int)(hue(p2, q2, h + 1.0 / 3) * 255), (int)(hue(p2, q2, h) * 255), (int)(hue(p2, q2, h - 1.0 / 3) * 255));
         }
 
         private static void StyleFace(Graphics g, SuiteSettings.EyesStyleKind style, char face, float open, Frame f, Color eye)
@@ -609,6 +689,11 @@ namespace StreeckSuite.Modules
                 case SuiteSettings.EyesStyleKind.Panda: Panda(c, face); break;
                 case SuiteSettings.EyesStyleKind.Kaomoji: Kaomoji(c, face); break;
                 case SuiteSettings.EyesStyleKind.Zombie: Zombie(c, face); break;
+                case SuiteSettings.EyesStyleKind.Slime: Slime(c, face); break;
+                case SuiteSettings.EyesStyleKind.Frog: Frog(c, face); break;
+                case SuiteSettings.EyesStyleKind.Saiyan: Saiyan(c, face); break;
+                case SuiteSettings.EyesStyleKind.Ninja: Ninja(c, face); break;
+                case SuiteSettings.EyesStyleKind.Vampire: Vampire(c, face); break;
                 default: Actual(c, face); break;
             }
         }
@@ -618,10 +703,17 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Arc(x, 4, 7, 1.1f, 1.9f, 3.5f, w)); break;
+                case 'f':
+                    {
+                        // Rebota con un brillo
+                        float b = -Math.Abs(c.Sin(5)) * 3;
+                        c.Both((x, s) => c.Up(x, b, 7, 3.5f, w));
+                        c.Sparkle(22, -9, 2 + Math.Abs(c.Sin(5)) * 2, w);
+                        break;
+                    }
                 case 's': c.Both((x, s) => c.RR(x - 6, -12, 12, 22, 6, w)); break;
                 case 'd': c.Both((x, s) => c.Arc(x, -3, 6, 0.15f, 0.85f, 3, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w)); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.Sin(4, s > 0 ? 2 : 0) * 0.6, () => c.RR(-6, -8, 12, 16, 6, w))); break; // Se tambalea
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => c.RR(x - 6, -4, 12, 11, 4, w)); break;
                 case 'w': c.RR(EL - 6, -8, 12, 16, 6, w); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, w); break;
@@ -634,10 +726,18 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => { c.Arc(x, 5, 8, 1.1f, 1.9f, 2.5f, w); c.Arc(x, 5, 4, 1.1f, 1.9f, 2.5f, w); }); break;
+                case 'f': c.Both((x, s) => { c.Ring(x, 0, 7, 9, w, 3); c.Sparkle(x, -1, 3.5f + c.Sin(5), w); }); break; // Pupilas que brillan
                 case 's': c.Both((x, s) => { c.Ring(x, 0, 8, 11, w, 3); c.Ring(x, 0, 4, 6, w, 2); }); break;
                 case 'd': c.Both((x, s) => { c.Arc(x, -5, 6, 0.05f, 0.95f, 3, w); c.Arc(x, -3, 6, 0.1f, 0.9f, 1.5f, w, 0.35f); }); break;
-                case 'z': c.Both((x, s) => { c.Ring(x, 0, 7, 9, w, 2); c.Spiral(x, 0, w, false, 0.6f); }); break;
+                case 'z':
+                    c.Both((x, s) =>
+                    {
+                        // La pupila da vueltas
+                        c.Ring(x, 0, 7, 9, w, 3);
+                        double a = c.Sec * 6 * (s > 0 ? -1 : 1);
+                        c.Ell(x + (float)Math.Cos(a) * 3.5f, (float)Math.Sin(a) * 4.5f, 2.6f, 3.2f, w);
+                    });
+                    break;
                 case 'a': c.Both((x, s) => { c.Ring(x, 0, 7, 9, w, 3); c.Heart(x, 0, 0.6f * c.Pulse, PinkHeart); }); break;
                 case 'e': c.Both((x, s) => { c.Ring(x, 1, 7, 7, w, 3); c.Ell(x, 1, 3, 3, w); }); break;
                 case 'w': c.Ring(EL, 0, 7, 9, w, 3); c.Ell(EL, 0, 3, 4, w); c.Arc(ER, 5, 8, 1.1f, 1.9f, 2.5f, w); break;
@@ -650,7 +750,16 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => { c.Arc(x, 4, 7, 1.1f, 1.9f, 3, w); c.Line(x - 2, -6, x - 3, -9, 1.5f, w); c.Line(x + 2, -6, x + 3, -9, 1.5f, w); }); break;
+                case 'f':
+                    {
+                        // Ojitos > < con destellos
+                        c.Lines(3, w, EL - 6, -5, EL + 5, 0, EL - 6, 5);
+                        c.Lines(3, w, ER + 6, -5, ER - 5, 0, ER + 6, 5);
+                        float sp = 1.5f + Math.Abs(c.Sin(6)) * 2;
+                        c.Sparkle(-27, -8, sp, w);
+                        c.Sparkle(27, -8, sp, w);
+                        break;
+                    }
                 case 's':
                     c.Both((x, s) =>
                     {
@@ -659,7 +768,14 @@ namespace StreeckSuite.Modules
                     });
                     break;
                 case 'd': c.Both((x, s) => { c.Arc(x, -4, 7, 0.1f, 0.9f, 2.5f, w); for (int k = -1; k <= 1; k++) c.Line(x + k * 5, 2, x + k * 6, 5, 1.3f, w); }); break;
-                case 'z': c.Both((x, s) => { c.Spiral(x, 0, w); c.Line(x - 4, -11, x - 5, -14, 1.5f, w); c.Line(x + 4, -11, x + 5, -14, 1.5f, w); }); break;
+                case 'z':
+                    {
+                        // Espiral con gotita de sudor
+                        c.Both((x, s) => { c.Ell(x, 0, 8, 9, w); c.Swirl(x, 0, 6.5f, c.Sec * 5, 1.6f, Dark); });
+                        float d = (float)(c.Sec * 1.5 % 1);
+                        c.Ell(26, -6 + d * 8, 2, 3, Color.FromArgb(125, 211, 252));
+                        break;
+                    }
                 case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.4f * c.Pulse, PinkHeart); c.Dot(x - 3, -3, 1.6f, Color.White); }); break;
                 case 'e': c.Both((x, s) => { c.Ell(x, 2, 8, 6, w); c.Dot(x, 3, 3.5f, Dark); }); break;
                 case 'w': c.Ell(EL, 0, 8, 9, w); c.Dot(EL, 1, 4.5f, Dark); c.Dot(EL + 2, -2, 1.6f, Color.White); c.Lines(3, w, ER - 7, -5, ER + 5, 0, ER - 7, 5); break;
@@ -679,25 +795,24 @@ namespace StreeckSuite.Modules
             switch (face)
             {
                 case 'f':
-                    c.Both((x, s) =>
                     {
-                        using (GraphicsPath arch = new GraphicsPath())
-                        using (Pen p = Stroke(c.C(w), 3.5f))
-                        {
-                            arch.AddLine(x - 6, 8, x - 6, -2);
-                            arch.AddArc(x - 6, -8, 12, 12, 180, 180);
-                            arch.AddLine(x + 6, -2, x + 6, 8);
-                            c.G.DrawPath(p, arch);
-                        }
-                    });
-                    break;
-                case 's': c.Both((x, s) => { c.Ring(x, 0, 7, 12, w, 2.5f); c.Ell(x, 0, 2, 7, w); }); break;
+                        // Carita ^ω^ con bigotes
+                        c.Both((x, s) => c.Up(x, 0, 6, 3, w));
+                        c.Arc(-3, 7, 3, 0, 1, 2, w);
+                        c.Arc(3, 7, 3, 0, 1, 2, w);
+                        float m = c.Sin(4) * 1.5f;
+                        c.Line(-25, 4 + m, -34, 2, 1.2f, w); c.Line(-25, 7, -34, 8 + m, 1.2f, w);
+                        c.Line(25, 4 + m, 34, 2, 1.2f, w); c.Line(25, 7, 34, 8 + m, 1.2f, w);
+                        break;
+                    }
+                // Pura pupila, sin contorno (pedido del usuario)
+                case 's': c.Both((x, s) => c.Slit(x, 0, 6.5f, 10.5f, w)); break;
                 case 'd': c.Both((x, s) => { using (Pen p = Stroke(c.C(w), 4)) c.G.DrawBezier(p, x - 9, 0, x - 3, -2, x + 3, -2, x + 9, 0); }); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 160, () => c.Ell(0, 0, 2.5f, 10, w))); break;
+                case 'z': c.Both((x, s) => c.Spin(x, 0, c.Sec * 3 * (s > 0 ? -1 : 1), () => c.Slit(0, 0, 3.6f, 10, w))); break;
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
-                case 'e': c.Both((x, s) => { c.Ell(x, 2, 8, 5, w); c.Ell(x, 2, 1.5f, 4, Dark); }); break;
-                case 'w': c.Ell(EL, 0, 6, 11, w); c.Lines(3, w, ER - 7, 3, ER, -4, ER + 7, 3); break;
-                default: c.Both((x, s) => { c.Ell(x + c.LookX * 1.5f, c.LookY, 6, 11 * c.Open, w); if (c.Open > 0.5f) c.Ell(x + c.LookX * 3, c.LookY * 2, 1.6f, 8 * c.Open, Dark); }); break;
+                case 'e': c.Both((x, s) => c.Spin(x, 1, -s * 0.35, () => c.Slit(0, 0, 2.4f, 8, w))); break;
+                case 'w': c.Slit(EL, 0, 3.6f, 10, w); c.Lines(3, w, ER - 7, 3, ER, -4, ER + 7, 3); break;
+                default: c.Both((x, s) => c.Slit(x + c.LookX * 3, c.LookY * 2, 3.6f, 10 * c.Open, w)); break;
             }
         }
 
@@ -713,18 +828,31 @@ namespace StreeckSuite.Modules
             switch (face)
             {
                 case 'f':
-                    c.Both((x, s) =>
                     {
-                        for (int k = 0; k < 7; k++)
+                        // Pantalla con ^ ^ verde
+                        float b = c.Sin(6) > 0 ? 0 : 1;
+                        int[,] cells = { { 0, 2 }, { 1, 1 }, { 2, 0 }, { 3, 1 }, { 4, 2 } };
+                        c.Both((x, s) =>
                         {
-                            double a = Math.PI * (1.05 + k * 0.15);
-                            c.Line(x + (float)Math.Cos(a) * 5, 5 + (float)Math.Sin(a) * 5, x + (float)Math.Cos(a) * 10, 5 + (float)Math.Sin(a) * 10, 2.2f, w);
-                        }
-                    });
-                    break;
+                            c.RR(x - 10, -9, 20, 18, 3, Color.FromArgb(15, 42, 23));
+                            for (int k = 0; k < 5; k++) c.Rect(x - 9 + cells[k, 0] * 4, -1 + cells[k, 1] * 3 - b, 3.2f, 3.2f, Color.FromArgb(74, 222, 128));
+                        });
+                        break;
+                    }
                 case 's': c.Both((x, s) => ScanRect(c, x - 8, -13, 16, 24)); break;
                 case 'd': c.Both((x, s) => { for (int k = 0; k < 4; k++) c.Rect(x - 9 + k * 5, -1 + (s < 0 ? k : 3 - k) * 1.5f, 5, 2.5f, w); }); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 200, () => { c.Box(-8, -8, 16, 16, w, 2); c.Box(-4, -4, 8, 8, w, 2); })); break;
+                case 'z':
+                    {
+                        // Estática de glitch
+                        int f20 = (int)(c.Sec * 20), f30 = (int)(c.Sec * 30);
+                        c.Both((x, s) =>
+                        {
+                            c.RR(x - 10, -9, 20, 18, 3, Color.FromArgb(26, 29, 36));
+                            for (int k = 0; k < 5; k++)
+                                c.Rect(x - 9 + (k * 5 + f30) % 6, -8 + (k * 7 + f20) % 17, 12, 1.6f, k % 2 == 1 ? Color.FromArgb(156, 163, 175) : Color.FromArgb(229, 231, 235));
+                        });
+                        break;
+                    }
                 case 'a': c.Both((x, s) => c.PixHeart(x, 1, PinkHeart)); break;
                 case 'e': c.Both((x, s) => c.Poly(w, x - 9, s < 0 ? -2 : -7, x + 9, s < 0 ? -7 : -2, x + 9, 7, x - 9, 7)); break;
                 case 'w': ScanRect(c, EL - 9, -8, 18, 16); c.Rect(ER - 9, -1, 18, 3, w); break;
@@ -744,10 +872,10 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Arc(x, 3, 6, 1.1f, 1.9f, 2.5f, w)); break;
+                case 'f': c.Dot(EL, -Math.Abs(c.Sin(6)) * 5, 5, w); c.Dot(ER, -Math.Abs(c.Sin(6, 1.2)) * 5, 5, w); break; // Saltan
                 case 's': c.Dot(EL, 0, 6, w); c.Arc(ER, 2, 6, 1.1f, 1.9f, 2.5f, w); break;
                 case 'd': c.Both((x, s) => c.Arc(x, -3, 6, 0.15f, 0.85f, 2, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.6f)); break;
+                case 'z': c.Both((x, s) => { double a = c.Sec * 5 * (s > 0 ? -1 : 1); c.Dot(x + (float)Math.Cos(a) * 5, (float)Math.Sin(a) * 5, 3.5f, w); }); break; // En órbita
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 0.8f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => c.Dot(x, 2, 5, w)); break;
                 case 'w': c.Dot(EL, 0, 5, w); c.Rect(ER - 6, -1, 12, 2.5f, w); break;
@@ -766,10 +894,29 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => { int[,] cells = { { 0, 2 }, { 1, 1 }, { 2, 0 }, { 3, 1 }, { 4, 2 } }; for (int k = 0; k < 5; k++) c.Rect(x - 10 + cells[k, 0] * 4, -2 + cells[k, 1] * 4, 3.4f, 3.4f, w); }); break;
+                case 'f':
+                    {
+                        c.Both((x, s) => { int[,] cells = { { 0, 2 }, { 1, 1 }, { 2, 0 }, { 3, 1 }, { 4, 2 } }; for (int k = 0; k < 5; k++) c.Rect(x - 10 + cells[k, 0] * 4, -2 + cells[k, 1] * 4, 3.4f, 3.4f, w); });
+                        // Corazón pixelado que parpadea arriba
+                        if (c.Sin(4) > 0)
+                        {
+                            string[] rows = { ".##.##.", "#######", ".#####.", "..###..", "...#..." };
+                            for (int j = 0; j < rows.Length; j++)
+                                for (int i = 0; i < 7; i++)
+                                    if (rows[j][i] == '#') c.Rect(-7 + i * 2, -14 + j * 2, 1.8f, 1.8f, PinkHeart);
+                        }
+                        break;
+                    }
                 case 's': c.Both((x, s) => PixelGrid(c, x - 8, -12, 4, 6)); break;
                 case 'd': c.Both((x, s) => { for (int i = 0; i < 4; i++) c.Rect(x - 9 + i * 5, 0, 3.4f, 2.6f, w); }); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, true)); break;
+                case 'z':
+                    {
+                        // X X con falla
+                        float o = c.Sin(20) > 0.6f ? 2 : 0;
+                        int[,] cells = { { 0, 0 }, { 1, 1 }, { 2, 2 }, { 3, 3 }, { 3, 0 }, { 2, 1 }, { 1, 2 }, { 0, 3 } };
+                        c.Both((x, s) => { for (int k = 0; k < 8; k++) c.Rect(x - 7 + cells[k, 0] * 4 + o, -7 + cells[k, 1] * 4, 3.2f, 3.2f, o > 0 ? Cyan : w); });
+                        break;
+                    }
                 case 'a': c.Both((x, s) => c.PixHeart(x, 1, PinkHeart)); break;
                 case 'e':
                     c.Both((x, s) =>
@@ -815,9 +962,15 @@ namespace StreeckSuite.Modules
                 case 'd': c.Both((x, s) => c.Glow(x - 9, 0, 18, 3, w, 0.55f)); break;
                 case 'z':
                     {
+                        // La luz en zigzag
                         c.RR(-32, -6, 64, 12, 6, w, 0.12f);
-                        float x = (float)Math.Sin(c.T / 60) * 26;
-                        c.Glow(x - 6, -6, 12, 12, w, Math.Sin(c.T / 40) > 0 ? 1 : 0.4f);
+                        float amp = c.Sin(6) * 5;
+                        List<PointF> zig = new List<PointF>();
+                        for (int x = -28; x <= 28; x += 4) zig.Add(new PointF(x, ((x / 4) % 2 != 0 ? 1 : -1) * amp));
+                        PointF[] points = zig.ToArray();
+                        using (Pen halo = Stroke(c.C(w, 0.15f), 9)) c.G.DrawLines(halo, points);
+                        using (Pen halo = Stroke(c.C(w, 0.3f), 6)) c.G.DrawLines(halo, points);
+                        using (Pen core = Stroke(c.C(w), 3.5f)) c.G.DrawLines(core, points);
                         break;
                     }
                 case 'a': { float p = c.Pulse; c.Glow(-32, -6 * p, 64, 12 * p, PinkHeart); break; }
@@ -838,10 +991,16 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Arc(0, 6, 10, 1.1f, 1.9f, 4, w); break;
+                case 'f':
+                    // Ojo grande feliz con brillo y pestañitas
+                    c.Arc(0, 6, 10, 1.1f, 1.9f, 4, w);
+                    c.Sparkle(9, -10, 2.5f + Math.Abs(c.Sin(5)) * 2, w);
+                    c.Line(-14, -2, -18, -6, 1.6f, w);
+                    c.Line(14, -2, 18, -6, 1.6f, w);
+                    break;
                 case 's': c.Ell(0, 0, 11, 16, w); c.Dot(0, 3, 3, Dark); c.Line(-10, -19, 10, -19, 2.5f, w); break;
                 case 'd': c.Arc(0, -4, 9, 0.1f, 0.9f, 3, w); c.Arc(0, -2, 9, 0.15f, 0.85f, 1.5f, w, 0.35f); break;
-                case 'z': c.Spiral(0, 0, w, false, 1.3f); break;
+                case 'z': c.Ell(0, 0, 10, 12, w); c.Dot(c.Cos(6) * 5, c.Sin(6) * 6, 3.5f, Dark); break; // La pupila orbita
                 case 'a': c.Heart(0, 0, 2 * c.Pulse, PinkHeart); break;
                 case 'e': c.Ell(0, 3, 10, 8, w); c.Dot(0, 4, 4, Dark); c.Lines(3, w, -12, -12, 0, -6, 12, -12); break;
                 case 'w':
@@ -858,10 +1017,24 @@ namespace StreeckSuite.Modules
         {
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Heart(x, 0, 1.4f + 0.12f * (float)Math.Sin(c.T / 150), PinkHeart)); break;
+                case 'f':
+                    {
+                        // Laten y sueltan un corazoncito
+                        float sz = 1.3f + 0.15f * c.Sin(8);
+                        c.Both((x, s) => c.Heart(x, 0, sz, PinkHeart));
+                        float p = (float)(c.Sec * 0.8 % 1);
+                        c.Heart(24, -4 - p * 12, 0.4f, Op(PinkHeart, 1 - p));
+                        break;
+                    }
                 case 's': c.Both((x, s) => c.Heart(x, 0, 1.8f, Rose)); break;
                 case 'd': Closed(c); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 160, () => c.Heart(0, 0, 1.1f, PinkHeart))); break;
+                case 'z':
+                    {
+                        // Giran con estrellitas alrededor
+                        c.Both((x, s) => c.Spin(x, 0, c.Sin(5, s > 0 ? 1 : 0) * 0.8, () => c.Heart(0, 0, 1, PinkHeart)));
+                        for (int i = 0; i < 3; i++) { double a = c.Sec * 3 + i * 2.1; c.Star((float)Math.Cos(a) * 20, -14 + (float)Math.Sin(a) * 3, 2.5f, Yellow); }
+                        break;
+                    }
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.7f * c.Pulse, Rose)); break;
                 case 'e': c.Both((x, s) => c.Heart(x, 2, 1, Red)); break;
                 case 'w': c.Heart(EL, 0, 1.2f, PinkHeart); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, c.Eye); break;
@@ -873,10 +1046,18 @@ namespace StreeckSuite.Modules
         {
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Star(x, 0, 10 + (float)Math.Sin(c.T / 150), Yellow)); break;
+                case 'f':
+                    {
+                        // Destellan
+                        float sz = 9 + Math.Abs(c.Sin(7)) * 3;
+                        c.Both((x, s) => c.Star(x, 0, sz, Yellow));
+                        c.Sparkle(EL + 8, -8, 2 + Math.Abs(c.Cos(7)) * 2, Color.White);
+                        c.Sparkle(ER + 8, -8, 2 + Math.Abs(c.Sin(7)) * 2, Color.White);
+                        break;
+                    }
                 case 's': c.Both((x, s) => c.Star(x, 0, 12, Color.White)); break;
                 case 'd': Closed(c); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 150, () => c.Star(0, 0, 9, Amber))); break;
+                case 'z': c.Both((x, s) => { float y = (float)((c.Sec * 12 + (s > 0 ? 10 : 0)) % 24) - 12; c.Spin(x, y, c.Sec * 6, () => c.Star(0, 0, 7, Amber)); }); break; // Caen dando vueltas
                 case 'a': c.Both((x, s) => c.Star(x, 0, 10 * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => c.Star(x, 2, 7, Red)); break;
                 case 'w': c.Star(EL, 0, 9, Amber); c.Arc(ER, 3, 6, 1.1f, 1.9f, 3, c.Eye); break;
@@ -887,15 +1068,38 @@ namespace StreeckSuite.Modules
         private static void Glasses(Face c, char face)
         {
             Color w = c.Eye;
-            c.Box(EL - 10, -8, 20, 16, w, 2);
-            c.Box(ER - 10, -8, 20, 16, w, 2);
-            c.Line(EL + 10, -2, ER - 10, -2, 2, w);
+            Action frames = () =>
+            {
+                c.Box(EL - 10, -8, 20, 16, w, 2);
+                c.Box(ER - 10, -8, 20, 16, w, 2);
+                c.Line(EL + 10, -2, ER - 10, -2, 2, w);
+            };
+            if (face != 'z') frames();
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Arc(x, 3, 5, 1.15f, 1.85f, 2.5f, w)); break;
+                case 'f':
+                    {
+                        c.Both((x, s) => c.Arc(x, 3, 5, 1.15f, 1.85f, 2.5f, w));
+                        // Reflejo que cruza los cristales
+                        float rx = -30 + (float)(c.Sec * 40 % 60);
+                        GraphicsState st = c.G.Save();
+                        using (Region glass = new Region(new RectangleF(EL - 10, -8, 20, 16)))
+                        {
+                            glass.Union(new RectangleF(ER - 10, -8, 20, 16));
+                            c.G.IntersectClip(glass);
+                            c.Line(rx, 10, rx + 8, -10, 2.5f, Op(Color.White, 0.7f));
+                        }
+                        c.G.Restore(st);
+                        break;
+                    }
                 case 's': c.Both((x, s) => c.Dot(x, 0, 5, w)); break;
                 case 'd': c.Both((x, s) => c.Line(x - 6, 0, x + 6, 0, 2, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.55f)); break;
+                case 'z':
+                    // Lentes chuecos y los ojitos de un lado a otro
+                    c.Spin(0, 0, c.Sin(4) * 0.35, frames);
+                    c.Dot(EL + c.Sin(5) * 3, 1, 2.6f, w);
+                    c.Dot(ER - c.Sin(5) * 3, -1, 2.6f, w);
+                    break;
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => c.RR(x - 3, -1, 6, 4, 1, w)); break;
                 case 'w': c.RR(EL - 3, -3, 6, 6, 1, w); c.Line(ER - 6, 0, ER + 6, 0, 2, w); break;
@@ -907,10 +1111,18 @@ namespace StreeckSuite.Modules
         {
             switch (face)
             {
-                case 'f': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Rect(x - 11, 0, 22, 11, Color.Black); }); break;
+                case 'f':
+                    {
+                        // Ojos ^ ^ con plumitas que se mueven
+                        c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Up(x, -2, 5, 2.6f, Color.Black); });
+                        float p = c.Sin(5) * 2;
+                        c.Line(-22, -9, -28, -14 + p, 2, Amber);
+                        c.Line(22, -9, 28, -14 - p, 2, Amber);
+                        break;
+                    }
                 case 's': c.Both((x, s) => { c.Dot(x, 0, 12, Amber); c.Dot(x, 0, 3, Color.Black); }); break;
                 case 'd': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Rect(x - 11, -11, 22, 13, Color.Black); }); break;
-                case 'z': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Spiral(x, 0, Color.Black, false, 0.6f); }); break;
+                case 'z': c.Spin(0, 0, c.Sin(2.5) * Math.PI * 0.6, () => c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Dot(x, 0, 4, Color.Black); })); break; // La cabeza da la vuelta
                 case 'a': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Heart(x, 0, 0.6f * c.Pulse, Color.FromArgb(190, 24, 93)); }); break;
                 case 'e': c.Both((x, s) => { c.Dot(x, 0, 10, Amber); c.Dot(x, 2, 4, Color.Black); c.Poly(Color.Black, x - 11, -11, x + 11, -11, s < 0 ? x + 11 : x - 11, -1); }); break;
                 case 'w': c.Dot(EL, 0, 10, Amber); c.Dot(EL, 0, 5, Color.Black); c.Dot(ER, 0, 10, Amber); c.Rect(ER - 11, -11, 22, 13, Color.Black); break;
@@ -929,10 +1141,19 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Arc(x, 3, 6, 1.1f, 1.9f, 3, w)); break;
+                case 'f': c.Both((x, s) => c.FillHalfBottom(x, -2, 7, w)); c.Arc(0, 6, 4, 0.15f, 0.85f, 2, w); break; // Medias lunas sonrientes
                 case 's': c.Both((x, s) => c.Dot(x, 0, 7, w)); break;
                 case 'd': c.Both((x, s) => c.Rect(x - 7, 0, 14, 2, w)); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, Math.Sin(c.T / 120) * 0.5, () => HalfMoon(c, 0))); break;
+                case 'z':
+                    {
+                        // Cabecea con zzz
+                        float n = Math.Max(0, c.Sin(2)) * 5;
+                        c.Both((x, s) => c.Line(x - 7, n, x + 7, n, 2.6f, w));
+                        Color zc = Color.FromArgb(174, 182, 200);
+                        Glyph(c, 24, "z", 9, zc, -8 - (float)(c.Sec * 10 % 8));
+                        Glyph(c, 30, "z", 9, zc, -14 - (float)((c.Sec * 10 + 4) % 8));
+                        break;
+                    }
                 case 'a': c.Both((x, s) => HalfMoon(c, x)); c.Heart(0, -12, 0.6f * c.Pulse, PinkHeart); break;
                 case 'e': c.Both((x, s) => c.Spin(x, 0, s * 0.25, () => c.Rect(-7, 0, 14, 3, w))); break;
                 case 'w': HalfMoon(c, EL); c.Rect(ER - 7, 0, 14, 2, w); break;
@@ -949,10 +1170,26 @@ namespace StreeckSuite.Modules
         {
             switch (face)
             {
-                case 'f': c.Both((x, s) => c.Lines(3, Cyan, x - 8, 4, x, -4, x + 8, 4)); break;
+                case 'f':
+                    {
+                        // Chevrons de neón que brillan
+                        float glow = 0.4f + Math.Abs(c.Sin(5)) * 0.6f;
+                        c.Both((x, s) => { c.Lines(6, Op(Cyan, glow * 0.35f), x - 8, 4, x, -4, x + 8, 4); c.Lines(3, Cyan, x - 8, 4, x, -4, x + 8, 4); });
+                        break;
+                    }
                 case 's': c.Both((x, s) => { c.Box(x - 9, -9, 18, 18, Cyan, 2); c.Rect(x - 3, -3, 6, 6, Cyan); }); break;
                 case 'd': c.Both((x, s) => c.Rect(x - 9, 0, 18, 2, Cyan)); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 120, () => c.Box(-7, -7, 14, 14, Cyan, 2))); break;
+                case 'z':
+                    {
+                        // Falla RGB
+                        float o = c.Sin(25) * 2;
+                        c.Both((x, s) =>
+                        {
+                            c.Poly(Color.FromArgb(204, 255, 0, 80), x - 9 + o, 5, x - 4 + o, -6, x + 9 + o, -6, x + 4 + o, 5);
+                            c.Poly(Color.FromArgb(217, 34, 211, 238), x - 9 - o, 5, x - 4 - o, -6, x + 9 - o, -6, x + 4 - o, 5);
+                        });
+                        break;
+                    }
                 case 'a':
                     c.Both((x, s) =>
                     {
@@ -993,10 +1230,27 @@ namespace StreeckSuite.Modules
             bool mouth = !SuiteSettings.EyesMouth; // Si el usuario ya tiene boquita, no se dibuja la propia
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 6, 3.5f, w)); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
+                case 'f':
+                    {
+                        // Flota: cada ojo sube y baja
+                        float b = c.Sin(3) * 3;
+                        c.Ell(EL, -2 + b, 4, 7, w);
+                        c.Ell(ER, -2 - b, 4, 7, w);
+                        if (mouth) c.Arc(0, 7, 5, 0.15f, 0.85f, 2.4f, w);
+                        break;
+                    }
                 case 's': c.Both((x, s) => c.Ell(x, -1, 6.5f, 11, w)); if (mouth) c.Ring(0, 11, 2.5f, 3.5f, w, 2); break;
                 case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); if (mouth) c.Dot(0, 10, 1.6f, w); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.75f)); if (mouth) c.Lines(2, w, -6, 11, -3, 9, 0, 11, 3, 9, 6, 11); break;
+                case 'z':
+                    // Se derrite: los ojos se vuelven ondas
+                    c.Both((x, s) =>
+                    {
+                        float[] wave = new float[34];
+                        for (int k = -8; k <= 8; k++) { wave[2 * (k + 8)] = x + k; wave[2 * (k + 8) + 1] = c.Sin(5, k * 0.7 + (s > 0 ? 1 : 0)) * 2.5f - 2; }
+                        c.Lines(2.6f, w, wave);
+                    });
+                    if (mouth) c.Lines(2, w, -6, 10, -3, 8, 0, 10, 3, 8, 6, 10);
+                    break;
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.1f * c.Pulse, PinkHeart)); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
                 case 'e': c.Both((x, s) => { c.Ell(x, 0, 5, 9, w); AngryCut(c, x, s, -11, 0, 7); }); if (mouth) c.Arc(0, 14, 4, 1.15f, 1.85f, 2.5f, w); break;
                 case 'w': c.Ell(EL, 0, 5, 9, w); HappyArc(c, ER, 6, 3.5f, w); if (mouth) c.Arc(0, 6, 4, 0.15f, 0.85f, 2.5f, w); break;
@@ -1024,10 +1278,15 @@ namespace StreeckSuite.Modules
             }
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); break;
+                case 'f': { float sp = 6 + c.Sin(6) * 1.2f; c.Both((x, s) => c.Sparkle(x, 0, sp, w)); break; } // Ojos de estrella
                 case 's': c.Both((x, s) => KawaiiEye(c, x, 11, 0)); break;
                 case 'd': c.Both((x, s) => SleepArc(c, x, 7, 3, w)); break;
-                case 'z': c.Both((x, s) => { c.Dot(x, 0, 9, w); c.Spiral(x, 0, Dark, false, 0.7f); }); break;
+                case 'z':
+                    // Mareado rosa, bien sonrojado
+                    c.Both((x, s) => { c.Dot(x, 0, 9, w); c.Swirl(x, 0, 7, c.Sec * 5 * (s > 0 ? -1 : 1), 1.8f, PinkHeart); });
+                    c.Ell(-27, 7, 5, 2.5f, Color.FromArgb(217, 255, 60, 120));
+                    c.Ell(27, 7, 5, 2.5f, Color.FromArgb(217, 255, 60, 120));
+                    break;
                 case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.4f * c.Pulse, PinkHeart); c.Dot(x - 4, -3, 1.8f, Color.White); }); break;
                 case 'e': c.Both((x, s) => { KawaiiEye(c, x, 9, 0.5f); AngryCut(c, x, s, -12, -1, 11); }); break;
                 case 'w': KawaiiEye(c, EL, 9, 1); c.Lines(3, w, ER - 7, -5, ER + 5, 0, ER - 7, 5); break;
@@ -1040,15 +1299,27 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             // El parche se queda en todas las caras
             Color patch = Color.FromArgb(104, 110, 126);
-            c.Line(-34, -9, 0, -14, 2f, patch);
-            c.Ell(EL, 0, 9, 8, patch);
-            c.Ring(EL, 0, 9, 8, Color.FromArgb(140, 146, 160), 1);
+            if (face != 'z')
+            {
+                c.Line(-34, -9, 0, -14, 2f, patch);
+                c.Ell(EL, 0, 9, 8, patch);
+                c.Ring(EL, 0, 9, 8, Color.FromArgb(140, 146, 160), 1);
+            }
             switch (face)
             {
-                case 'f': HappyArc(c, ER, 7, 3.5f, w); break;
+                case 'f':
+                    // Sonrisa de lado con diente de oro
+                    HappyArc(c, ER, 7, 3.5f, w);
+                    c.Arc(2, 6, 7, 0.1f, 0.75f, 2.4f, w);
+                    c.Rect(4, 10, 3, 3, Gold);
+                    break;
                 case 's': c.RR(ER - 7, -12, 14, 24, 7, w); break;
                 case 'd': SleepArc(c, ER, 6, 3, w); break;
-                case 'z': c.Spiral(ER, 0, w); break;
+                case 'z':
+                    // Parche ladeado que se columpia y ojo ✕ girando
+                    c.Spin(EL, 0, 0.5 + c.Sin(3) * 0.15, () => c.Ell(0, 4, 8, 7, patch));
+                    c.Spin(ER, 0, c.Sec * 6, () => { c.Line(-5, -5, 5, 5, 2.6f, w); c.Line(-5, 5, 5, -5, 2.6f, w); });
+                    break;
                 case 'a': c.Heart(ER, 0, 1.3f * c.Pulse, PinkHeart); break;
                 case 'e': c.RR(ER - 6, -8, 12, 16, 6, w); AngryCut(c, ER, 1, -11, -1, 9); break;
                 case 'w': c.Arc(ER, -3, 6, 0.15f, 0.85f, 3, w); c.Lines(2.2f, w, -3, 13, 3, 14, 8, 11); break;
@@ -1061,10 +1332,21 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); break;
+                case 'f':
+                    {
+                        // Espirales de colores
+                        double hue = c.Sec * 120 % 360;
+                        c.Dot(EL, 0, 9, w); c.Swirl(EL, 0, 8, c.Sec * 8, 2, Hsl(hue, 0.9, 0.55));
+                        c.Dot(ER, 0, 9, w); c.Swirl(ER, 0, 8, c.Sec * 8, 2, Hsl(hue + 120, 0.9, 0.55));
+                        break;
+                    }
                 case 's': c.Both((x, s) => { c.Dot(x, 0, 11, w); c.Spiral(x, 0, Dark, false, 0.95f); }); break;
                 case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 1.1f)); break;
+                case 'z':
+                    // Al revés y a distinto ritmo
+                    c.Dot(EL, 0, 9, w); c.Swirl(EL, 0, 8, c.Sec * 7, 2, Color.Black);
+                    c.Dot(ER, 0, 9, w); c.Swirl(ER, 0, 8, -c.Sec * 11, 2, Color.Black);
+                    break;
                 case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart); }); break;
                 case 'e': c.Both((x, s) => { c.Dot(x, 0, 9, w); c.Spiral(x, 0, Red, false, 0.75f); AngryCut(c, x, s, -11, -1, 10); }); break;
                 case 'w': c.Dot(EL, 0, 9, w); c.Spiral(EL, 0, Dark, false, 0.75f); HappyArc(c, ER, 7, 3.5f, w); break;
@@ -1094,10 +1376,14 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); c.RR(-3, 7, 6, 6, 3, Rose); break;
+                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, w)); c.Ell(c.Sin(8) * 1.5f, 11, 4, 5, Color.FromArgb(255, 111, 143)); break; // Lengua de fuera
                 case 's': c.Both((x, s) => PuppyEye(c, x, 11, false)); PuppyBrows(c); break;
                 case 'd': c.Both((x, s) => SleepArc(c, x, 6, 3, w)); PuppyBrows(c); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.85f)); break;
+                case 'z':
+                    // Estrellitas dando vueltas en la cabeza
+                    c.Both((x, s) => { c.Dot(x, 0, 8, w); c.Dot(x, 1, 5, PuppyBlue); });
+                    for (int i = 0; i < 3; i++) { double a = c.Sec * 3 + i * 2.1; c.Star((float)Math.Cos(a) * 22, -14 + (float)Math.Sin(a) * 3, 3, Color.FromArgb(255, 216, 74)); }
+                    break;
                 case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart); c.Dot(x - 4, -3, 1.6f, Color.White); }); break;
                 case 'e': c.Both((x, s) => { PuppyEye(c, x, 9, false); AngryCut(c, x, s, -12, -1, 11); }); break;
                 case 'w': PuppyEye(c, EL, 9, false); HappyArc(c, ER, 7, 3.5f, w); c.RR(-3, 7, 6, 6, 3, Rose); break;
@@ -1110,18 +1396,30 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 5, 2.8f, w)); break;
+                case 'f': c.Both((x, s) => HappyArc(c, x, 5, 2.8f, w)); c.Sparkle(ER + 6, -6, (c.Sin(4) + 1) * 2.5f + 1, Color.FromArgb(255, 246, 200)); break; // Destello
                 case 's': c.Both((x, s) => c.Dot(x, -1, 5, w)); break;
                 case 'd': c.Both((x, s) => c.Line(x - 5, 1, x + 5, 1, 2.6f, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.55f)); break;
+                case 'z':
+                    {
+                        // El monóculo se resbala
+                        c.Swirl(EL, 0, 5, c.Sec * 4, 1.8f, w);
+                        c.Dot(ER, 0, 3.5f, w);
+                        float drop = 6 + c.Sin(3) * 2;
+                        c.Ring(ER + 3, drop + 6, 7, 7, Gold, 2);
+                        c.Line(ER + 3, drop - 1, ER + 8, -8, 1.2f, Gold);
+                        break;
+                    }
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => { c.Dot(x, 1, 3.5f, w); c.Line(x - s * 7, -9, x + s * 5, -4, 2.4f, w); }); break;
                 case 'w': c.Dot(EL, 0, 3.5f, w); c.Line(ER - 5, 1, ER + 5, 1, 2.6f, w); break;
                 default: c.Both((x, s) => c.Ell(x + c.LookX * 2.5f, c.LookY * 2, 3.5f, 3.5f * c.Open + 0.4f, w)); break;
             }
             // Monóculo dorado con cadenita y bigote, en todas las caras
-            c.Ring(ER, 0, 9, 9, Gold, 2);
-            c.Line(ER + 6, 7, ER + 11, 17, 1.2f, Gold);
+            if (face != 'z')
+            {
+                c.Ring(ER, 0, 9, 9, Gold, 2);
+                c.Line(ER + 6, 7, ER + 11, 17, 1.2f, Gold);
+            }
             using (Pen p = Stroke(c.C(w), 2.6f))
             {
                 c.G.DrawBezier(p, 0, 10, -4, 14, -9, 14, -12, 9);
@@ -1139,10 +1437,15 @@ namespace StreeckSuite.Modules
             Color g = AlienGreen;
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 7, 3.5f, g)); break;
+                case 'f':
+                    // Medias lunas con brillo
+                    c.Both((x, s) => c.Spin(x, 0, -s * 0.45, () => c.FillHalfTop(0, 0, 10, 5, g)));
+                    c.Sparkle(EL - 3, -4, 2 + c.Sin(5), Color.White);
+                    c.Sparkle(ER - 3, -4, 2 + c.Cos(5), Color.White);
+                    break;
                 case 's': c.Both((x, s) => { AlienEye(c, x, s, 12, 7, g); c.Dot(x, 0, 2.2f, Dark); }); break;
                 case 'd': c.Both((x, s) => c.Spin(x, 0, -s * 0.45, () => c.Line(-9, 0, 9, 0, 2.6f, g))); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, g, false, 0.85f)); break;
+                case 'z': c.Spin(EL, 0, c.Sec * 4, () => c.Ell(0, 0, 9, 4.5f, g)); c.Spin(ER, 0, -c.Sec * 6, () => c.Ell(0, 0, 9, 4.5f, g)); break; // Cada ojo a un lado
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.3f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => { AlienEye(c, x, s, 10, 5, g); AngryCut(c, x, s, -10, 1, 12); }); break;
                 case 'w': AlienEye(c, EL, -1, 10, 5, g); c.Spin(ER, 0, -0.45, () => c.Line(-9, 0, 9, 0, 2.6f, g)); break;
@@ -1154,13 +1457,14 @@ namespace StreeckSuite.Modules
         {
             Color w = c.Eye;
             // Manchas de panda, en todas las caras
-            c.Both((x, s) => c.Spin(x, 1, s * 0.5, () => c.Ell(0, 0, 8.5f, 11.5f, PatchGray)));
+            float bob = face == 'f' ? c.Sin(4) * 1.5f : 0;
+            if (face != 'z') c.Both((x, s) => c.Spin(x, 1 + bob, s * 0.5, () => c.Ell(0, 0, 8.5f, 11.5f, PatchGray)));
             switch (face)
             {
-                case 'f': c.Both((x, s) => HappyArc(c, x, 4.5f, 2.6f, w)); break;
+                case 'f': c.Both((x, s) => c.Up(x, bob, 4.5f, 2.6f, w)); c.Ell(0, 9, 3, 2, Color.FromArgb(255, 143, 176)); break; // Arquitos y naricita
                 case 's': c.Both((x, s) => { c.Dot(x, 0, 5, w); c.Dot(x, 0, 2.2f, Dark); }); break;
                 case 'd': c.Both((x, s) => c.Line(x - 4, 1, x + 4, 1, 2.4f, w)); break;
-                case 'z': c.Both((x, s) => c.Spiral(x, 0, w, false, 0.5f)); break;
+                case 'z': c.Both((x, s) => { c.Spin(x, 1, c.Sec * 3 * s, () => c.Ell(0, 0, 8.5f, 11.5f, PatchGray)); c.Dot(x, 0, 3, w); }); break; // Manchas que giran
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 0.7f * c.Pulse, PinkHeart)); break;
                 case 'e': c.Both((x, s) => { c.Dot(x, 1, 3.8f, w); c.Dot(x, 1.5f, 1.8f, Dark); c.Line(x - s * 6, -7, x + s * 4, -3, 2.2f, w); }); break;
                 case 'w': c.Dot(EL, 0, 3.8f, w); c.Dot(EL, 0.5f, 1.8f, Dark); c.Line(ER - 4, 1, ER + 4, 1, 2.4f, w); break;
@@ -1176,7 +1480,7 @@ namespace StreeckSuite.Modules
         }
 
         // Caritas de texto: cada ojo es un signo, centrado en su lugar
-        private static void Glyph(Face c, float x, string text, float size, Color color)
+        private static void Glyph(Face c, float x, string text, float size, Color color, float y = 0)
         {
             using (GraphicsPath path = new GraphicsPath())
             using (FontFamily family = new FontFamily("Segoe UI"))
@@ -1186,7 +1490,7 @@ namespace StreeckSuite.Modules
                 if (b.Width <= 0) return;
                 using (Matrix m = new Matrix())
                 {
-                    m.Translate(x - (b.X + b.Width / 2), -(b.Y + b.Height / 2));
+                    m.Translate(x - (b.X + b.Width / 2), y - (b.Y + b.Height / 2));
                     path.Transform(m);
                 }
                 using (SolidBrush brush = new SolidBrush(c.C(color))) c.G.FillPath(brush, path);
@@ -1198,10 +1502,23 @@ namespace StreeckSuite.Modules
             Color w = c.Eye;
             switch (face)
             {
-                case 'f': Glyph(c, EL, "^", 26, w); Glyph(c, ER, "^", 26, w); break;
+                case 'f':
+                    {
+                        // ^▽^ que rebota
+                        float b = c.Sin(6) * 1.5f;
+                        Glyph(c, EL, "^", 24, w, 2 + b);
+                        Glyph(c, ER, "^", 24, w, 2 - b);
+                        c.Lines(1.8f, w, -4, 7, 4, 7, 0, 12, -4, 7);
+                        break;
+                    }
                 case 's': Glyph(c, EL, "O", 20, w); Glyph(c, ER, "O", 20, w); break;
                 case 'd': Glyph(c, EL, "–", 22, w); Glyph(c, ER, "–", 22, w); break;
-                case 'z': c.Both((x, s) => c.Spin(x, 0, c.T / 180, () => Glyph(c, 0, "@", 20, w))); break;
+                case 'z':
+                    // @_@ girando
+                    c.Spin(EL, 0, c.Sec * 5, () => Glyph(c, 0, "@", 20, w));
+                    c.Spin(ER, 0, -c.Sec * 5, () => Glyph(c, 0, "@", 20, w));
+                    c.Line(-3, 9, 3, 9, 2, w);
+                    break;
                 case 'a': c.Both((x, s) => c.Heart(x, 0, 1.1f * c.Pulse, PinkHeart)); break;
                 case 'e': Glyph(c, EL, ">", 22, w); Glyph(c, ER, "<", 22, w); break;
                 case 'w': Glyph(c, EL, "•", 26, w); Glyph(c, ER, "~", 24, w); break;
@@ -1220,10 +1537,21 @@ namespace StreeckSuite.Modules
             for (int i = 0; i < 3; i++) c.Line(ER - 2 + i * 5, -16 + i, ER - 3 + i * 5, -10 + i, 1.2f, Stitch);
             switch (face)
             {
-                case 'f': HappyArc(c, EL, 9, 3.5f, w); HappyArc(c, ER, 5, 3, w); break;
+                case 'f':
+                    // Sonrisa con puntadas
+                    HappyArc(c, EL, 9, 3.5f, w); HappyArc(c, ER, 5, 3, w);
+                    c.Arc(0, 4, 8, 0.15f, 0.85f, 2.2f, w);
+                    for (int i = -1; i <= 1; i++) c.Line(i * 4, 9, i * 4, 13, 1.4f, Stitch);
+                    break;
                 case 's': c.Dot(EL, 0, 12, w); c.Dot(EL + 2, -1, 3, Dark); c.Dot(ER, 1, 8, w); c.Dot(ER, 1, 2, Dark); break;
                 case 'd': SleepArc(c, EL, 8, 3, w); c.Line(ER - 4, -3, ER + 4, 5, 2.4f, w); c.Line(ER - 4, 5, ER + 4, -3, 2.4f, w); break;
-                case 'z': c.Spiral(EL, 0, w, false, 1); c.Spiral(ER, 1, w, false, 0.6f); break;
+                case 'z':
+                    // Pupila que da vueltas y un ojo ✕
+                    c.Dot(EL, 0, 9, w);
+                    c.Dot(EL + c.Cos(5) * 4, c.Sin(5) * 4, 3, Color.Black);
+                    c.Line(ER - 4, -4, ER + 4, 4, 2.4f, w);
+                    c.Line(ER - 4, 4, ER + 4, -4, 2.4f, w);
+                    break;
                 case 'a': c.Heart(EL, 0, 1.4f * c.Pulse, PinkHeart); c.Heart(ER, 1, 0.8f * c.Pulse, PinkHeart); break;
                 case 'e': c.Dot(EL, 0, 10, w); c.Dot(EL + 2, 1, 3, Dark); AngryCut(c, EL, -1, -11, -1, 11); c.Dot(ER, 1, 6, w); c.Dot(ER, 2, 2, Dark); break;
                 case 'w': c.Dot(EL, 0, 10, w); c.Dot(EL + 2, -2, 3, Dark); c.Line(ER - 6, 1, ER + 6, 1, 2.6f, w); break;
@@ -1236,6 +1564,357 @@ namespace StreeckSuite.Modules
                         c.Dot(EL + 2 + c.LookX * 3, -2 + c.LookY * 2, 3, Dark);
                         c.Dot(ER + c.LookX * 1.5f, 1 + c.LookY, 2, Dark);
                     }
+                    break;
+            }
+        }
+
+        // --- 5 estilos más (mockup «Ojitos para elegir 5»): Slime, Rana, Saiyajin, Ninja y Vampiro ---
+
+        // Trazo tipo canvas (moveTo/lineTo/quadraticCurveTo) para copiar los dibujos del mockup tal cual
+        private class Shape : IDisposable
+        {
+            public readonly GraphicsPath Path = new GraphicsPath();
+            private PointF _cur;
+            public Shape M(float x, float y) { Path.StartFigure(); _cur = new PointF(x, y); return this; }
+            public Shape L(float x, float y) { PointF p = new PointF(x, y); Path.AddLine(_cur, p); _cur = p; return this; }
+            public Shape Q(float cx, float cy, float x, float y) { PointF p = new PointF(x, y); Quad(Path, _cur, new PointF(cx, cy), p); _cur = p; return this; }
+            public Shape Z() { Path.CloseFigure(); return this; }
+            public void Dispose() { Path.Dispose(); }
+        }
+
+        private static void FillShape(Face c, Shape shape, Color color)
+        {
+            using (shape)
+            using (SolidBrush b = new SolidBrush(c.C(color))) c.G.FillPath(b, shape.Path);
+        }
+
+        private static void StrokeShape(Face c, Shape shape, float width, Color color)
+        {
+            using (shape)
+            using (Pen p = Stroke(c.C(color), width)) c.G.DrawPath(p, shape.Path);
+        }
+
+        private static void DownArc(Face c, float x, float y, float r, float w, Color color) { c.Arc(x, y - r * 0.5f, r, 0.15f, 0.85f, w, color); }
+
+        // Caras comunes del mockup cuando el estilo no trae la suya: sorprendido (ojo 1,25 veces) y enojado (corte + cejas)
+        private static void GenericSurprised(Action<float, int, float, float, float> open) { open(EL, -1, 0, 0, 1.25f); open(ER, 1, 0, 0, 1.25f); }
+        private static void GenericAngry(Face c, Color accent, Action<float, int, float, float, float> open)
+        {
+            open(EL, -1, 0, 0.4f, 1); open(ER, 1, 0, 0.4f, 1);
+            AngryCut(c, EL, -1, -14, -1, 12); AngryCut(c, ER, 1, -14, -1, 12);
+            c.Line(EL - 6, -12, EL + 6, -6, 2.2f, accent);
+            c.Line(ER + 6, -12, ER - 6, -6, 2.2f, accent);
+        }
+
+        private static readonly Color SlimeGreen = Color.FromArgb(124, 242, 156);
+        private static readonly Color SlimeShine = Color.FromArgb(232, 255, 233);
+
+        private static void Slime(Face c, char face)
+        {
+            Action<float, int, float, float, float> open = (x, s, lx, ly, k) =>
+            {
+                float j = c.Sin(9, s) * 0.8f;
+                c.Ell(x, 1, (8 + j) * k, (8 - j) * k, SlimeGreen);
+                c.Ell(x + lx * 2.5f, ly * 2, 3 * k, 3.4f * k, Dark);
+                c.Dot(x - 3, -3, 1.6f, SlimeShine);
+            };
+            switch (face)
+            {
+                case 'f':
+                    c.Both((x, s) =>
+                    {
+                        // Gelatina feliz que tiembla
+                        float j = c.Sin(12) * 1.2f;
+                        GraphicsState st = c.G.Save();
+                        c.G.TranslateTransform(x, 0);
+                        c.G.ScaleTransform(1 + j * 0.06f, 1 - j * 0.06f);
+                        c.Up(0, 0, 7, 4, SlimeGreen);
+                        c.G.Restore(st);
+                    });
+                    break;
+                case 's': GenericSurprised(open); break;
+                case 'z': c.Both((x, s) => { float j = c.Sin(8, s > 0 ? 1 : 0) * 2; c.Ell(x, 1, 8 + j, 8 - j, SlimeGreen); c.Swirl(x, 1, 5, c.Sec * 5 * (s > 0 ? -1 : 1), 1.6f, Dark); }); break;
+                case 'd':
+                    c.Both((x, s) => c.Ell(x, 3 + c.Sin(2), 9, 4, SlimeGreen));
+                    c.Dot(26, -2 - (float)(c.Sec * 6 % 10), 2, Op(SlimeGreen, 0.6f)); // Gotita que sube
+                    break;
+                case 'e': GenericAngry(c, SlimeGreen, open); break;
+                case 'a': c.Both((x, s) => { c.Heart(x, 0, 1.1f + 0.12f * c.Sin(6), SlimeGreen); c.Dot(x - 3, -3, 1.5f, SlimeShine); }); break;
+                case 'w': open(EL, -1, 0, 0, 1); c.Up(ER, 0, 7, 4, SlimeGreen); break;
+                default:
+                    if (c.Open < 0.5f) c.Both((x, s) => c.Line(x - 6, 1, x + 6, 1, 2.4f, SlimeGreen));
+                    else { open(EL, -1, c.LookX, c.LookY, 1); open(ER, 1, c.LookX, c.LookY, 1); }
+                    break;
+            }
+        }
+
+        private static readonly Color FrogGreen = Color.FromArgb(155, 229, 100);
+        private static readonly Color FrogSkin = Color.FromArgb(95, 181, 58);
+
+        private static void Frog(Face c, char face)
+        {
+            bool mouth = !SuiteSettings.EyesMouth;
+            Action<float, int, float, float, float> open = (x, s, lx, ly, k) =>
+            {
+                c.Ell(x, -2, 9 * k, 9 * k, FrogSkin);
+                c.Ell(x, -2, 7 * k, 7 * k, Color.White);
+                c.Ell(x + lx * 2.5f, -2 + ly * 2, 3 * k, 4.5f * k, Dark);
+            };
+            switch (face)
+            {
+                case 'f':
+                    c.Both((x, s) => { c.Ell(x, -2, 9, 9, FrogSkin); c.Up(x, -3, 5, 2.6f, Dark); });
+                    if (mouth) c.Arc(0, 4, 9, 0.1f, 0.9f, 2, FrogGreen);
+                    break;
+                case 's': GenericSurprised(open); break;
+                case 'z': c.Both((x, s) => { c.Ell(x, -2, 9, 9, FrogSkin); c.Ell(x, -2, 7, 7, Color.White); c.Swirl(x, -2, 5, c.Sec * 6 * (s > 0 ? -1 : 1), 1.5f, Dark); }); break;
+                case 'd':
+                    {
+                        c.Both((x, s) => { c.Ell(x, -2, 9, 9, FrogSkin); c.Line(x - 6, -1, x + 6, -1, 2.4f, Dark); });
+                        float tongue = Math.Max(0, c.Sin(1.5)) * 10; // Se le sale la lengüita
+                        if (tongue > 0.3f) c.Line(0, 6, tongue, 6 + tongue * 0.2f, 2, Color.FromArgb(255, 122, 154));
+                        break;
+                    }
+                case 'e': GenericAngry(c, FrogGreen, open); break;
+                case 'a': c.Both((x, s) => { c.Ell(x, -2, 9, 9, FrogSkin); c.Heart(x, -2, 0.75f + 0.1f * c.Sin(6), PinkHeart); }); break;
+                case 'w':
+                    open(EL, -1, 0, 0, 1);
+                    c.Ell(ER, -2, 9, 9, FrogSkin); c.Line(ER - 6, -1, ER + 6, -1, 2.4f, Dark);
+                    if (mouth) c.Line(-4, 7, 6, 7, 2, FrogGreen);
+                    break;
+                default:
+                    if (c.Open < 0.5f) c.Both((x, s) => { c.Ell(x, -2, 9, 9, FrogSkin); c.Line(x - 6, -1, x + 6, -1, 2.4f, Dark); });
+                    else { open(EL, -1, c.LookX, c.LookY, 1); open(ER, 1, c.LookX, c.LookY, 1); }
+                    break;
+            }
+        }
+
+        private static readonly Color VampDark = Color.FromArgb(127, 29, 29);
+
+        private static void Fangs(Face c, float y)
+        {
+            c.Poly(Color.White, -5, y, -3, y + 5, -1, y);
+            c.Poly(Color.White, 1, y, 3, y + 5, 5, y);
+        }
+
+        private static void Vampire(Face c, char face)
+        {
+            Action<float, int, float, float, float> open = (x, s, lx, ly, k) =>
+            {
+                c.Ell(x, 0, 7 * k, 7 * k, VampDark);
+                c.Ell(x + lx * 2, ly * 1.5f, 5 * k, 5 * k, Red);
+                c.Ell(x + lx * 2, ly * 1.5f, 1.4f * k, 4 * k, Dark);
+            };
+            switch (face)
+            {
+                case 'f': c.Both((x, s) => c.Up(x, 0, 7, 3.2f, Red)); Fangs(c, 8); break;
+                case 's': GenericSurprised(open); Fangs(c, 9); break;
+                case 'z': c.Both((x, s) => { c.Ell(x, 0, 7, 7, VampDark); c.Swirl(x, 0, 5, c.Sec * 6 * (s > 0 ? -1 : 1), 1.6f, Red); }); break;
+                case 'd':
+                    {
+                        c.Both((x, s) => DownArc(c, x, 0, 6, 2.6f, Red));
+                        float f = c.Sin(3) * 3; // Murcielaguito
+                        c.Poly(Color.FromArgb(75, 85, 99), 24, -10 + f, 30, -14 + f, 28, -8 + f, 34, -10 + f, 28, -5 + f);
+                        break;
+                    }
+                case 'e': GenericAngry(c, Red, open); Fangs(c, 9); break;
+                case 'a': c.Both((x, s) => c.Heart(x, 0, 1.1f + 0.1f * c.Sin(7), Red)); break;
+                case 'w': open(EL, -1, 0, 0, 1); c.Up(ER, 0, 6, 3, Red); Fangs(c, 9); break;
+                default:
+                    if (c.Open < 0.5f) c.Both((x, s) => c.Line(x - 6, 1, x + 6, 1, 2.4f, Red));
+                    else { open(EL, -1, c.LookX, c.LookY, 1); open(ER, 1, c.LookX, c.LookY, 1); }
+                    Fangs(c, 9);
+                    break;
+            }
+        }
+
+        // Saiyajin calcado de la hoja del usuario
+        private static readonly Color SaiGold = Color.FromArgb(217, 169, 42);
+        private static readonly Color SaiTeal = Color.FromArgb(45, 212, 191);
+        private static readonly Color Iris = Color.FromArgb(20, 184, 166);
+
+        private static void FillGold(Face c, Shape shape, float top, float bottom)
+        {
+            using (shape)
+            using (LinearGradientBrush b = new LinearGradientBrush(new PointF(0, top - 1), new PointF(0, bottom + 1), Color.Black, Color.Black))
+            {
+                ColorBlend blend = new ColorBlend();
+                blend.Colors = new[] { c.C(Color.FromArgb(246, 214, 107)), c.C(Color.FromArgb(226, 181, 56)), c.C(Color.FromArgb(184, 134, 15)) };
+                blend.Positions = new[] { 0f, 0.55f, 1f };
+                b.InterpolationColors = blend;
+                c.G.FillPath(b, shape.Path);
+            }
+        }
+
+        private static void SaiHair(Face c, float k)
+        {
+            float sw = c.Sin(5);
+            float[,] tips = { { -37, -13 }, { -32, -24 }, { -22, -30 }, { -12, -27 }, { -3, -35 }, { 7, -28 }, { 17, -33 }, { 27, -25 }, { 37, -13 } };
+            float[] vals = { -15, -21, -22, -22, -23, -22, -22, -18 };
+            Shape hair = new Shape().M(-31, -1);
+            for (int i = 0; i < 9; i++)
+            {
+                hair.L(tips[i, 0] + sw * (i % 2 == 1 ? 1 : -1), -6 + (tips[i, 1] + 6) * k);
+                if (i < 8) hair.L(tips[i, 0] + 5, -6 + (vals[i] + 6) * k);
+            }
+            hair.L(31, -1).L(24, -9).L(14, -12).L(6, -10).L(0, -3).L(-5, -11).L(-16, -12).L(-24, -9).Z();
+            FillGold(c, hair, -6 - 30 * k, -1);
+            FillShape(c, new Shape().M(-6, -14).L(-3 + sw, -6 - 27 * k).L(1, -15).Z(), Color.FromArgb(115, 255, 246, 200));
+        }
+
+        private static void SaiFlatHair(Face c)
+        {
+            FillGold(c, new Shape().M(-30, -2).Q(-32, -22, -16, -25).L(16, -25).Q(25, -25, 27, -16).L(32, -4).L(24, -9).Q(0, -14, -23, -9).Z(), -25, -2);
+        }
+
+        private static void SaiEye(Face c, float x, int s, float lx, float ly, float k)
+        {
+            GraphicsState st = c.G.Save();
+            c.G.TranslateTransform(x, 1);
+            if (s > 0) c.G.ScaleTransform(-1, 1);
+            Shape eye = new Shape().M(-8 * k, -4 * k).L(7 * k, 0).Q(5 * k, 5 * k, -1, 5 * k).Q(-7 * k, 4.5f * k, -8 * k, -4 * k).Z();
+            using (SolidBrush b = new SolidBrush(c.C(Color.White))) c.G.FillPath(b, eye.Path);
+            StrokeShape(c, eye, 1.3f, SaiGold);
+            c.Line(-8.5f * k, -4.5f * k, 7.5f * k, -0.3f, 2.2f, SaiGold);
+            c.G.Restore(st);
+            float px = x + lx * 2 - s * 1.2f, py = 2.4f + ly;
+            c.Dot(px, py, 3.1f * k, Iris);
+            c.Dot(px, py, 1.3f * k, Dark);
+            c.Dot(px - 1, py - 1, 0.8f, Color.White);
+        }
+
+        private static void Saiyan(Face c, char face)
+        {
+            bool mouth = !SuiteSettings.EyesMouth;
+            switch (face)
+            {
+                case 'f':
+                    SaiHair(c, 1);
+                    c.Both((x, s) => { c.Arc(x, 1, 9, 1.2f, 1.8f, 1.5f, SaiGold); c.Up(x, 2, 5.5f, 2.4f, SaiTeal); });
+                    if (mouth) c.Arc(0, 7, 3, 0.15f, 0.85f, 1.8f, SaiTeal);
+                    break;
+                case 's':
+                    SaiHair(c, 1);
+                    c.Both((x, s) => { c.Arc(x, 0, 10, 1.2f, 1.8f, 1.5f, SaiGold); c.Dot(x, 2, 6.5f, Color.White); c.Ring(x, 2, 6.5f, 6.5f, SaiGold, 1.3f); c.Dot(x, 2, 3, Iris); });
+                    if (mouth) c.Ell(0, 12, 1.7f, 2.3f, SaiTeal);
+                    break;
+                case 'z':
+                    SaiHair(c, 1);
+                    c.Both((x, s) => c.Swirl(x, 2, 6, c.Sec * 6 * (s > 0 ? -1 : 1), 1.8f, SaiTeal));
+                    if (mouth) c.Lines(1.4f, SaiGold, -6, 11, -4, 9, -2, 11, 0, 9, 2, 11, 4, 9, 6, 11);
+                    break;
+                case 'd':
+                    SaiFlatHair(c);
+                    c.Both((x, s) => c.Line(x - 6, 3, x + 6, 3, 2.4f, SaiTeal));
+                    if (mouth) c.Line(-2.5f, 10, 2.5f, 10, 1.8f, SaiTeal);
+                    break;
+                case 'e':
+                    {
+                        // Aura amarilla con rayos (sin cabello, como en la hoja)
+                        float p = 0.6f + 0.4f * Math.Abs(c.Sin(6));
+                        c.Ell(0, -1, 40, 20, Op(Color.FromArgb(250, 204, 21), 0.14f * p));
+                        for (int s = -1; s <= 1; s += 2)
+                        {
+                            float x = s * 33;
+                            c.Poly(Color.FromArgb(253, 224, 71), x + s * 2, -12, x - s * 4, 0, x + s * 1, 0, x - s * 3, 12, x + s * 6, -3, x + s * 1, -3, x + s * 5, -12);
+                        }
+                        SaiEye(c, EL, -1, 0, 0.3f, 0.95f);
+                        SaiEye(c, ER, 1, 0, 0.3f, 0.95f);
+                        c.Both((x, s) => c.Line(x - s * 9, -8, x + s * 6, -4, 2.2f, SaiGold));
+                        if (mouth) c.Arc(0, 14, 3.5f, 1.15f, 1.85f, 1.8f, Color.White);
+                        break;
+                    }
+                case 'a':
+                    SaiHair(c, 1);
+                    c.Both((x, s) => { c.Heart(x, 2, 0.95f + 0.08f * c.Sin(7), Color.FromArgb(255, 111, 154)); c.Dot(x + 3, -1, 1.2f, Color.White); });
+                    break;
+                case 'w':
+                    SaiHair(c, 1.1f);
+                    SaiEye(c, EL, -1, 0, 0, 1);
+                    c.Up(ER, 2, 5.5f, 2.4f, SaiTeal);
+                    if (mouth) StrokeShape(c, new Shape().M(-2, 11).Q(2, 13, 5, 9), 1.8f, Color.White);
+                    break;
+                default:
+                    SaiHair(c, 1);
+                    if (c.Open < 0.5f) c.Both((x, s) => c.Line(x - 6, 2, x + 6, 2, 2.4f, SaiTeal));
+                    else c.Both((x, s) => SaiEye(c, x, s, c.LookX, c.LookY, 1));
+                    if (mouth) c.Line(-2, 10, 2, 10, 1.6f, Color.White);
+                    break;
+            }
+        }
+
+        // Ninja calcado de la hoja del usuario
+        private static void NinjaBand(Face c)
+        {
+            c.RR(-24, -21, 48, 9, 2, Color.FromArgb(59, 67, 86));
+            float w = c.Sin(6) * 1.5f;
+            Color tail = Color.FromArgb(43, 50, 67);
+            c.Poly(tail, 23, -20, 32, -24 + w, 33, -21 + w, 23, -16);
+            c.Poly(tail, 23, -16, 31, -15 + w, 31, -12 + w, 23, -13);
+            Glyph(c, 0, "G", 7, Color.FromArgb(163, 172, 189), -16.5f);
+        }
+
+        private static void NinjaMask(Face c, bool mouth)
+        {
+            FillShape(c, new Shape().M(-25, 1).Q(-8, 4, 0, 6).Q(8, 4, 25, 1).Q(22, 15, 0, 15).Q(-22, 15, -25, 1).Z(), Color.FromArgb(42, 48, 61));
+            if (mouth) c.Line(-2.5f, 9.5f, 2.5f, 9.5f, 1.6f, Color.White);
+        }
+
+        private static void NinjaEye(Face c, float x, int s, float k)
+        {
+            k *= 1.2f;
+            GraphicsState st = c.G.Save();
+            c.G.TranslateTransform(x, 0);
+            if (s > 0) c.G.ScaleTransform(-1, 1);
+            FillShape(c, new Shape().M(-8 * k, -5 * k).L(8 * k, 0).Q(6 * k, 6 * k, 0, 6 * k).Q(-8 * k, 6 * k, -8 * k, -5 * k).Z(), Color.White);
+            c.G.Restore(st);
+        }
+
+        private static void Ninja(Face c, char face)
+        {
+            bool mouth = !SuiteSettings.EyesMouth;
+            Color white = Color.White;
+            if (face != 'a') NinjaBand(c); // Enamorado va sin banda, como en la hoja
+            switch (face)
+            {
+                case 'f':
+                    c.Both((x, s) => c.Up(x, 1, 5.5f, 2.6f, white));
+                    c.Ell(-23, 6, 3.5f, 2, Color.FromArgb(184, 80, 104));
+                    c.Ell(23, 6, 3.5f, 2, Color.FromArgb(184, 80, 104));
+                    if (mouth) c.Arc(0, 6, 3.5f, 0.15f, 0.85f, 1.8f, white);
+                    break;
+                case 's':
+                    c.Both((x, s) => { c.Dot(x, 1, 6.5f, white); c.Dot(x, 1, 2.3f, Iris); });
+                    if (mouth) c.Ell(0, 11, 2, 2.7f, white);
+                    break;
+                case 'z':
+                    c.Both((x, s) => c.Swirl(x, 1, 6, c.Sec * 6 * (s > 0 ? -1 : 1), 1.7f, white));
+                    if (mouth) { c.Line(-3.5f, 9.5f, 3.5f, 12.5f, 1.6f, white); c.Line(-3.5f, 12.5f, 3.5f, 9.5f, 1.6f, white); }
+                    break;
+                case 'd':
+                    c.Both((x, s) => c.Line(x - 6, 2, x + 6, 2, 2.6f, white));
+                    if (mouth) c.Line(-2.5f, 9, 2.5f, 9, 1.8f, white);
+                    break;
+                case 'e':
+                    c.Both((x, s) => { NinjaEye(c, x, s, 0.9f); c.Dot(x - s * 3, 2.5f, 2.3f, Iris); c.Dot(x - s * 3, 2.5f, 1, Dark); });
+                    NinjaMask(c, mouth);
+                    break;
+                case 'a':
+                    {
+                        float p = 1 + 0.08f * c.Sin(7);
+                        c.Heart(EL, 1, p, Color.FromArgb(232, 112, 143));
+                        c.Heart(ER, 1, p, Color.FromArgb(217, 79, 110));
+                        break;
+                    }
+                case 'w':
+                    c.Dot(EL, 1, 6, white); c.Dot(EL + 1.5f, 2, 2.4f, Iris);
+                    c.Line(ER - 5, 1, ER + 5, 1, 2.4f, Color.FromArgb(227, 179, 65));
+                    if (mouth) c.Arc(3, 7, 3, 0.2f, 0.8f, 1.8f, white);
+                    break;
+                default:
+                    if (c.Open < 0.5f) c.Both((x, s) => c.Line(x - 6, 2, x + 6, 2, 2.4f, white));
+                    else c.Both((x, s) => { NinjaEye(c, x, s, 1); c.Dot(x - s * 3 + c.LookX * 1.5f, 2.5f + c.LookY, 1.9f, Dark); });
+                    NinjaMask(c, mouth);
                     break;
             }
         }

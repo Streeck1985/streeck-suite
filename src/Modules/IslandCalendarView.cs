@@ -129,7 +129,7 @@ namespace StreeckSuite.Modules
             {
                 if (e.Start.Date != DateTime.Today || (e.End < DateTime.Now && !e.AllDay)) continue;
                 RectangleF row = new RectangleF(area.X, y, area.Width, p.Px(17));
-                string when = e.AllDay ? "Todo el día" : e.Start.ToString("HH:mm");
+                string when = e.AllDay ? "Todo el día" : StreeckSuite.Core.TimeText.Short(e.Start);
                 p.DrawText(g, when + " · " + e.Title, p.Text12, white, row, StringAlignment.Near);
                 _eventHits.Add(new KeyValuePair<RectangleF, AgendaEvent>(row, e));
                 y += p.Px(17);

@@ -177,7 +177,7 @@ namespace StreeckSuite.Modules
 
         public static string TimeFormat(ClockSettings s)
         {
-            return s.ShowSeconds ? "HH:mm:ss" : "HH:mm";
+            return TimeText.ClockFormat(s.ShowSeconds); // 12 o 24 h según Ajustes (automático: como Windows)
         }
 
         // Hora de referencia para colocar y medir: tiene la anchura típica de cualquier hora
