@@ -322,7 +322,7 @@ namespace StreeckSetup
             {
                 using (RegistryKey run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
                 {
-                    _options[0] = run != null && run.GetValue("StreeckSuite") != null;
+                    _options[0] = (run != null && run.GetValue("StreeckSuite") != null) || LogonTaskExists();
                 }
                 _options[1] = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Program.AppName + ".lnk"));
             }
@@ -392,9 +392,13 @@ namespace StreeckSetup
             if (_options[1]) Shortcut(desktop, exe); else if (File.Exists(desktop)) File.Delete(desktop);
 
             Report(0.8f, "Registrando en Aplicaciones…");
+            // Inicio con Windows: tarea «al iniciar sesión», que abre la suite en segundos. La lista Run de Windows abre los
+            // programas en fila y con retraso (la suite tardaba más de un minuto); solo se usa si la tarea no se pudo crear
+            bool task = _options[0] && CreateLogonTask(exe);
+            if (!_options[0]) DeleteLogonTask();
             using (RegistryKey run = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run"))
             {
-                if (_options[0]) run.SetValue("StreeckSuite", "\"" + exe + "\""); else run.DeleteValue("StreeckSuite", false);
+                if (_options[0] && !task) run.SetValue("StreeckSuite", "\"" + exe + "\""); else run.DeleteValue("StreeckSuite", false);
             }
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\StreeckSuite"))
             {
@@ -448,6 +452,74 @@ namespace StreeckSetup
             }
         }
 
+        #region Inicio con Windows (tarea programada)
+
+        private const string LogonTaskName = "Streeck Suite";
+
+        // Tarea «al iniciar sesión» del propio usuario (no pide administrador): sin la fila ni el retraso de la lista Run
+        private static bool CreateLogonTask(string exe)
+        {
+            string user = Environment.UserDomainName + "\\" + Environment.UserName;
+            string xml =
+                "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" +
+                "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">" +
+                "<RegistrationInfo><Author>Streeck</Author><Description>Abre Streeck Suite al iniciar sesion.</Description></RegistrationInfo>" +
+                "<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + System.Security.SecurityElement.Escape(user) + "</UserId></LogonTrigger></Triggers>" +
+                "<Principals><Principal id=\"Author\"><UserId>" + System.Security.SecurityElement.Escape(user) + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>" +
+                "<Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" +
+                "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>4</Priority></Settings>" +
+                "<Actions Context=\"Author\"><Exec><Command>" + System.Security.SecurityElement.Escape(exe) + "</Command></Exec></Actions></Task>";
+            string file = Path.Combine(Path.GetTempPath(), "streeck_tarea.xml");
+            try
+            {
+                File.WriteAllText(file, xml, System.Text.Encoding.Unicode);
+                return Schtasks("/Create /TN \"" + LogonTaskName + "\" /XML \"" + file + "\" /F") == 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            finally
+            {
+                try { File.Delete(file); } catch (Exception) { }
+            }
+        }
+
+        private static void DeleteLogonTask()
+        {
+            Schtasks("/Delete /TN \"" + LogonTaskName + "\" /F");
+        }
+
+        private static bool LogonTaskExists()
+        {
+            return Schtasks("/Query /TN \"" + LogonTaskName + "\"") == 0;
+        }
+
+        private static int Schtasks(string arguments)
+        {
+            try
+            {
+                ProcessStartInfo info = new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "schtasks.exe"), arguments);
+                info.UseShellExecute = false;
+                info.CreateNoWindow = true;
+                info.RedirectStandardOutput = true;
+                info.RedirectStandardError = true;
+                using (Process p = Process.Start(info))
+                {
+                    p.StandardOutput.ReadToEnd();
+                    p.StandardError.ReadToEnd();
+                    if (!p.WaitForExit(15000)) return -1;
+                    return p.ExitCode;
+                }
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
+        #endregion
+
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr FindWindow(string className, string windowName);
 
@@ -471,6 +543,7 @@ namespace StreeckSetup
             {
                 if (run != null) run.DeleteValue("StreeckSuite", false);
             }
+            DeleteLogonTask();
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\StreeckSuite", false);
             foreach (string link in new[]
             {
