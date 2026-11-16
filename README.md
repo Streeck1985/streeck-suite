@@ -19,6 +19,17 @@
 
 > ℹ️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
 
+## ✨ Novedades de la 1.4.5
+
+### Papelera en la barra
+Una islita junto a tus apps, con el mismo skin que las demás. Un clic la abre; con **clic derecho** ves cuántos elementos hay y cuánto ocupan, y puedes **restaurar todo** o **vaciarla** (Windows siempre pregunta antes). Un puntito avisa cuando tiene algo.
+
+<p align="center"><img src="imagenes/barra-papelera.png" width="580" alt="Papelera en la barra junto a las apps"></p>
+
+### Y más
+- **Copiar texto de la pantalla (Ctrl + Alt + T):** arrastra sobre cualquier texto y queda copiado, en español o inglés. Usa el lector de Windows: no manda tu pantalla a internet. También en la isla › Herramientas.
+- **Clic derecho en el menú de inicio:** ejecutar como administrador, abrir la ubicación y desinstalar, en todas las apps.
+- **Arranca en segundos** al encender la PC, sin esperar la fila de programas de inicio de Windows.
 ## ✨ Novedades de la 1.4.2
 
 ### 5 ojitos más: ya son 30
