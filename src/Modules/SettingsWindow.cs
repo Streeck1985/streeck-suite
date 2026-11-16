@@ -1280,12 +1280,16 @@ namespace StreeckSuite.Modules
             // (El «Estilo de cristal» se quitó: solo cambiaba el menú de inicio y no se notaba; el usuario lo pidió)
             // Mini reproductor (sugerencia del mockup de la barra): con él, la isla de arriba no repite la música
             y = 380;
-            DrawCard(g, y, 66);
+            DrawCard(g, y, 66 + 62);
             DrawToggleRow(g, y + 4, "Mini reproductor en la barra", "Una isla más con la canción; la isla de arriba deja de mostrar música", SuiteSettings.TaskbarMiniPlayer,
                 () => { SuiteSettings.TaskbarMiniPlayer = !SuiteSettings.TaskbarMiniPlayer; SuiteSettings.Save(); });
+            DrawRowDivider(g, y + 64);
+            // Papelera (opción B del mockup «Papelera»): islita junto a las apps, con clic derecho para vaciar
+            DrawToggleRow(g, y + 66, "Papelera en la barra", "Junto a tus apps · clic la abre, clic derecho para vaciar o restaurar", SuiteSettings.TaskbarRecycleBin,
+                () => { SuiteSettings.TaskbarRecycleBin = !SuiteSettings.TaskbarRecycleBin; SuiteSettings.Save(); });
 
             // La skin (compartida con la isla) se elige en Apariencia, con vista previa
-            y += 66 + 14;
+            y += 66 + 62 + 14;
             DrawCard(g, y, 58);
             DrawAssistantRow(g, y + 4, "Skin: " + IslandSkin.Names[Math.Max(0, Math.Min(IslandSkin.Count - 1, SuiteSettings.TaskbarSkin))],
                 "La misma para la isla y la barra", Gray, "Elegir en Apariencia", () => { _page = Page.Appearance; Invalidate(); });

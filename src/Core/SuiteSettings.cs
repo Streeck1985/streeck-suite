@@ -44,6 +44,7 @@ namespace StreeckSuite.Core
         public static bool DoNotDisturb = false;        // Centro de control: la isla no muestra avisos de apps
         public static bool HideWindowsVolume = true;    // Esconde el aviso de volumen de Windows (la isla muestra el suyo)
         public static bool TaskbarMiniPlayer = true;    // 4.ª isla en la barra con la música (entonces la isla de arriba no la repite)
+        public static bool TaskbarRecycleBin = true;    // Papelera junto a la isla de las apps (opción B del mockup «Papelera»)
         public static int StartIcon = 0;                // Botón de Inicio: 0 Windows, 1 Streeck, 2 Orbe, 3 Ojitos, 4 Destello, 5 Luna, 6 Tu imagen
         public static int StartIconSize = 100;          // 70..140 %
         public static int StartIconHover = 1;           // 0 nada, 1 crece, 2 gira
@@ -190,6 +191,7 @@ namespace StreeckSuite.Core
                 DoNotDisturb = ReadBool(values, "isla.nomolestar", DoNotDisturb);
                 HideWindowsVolume = ReadBool(values, "isla.ocultarvolumenwindows", HideWindowsVolume);
                 TaskbarMiniPlayer = ReadBool(values, "barra.miniplayer", TaskbarMiniPlayer);
+                TaskbarRecycleBin = ReadBool(values, "barra.papelera", TaskbarRecycleBin);
                 TaskbarSkin = ReadInt(values, "barra.skin", TaskbarSkin, 0, 15);
                 FontKind islandFont;
                 if (values.TryGetValue("isla.letra", out raw) && Enum.TryParse(raw, out islandFont)) IslandFont = islandFont;
@@ -311,6 +313,7 @@ namespace StreeckSuite.Core
                     "isla.nomolestar=" + (DoNotDisturb ? 1 : 0),
                     "isla.ocultarvolumenwindows=" + (HideWindowsVolume ? 1 : 0),
                     "barra.miniplayer=" + (TaskbarMiniPlayer ? 1 : 0),
+                    "barra.papelera=" + (TaskbarRecycleBin ? 1 : 0),
                     "barra.skin=" + TaskbarSkin,
                     "isla.letra=" + IslandFont,
                     "isla.borde=" + IslandBorder,

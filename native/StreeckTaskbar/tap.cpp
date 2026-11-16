@@ -41,6 +41,8 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <shlwapi.h>
 #include <shcore.h>
+#include <shellapi.h>
+#include <shldisp.h>
 #include <cmath>
 #include <mutex>
 #include <algorithm>
@@ -82,6 +84,7 @@ struct Settings
     bool Edges = false;
     int Glass = Aero;
     bool MiniPlayer = false;  // 4.ª isla con la música (sugerencia aprobada del mockup de la barra)
+    bool RecycleBin = false;  // Papelera junto a la isla de las apps (opción B del mockup «Papelera»)
     Color IslandColor{ 219, 0, 0, 0 };  // Mismo color y opacidad que la isla de arriba (para el skin Notch)
     int Skin = 1;                       // Skin de la barra (ver enum Skin); Notch por defecto
     // Icono del botón de Inicio: 0 Windows original, 3 ojitos (dibujados aquí); el resto es la imagen inicio_archivo
@@ -185,6 +188,7 @@ static void LoadSettings()
     g_settings.Edges = ToInt(values, L"extremos", 0) == 1;
     g_settings.Glass = std::clamp(ToInt(values, L"cristal", Aero), 0, 3);
     g_settings.MiniPlayer = ToInt(values, L"miniplayer", 0) == 1;
+    g_settings.RecycleBin = ToInt(values, L"papelera", 0) == 1;
     g_settings.Skin = std::clamp(ToInt(values, L"skin", 1), 0, 15);
     g_settings.Line = std::clamp(ToInt(values, L"linea", 0), 0, 3);
     g_settings.Frosted = ToInt(values, L"vidrio", 0) == 1;
@@ -594,6 +598,8 @@ static void StyleBackground(InstanceHandle handle)
 }
 
 static void PlacePlayer(wuxc::Grid const& root, double x, double top, double height);
+static bool PlaceBin(wuxc::Grid const& root, double x, double top, double height);
+static bool BinWanted();
 static void ApplyStartIcon(FrameState& state);
 
 // Skins claros (Papel, Hielo): las letras e iconos de Windows (hora, clima, bandeja) se pintan oscuros; al volver a
@@ -827,7 +833,10 @@ static void LayoutFrame(FrameState& state)
         {
             double appsRight = frameWidth / 2 + state.Apps / 2;
             double trayLeft = frameWidth - state.TrayInset - state.TrayWidth;
-            shiftOf[2] = std::round(appsRight + gap - trayLeft);
+            // La papelera va entre las apps y la bandeja: se le deja su lugar (solo en la barra principal)
+            bool mainFrame = !g_frames.empty() && g_frames[0].get() == &state;
+            double binRoom = mainFrame && BinWanted() ? islandHeight + 10 : 0;
+            shiftOf[2] = std::round(appsRight + gap + binRoom - trayLeft);
         }
         state.GroupShift[2] = shiftOf[2];
         left = std::max(0.0, base - std::floor(shiftOf[2] / 2));
@@ -848,10 +857,16 @@ static void LayoutFrame(FrameState& state)
     for (int g = 0; g < 3; g++) islandWidth[g] = present[g] ? maxX[g] - minX[g] + 2 * pad : 0;
     for (Item& item : items) SetShift(item.Element, (float)shiftOf[item.Group]);
 
-    // Mini reproductor: a la derecha de la isla de las apps (solo en la barra principal)
+    // Papelera y mini reproductor: a la derecha de la isla de las apps, en ese orden (solo en la barra principal)
     if (!g_frames.empty() && g_frames[0].get() == &state && present[1] && !vertical)
     {
-        PlacePlayer(root, maxX[1] + shiftOf[1] + pad + 14, top, islandHeight);
+        double next = maxX[1] + shiftOf[1] + pad + 10;
+        if (PlaceBin(root, next, top, islandHeight)) next += islandHeight + 10;
+        PlacePlayer(root, next + 4, top, islandHeight);
+    }
+    else if (!g_frames.empty() && g_frames[0].get() == &state)
+    {
+        PlaceBin(root, 0, 0, 0);  // Barra vertical o sin apps: sin papelera
     }
 
     // Firma de lo que hay que dibujar
@@ -1201,6 +1216,286 @@ static void StartMedia()
             Log(L"Mini reproductor sin música: " + std::wstring(error.message()));
         }
     }).detach();
+}
+
+#pragma endregion
+
+#pragma region Papelera (opcion B del mockup de la papelera)
+
+// Islita junto a la de las apps: un clic abre la papelera; clic derecho, cuántos elementos hay, Abrir, Restaurar
+// todo y Vaciar (con la confirmación y el sonido de Windows). Un puntito avisa cuando tiene algo.
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "uuid.lib")
+
+static winrt::weak_ref<wuxc::Canvas> g_binCanvas;
+static winrt::weak_ref<wuxc::Border> g_binIsland;
+static winrt::weak_ref<wuxs::Ellipse> g_binDot;
+static winrt::weak_ref<wuxc::MenuFlyoutItem> g_binHeader;
+static wux::DispatcherTimer g_binTimer{ nullptr };
+static double g_binX = -1;
+static std::wstring g_binStyle;
+static long long g_binCount = 0, g_binBytes = 0;
+
+static bool BinWanted()
+{
+    return g_settings.Active && g_settings.RecycleBin && g_settings.Format != Capsule;
+}
+
+static std::wstring BinSummary()
+{
+    if (g_binCount <= 0) return L"La papelera está vacía";
+    wchar_t size[32];
+    if (g_binBytes >= 1024LL * 1024 * 1024) swprintf_s(size, L"%.1f GB", g_binBytes / 1073741824.0);
+    else if (g_binBytes >= 1024LL * 1024) swprintf_s(size, L"%.0f MB", g_binBytes / 1048576.0);
+    else swprintf_s(size, L"%.0f KB", g_binBytes / 1024.0);
+    return std::to_wstring(g_binCount) + (g_binCount == 1 ? L" elemento · " : L" elementos · ") + size;
+}
+
+static void ApplyBinState()
+{
+    if (auto dot = g_binDot.get()) dot.Visibility(g_binCount > 0 ? wux::Visibility::Visible : wux::Visibility::Collapsed);
+    if (auto header = g_binHeader.get()) header.Text(BinSummary());
+}
+
+// Contar la papelera puede tardar con muchos archivos: se hace en otro hilo y se aplica en el de la barra
+static void RefreshBin()
+{
+    std::thread([]
+    {
+        SHQUERYRBINFO info{};
+        info.cbSize = sizeof(info);
+        long long count = 0, bytes = 0;
+        if (SUCCEEDED(SHQueryRecycleBinW(nullptr, &info))) { count = info.i64NumItems; bytes = info.i64Size; }
+        wux::UIElement anchor = g_anchor.get();
+        if (!anchor) return;
+        try
+        {
+            anchor.Dispatcher().RunAsync(winrt::Windows::UI::Core::CoreDispatcherPriority::Normal, [count, bytes]
+            {
+                g_binCount = count;
+                g_binBytes = bytes;
+                ApplyBinState();
+            });
+        }
+        catch (...) { }
+    }).detach();
+}
+
+static void OpenBin()
+{
+    std::thread([] { ShellExecuteW(nullptr, L"open", L"shell:RecycleBinFolder", nullptr, nullptr, SW_SHOWNORMAL); }).detach();
+}
+
+static void EmptyBin()
+{
+    // Sin banderas: Windows pregunta «¿Seguro que quieres eliminar…?» y suena la papelera
+    std::thread([] { SHEmptyRecycleBinW(nullptr, nullptr, 0); RefreshBin(); }).detach();
+}
+
+// Restaurar todo: el verbo «undelete» de cada elemento de la papelera (lo mismo que «Restaurar todos los elementos»)
+static void RestoreBin()
+{
+    std::thread([]
+    {
+        if (SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)))
+        {
+            IShellDispatch* shell = nullptr;
+            if (SUCCEEDED(CoCreateInstance(CLSID_Shell, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&shell))))
+            {
+                VARIANT where;
+                VariantInit(&where);
+                where.vt = VT_I4;
+                where.lVal = ssfBITBUCKET;
+                Folder* folder = nullptr;
+                if (SUCCEEDED(shell->NameSpace(where, &folder)) && folder)
+                {
+                    FolderItems* items = nullptr;
+                    if (SUCCEEDED(folder->Items(&items)) && items)
+                    {
+                        long count = 0;
+                        items->get_Count(&count);
+                        for (long i = count - 1; i >= 0; i--)  // De atrás hacia adelante: cada restaurado sale de la lista
+                        {
+                            VARIANT index;
+                            VariantInit(&index);
+                            index.vt = VT_I4;
+                            index.lVal = i;
+                            FolderItem* item = nullptr;
+                            if (SUCCEEDED(items->Item(index, &item)) && item)
+                            {
+                                VARIANT verb;
+                                VariantInit(&verb);
+                                verb.vt = VT_BSTR;
+                                verb.bstrVal = SysAllocString(L"undelete");
+                                item->InvokeVerb(verb);
+                                VariantClear(&verb);
+                                item->Release();
+                            }
+                        }
+                        items->Release();
+                        Log(L"Papelera: se restauraron " + std::to_wstring(count) + L" elementos");
+                    }
+                    folder->Release();
+                }
+                shell->Release();
+            }
+            CoUninitialize();
+        }
+        RefreshBin();
+    }).detach();
+}
+
+static wuxc::MenuFlyoutItem BinMenuItem(const wchar_t* text, const wchar_t* glyph, bool danger)
+{
+    wuxc::MenuFlyoutItem item;
+    item.Text(text);
+    wuxc::FontIcon icon;
+    icon.Glyph(glyph);
+    item.Icon(icon);
+    if (danger) item.Foreground(wuxm::SolidColorBrush(Color{ 255, 248, 113, 113 }));
+    return item;
+}
+
+static wuxc::Canvas EnsureBin(wuxc::Grid const& root)
+{
+    wuxc::Canvas canvas = g_binCanvas.get();
+    if (canvas) return canvas;
+    canvas = wuxc::Canvas();  // Sin fondo: solo la islita recibe clics
+    wuxc::Grid::SetRowSpan(canvas, 16);
+    wuxc::Grid::SetColumnSpan(canvas, 16);
+
+    wuxc::Border island;
+    wuxc::Button button;
+    button.Background(wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 }));
+    button.BorderThickness(wux::Thickness{ 0, 0, 0, 0 });
+    button.Padding(wux::Thickness{ 0, 0, 0, 0 });
+    button.MinWidth(0);
+    button.MinHeight(0);
+    button.HorizontalAlignment(wux::HorizontalAlignment::Stretch);
+    button.VerticalAlignment(wux::VerticalAlignment::Stretch);
+    button.HorizontalContentAlignment(wux::HorizontalAlignment::Center);
+    button.VerticalContentAlignment(wux::VerticalAlignment::Center);
+    wuxc::ToolTipService::SetToolTip(button, winrt::box_value(L"Papelera"));
+
+    wuxc::Grid content;
+    content.Width(22);
+    content.Height(22);
+    wuxc::FontIcon icon;
+    icon.Glyph(L"");
+    icon.FontSize(16);
+    icon.Foreground(wuxm::SolidColorBrush(Color{ 255, 255, 255, 255 }));
+    content.Children().Append(icon);
+    wuxs::Ellipse dot;  // Tiene algo adentro
+    dot.Width(7);
+    dot.Height(7);
+    dot.Fill(wuxm::SolidColorBrush(Color{ 255, 74, 222, 128 }));
+    dot.HorizontalAlignment(wux::HorizontalAlignment::Right);
+    dot.VerticalAlignment(wux::VerticalAlignment::Top);
+    dot.Visibility(wux::Visibility::Collapsed);
+    content.Children().Append(dot);
+    button.Content(content);
+    button.Click([](auto&&, auto&&) { OpenBin(); });
+
+    wuxc::MenuFlyout menu;
+    wuxc::MenuFlyoutItem header;
+    header.Text(BinSummary());
+    header.IsEnabled(false);
+    menu.Items().Append(header);
+    menu.Items().Append(wuxc::MenuFlyoutSeparator());
+    wuxc::MenuFlyoutItem open = BinMenuItem(L"Abrir papelera", L"", false);
+    open.Click([](auto&&, auto&&) { OpenBin(); });
+    menu.Items().Append(open);
+    wuxc::MenuFlyoutItem restore = BinMenuItem(L"Restaurar todo", L"", false);
+    restore.Click([](auto&&, auto&&) { RestoreBin(); });
+    menu.Items().Append(restore);
+    menu.Items().Append(wuxc::MenuFlyoutSeparator());
+    wuxc::MenuFlyoutItem empty = BinMenuItem(L"Vaciar papelera…", L"", true);
+    empty.Click([](auto&&, auto&&) { EmptyBin(); });
+    menu.Items().Append(empty);
+    menu.Opening([](auto&&, auto&&)
+    {
+        ApplyBinState();  // Lo último que se supo; el conteo nuevo llega enseguida
+        RefreshBin();
+    });
+    button.ContextFlyout(menu);
+
+    island.Child(button);
+    canvas.Children().Append(island);
+    root.Children().Append(canvas);  // Encima de todo, como el reproductor
+
+    g_binCanvas = canvas;
+    g_binIsland = island;
+    g_binDot = dot;
+    g_binHeader = header;
+    g_binX = -1;
+    g_binStyle.clear();
+    ApplyBinState();
+    RefreshBin();
+    if (!g_binTimer)
+    {
+        g_binTimer = wux::DispatcherTimer();
+        g_binTimer.Interval(std::chrono::seconds(4));
+        g_binTimer.Tick([](auto&&, auto&&) { if (g_binCanvas.get()) RefreshBin(); });
+        g_binTimer.Start();
+    }
+    Log(L"Papelera en la barra");
+    return canvas;
+}
+
+static void RemoveBin(wuxc::Grid const& root)
+{
+    wuxc::Canvas canvas = g_binCanvas.get();
+    if (!canvas) return;
+    uint32_t index;
+    if (root.Children().IndexOf(canvas, index)) root.Children().RemoveAt(index);
+    g_binCanvas = nullptr;
+}
+
+// Coloca la papelera en x (o la quita si no toca). Devuelve si quedó puesta, para correr el reproductor
+static bool PlaceBin(wuxc::Grid const& root, double x, double top, double height)
+{
+    if (!BinWanted() || height <= 0) { RemoveBin(root); g_binStyle.clear(); return false; }
+    bool created = !g_binCanvas.get();
+    EnsureBin(root);
+    wuxc::Border island = g_binIsland.get();
+    if (!island) return false;
+
+    // El mismo skin que las islas (como el reproductor); en Completa y Línea fina va sin fondo, dentro de la barra
+    wchar_t style[64];
+    swprintf_s(style, L"%d|%d|%x|%.0f", g_settings.Skin, g_settings.Format, *(uint32_t*)&g_settings.IslandColor, height);
+    if (created || g_binStyle != style)
+    {
+        g_binStyle = style;
+        bool inline_ = g_settings.Format == Full || g_settings.Skin == SkinLine || g_settings.Skin == SkinGhost;
+        bool notch = g_settings.Skin == SkinNotch && !inline_;
+        double barHeight = root.ActualHeight();
+        island.Width(height);
+        island.Height(notch ? barHeight - top - 1 : height);
+        island.CornerRadius(notch ? wux::CornerRadius{ 18, 18, 0, 0 }
+            : g_settings.Skin == SkinAero7 ? wux::CornerRadius{ 10, 10, 10, 10 } : wux::CornerRadius{ height / 2, height / 2, height / 2, height / 2 });
+        island.Background(inline_ ? wuxm::SolidColorBrush(Color{ 0, 0, 0, 0 }) : IslandFill(3));
+        double stroke = inline_ || notch ? 0 : StrokeWidth();
+        island.BorderThickness(wux::Thickness{ stroke, stroke, stroke, stroke });
+        if (stroke > 0) island.BorderBrush(IslandStroke(3));
+        // El icono sigue el color de las letras de la barra (oscuro en los skins claros)
+        if (auto button = island.Child().try_as<wuxc::Button>())
+        {
+            if (auto content = button.Content().try_as<wuxc::Grid>())
+            {
+                if (auto icon = content.Children().GetAt(0).try_as<wuxc::FontIcon>())
+                    icon.Foreground(wuxm::SolidColorBrush(LightSkin() ? Color{ 255, 30, 30, 30 } : Color{ 255, 255, 255, 255 }));
+            }
+        }
+        g_binX = -1;
+    }
+    if (std::abs(g_binX - x) > 1)
+    {
+        bool notch = g_settings.Skin == SkinNotch && g_settings.Format != Full;
+        wuxc::Canvas::SetLeft(island, x);
+        wuxc::Canvas::SetTop(island, notch ? top + 2 : top);
+        g_binX = x;
+    }
+    return true;
 }
 
 #pragma endregion

@@ -149,6 +149,7 @@ namespace StreeckSuite.Modules
                     "extremos=" + (SuiteSettings.TaskbarEdges ? 1 : 0),
                     "cristal=" + (int)SuiteSettings.GlassStyle,
                     "miniplayer=" + (SuiteSettings.TaskbarMiniPlayer ? 1 : 0),
+                    "papelera=" + (SuiteSettings.TaskbarRecycleBin ? 1 : 0),
                     "skin=" + SuiteSettings.TaskbarSkin,
                     // Apariencia: contorno, fondo cristal y forma redondeada (los mismos de la isla)
                     "linea=" + (int)SuiteSettings.IslandBorder,
