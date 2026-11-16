@@ -279,21 +279,17 @@ namespace StreeckSuite.Modules
             Text = "Novedades de Streeck Suite " + AppInfo.Version;
             using (Graphics g = CreateGraphics()) _scale = g.DpiX / 96f;
 
-            // Novedades de la 1.4.4, 1.4.3 y 1.4.2
-            Add("", "Saiyajin enojado nuevo", "Súper Saiyajin: cabello que se levanta, ojos con brillo y rayitos", "Elegir",
+            // Novedades de la 1.4.5 (y lo más importante de las anteriores)
+            Add("\uE74D", "Papelera en la barra", "Junto a tus apps: clic la abre, clic derecho para vaciar o restaurar", "Ajustes",
+                () => { SettingsWindow.Open(SettingsWindow.Page.Taskbar); Close(); });
+            Add("\uE8E9", "Copiar texto de la pantalla", "Ctrl + Alt + T: arrastra sobre cualquier texto y queda copiado (español e inglés)", "Probar",
+                () => { Close(); IslandTools.Run(IslandTools.CopyScreenText); });
+            Add("\uEA18", "Clic derecho en el inicio", "Ejecutar como administrador, abrir ubicación y desinstalar, en todas las apps", null, null);
+            Add("\uE7E8", "Arranca en segundos", "La suite ya no espera la fila de programas de inicio de Windows", null, null);
+            Add("\uE76E", "30 ojitos y Saiyajin enojado nuevo", "Slime, Rana, Saiyajin, Ninja y Vampiro, y caras con más personalidad", "Elegir",
                 () => { SettingsWindow.Open(SettingsWindow.Page.Eyes); Close(); });
-            Add("", "Arreglo para PCs con Snapdragon", "La suite ya no hace lenta la PC con procesador ARM al entrar a la barra", null, null);
-            Add("\uE76E", "5 ojitos más: ya son 30", "Slime, Rana, Saiyajin, Ninja y Vampiro, cada uno con sus 8 caras", "Elegir",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Eyes); Close(); });
-            Add("\uE76E", "Feliz y mareado con personalidad", "Cada estilo festeja y se marea a su manera; el gato ahora es pura pupila", null, null);
             Add("\uE917", "Hora en 12 o 24 horas", "Automático como Windows, o elígelo tú: reloj 3D, isla, agenda y widgets", "Elegir",
                 () => { SettingsWindow.Open(SettingsWindow.Page.Time); Close(); });
-            Add("\uE707", "Mi ciudad para el clima", "Si el clima automático te ubica mal, elige tu ciudad", "Elegir",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Time); Close(); });
-            Add("\uE777", "Se actualiza sola", "Las versiones nuevas se instalan cuando no estás usando la PC", null, null);
-            Add("\uE7F8", "Barra de tareas en PCs con Snapdragon", "Las islas de la barra ahora funcionan en Windows con procesador ARM", null, null);
-            Add("\uE90F", "Herramientas también en Ajustes", "Captura, calculadora y bloquear desde Ajustes › Herramientas", "Abrir",
-                () => { SettingsWindow.Open(SettingsWindow.Page.Tools); Close(); });
 
             int w = (int)Px(W), h = (int)Px(Pad + 70 + _items.Count * Row + 64);
             Size = new Size(w, h);
