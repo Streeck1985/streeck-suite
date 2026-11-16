@@ -248,12 +248,21 @@ namespace StreeckSuite.Modules
             RenderSurface();
         }
 
-        // Clic derecho en una app: anclar, mover al principio, ejecutar como administrador
+        // Clic derecho en una app (mockup «Clic derecho en el inicio»): abrir, como administrador, ubicación, anclar,
+        // mover al principio y desinstalar. Las opciones de escritorio salen en todas las apps que tienen un .exe
         private void ShowAppMenu(ShellImage.App app, Point location)
         {
             ContextMenuStrip menu = new ContextMenuStrip();
             TrayMenuStyle.Apply(menu);
             bool pinned = StartMenuService.IsPinned(app.Id);
+            bool desktop = StartMenuService.IsDesktopApp(app);
+            menu.Items.Add(TrayMenuStyle.Item("Abrir", "\uE8A7", (s, e) => { HideMenu(); StartMenuService.Launch(app, false); }));
+            if (desktop)
+            {
+                menu.Items.Add(TrayMenuStyle.Item("Ejecutar como administrador", "\uEA18", (s, e) => { HideMenu(); StartMenuService.RunAsAdmin(app); }));
+                menu.Items.Add(TrayMenuStyle.Item("Abrir ubicación del archivo", "\uE838", (s, e) => { HideMenu(); StartMenuService.OpenLocation(app); }));
+            }
+            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(TrayMenuStyle.Item(pinned ? "Desanclar del inicio" : "Anclar al inicio", pinned ? "" : "", (s, e) =>
             {
                 if (pinned) StartMenuService.Unpin(app.Id); else StartMenuService.Pin(app.Id);
@@ -263,15 +272,8 @@ namespace StreeckSuite.Modules
             {
                 menu.Items.Add(TrayMenuStyle.Item("Mover al principio", "", (s, e) => { StartMenuService.MoveToFront(app.Id); Relayout(); }));
             }
-            if (StartMenuService.ExePath(app.Id) != null)
-            {
-                menu.Items.Add(TrayMenuStyle.Item("Abrir ubicación del archivo", "", (s, e) =>
-                {
-                    HideMenu();
-                    System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + StartMenuService.ExePath(app.Id) + "\"");
-                }));
-                menu.Items.Add(TrayMenuStyle.Item("Ejecutar como administrador", "", (s, e) => { HideMenu(); StartMenuService.Launch(app, true); }));
-            }
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(TrayMenuStyle.Item("Desinstalar", "\uE74D", (s, e) => { HideMenu(); StartMenuService.Uninstall(app); }));
             _contextOpen = true;
             menu.Closed += (s, e) =>
             {
@@ -570,6 +572,8 @@ namespace StreeckSuite.Modules
                 if (i == _selected) _painter.DrawText(g, "Enter ↵", _painter.Bold12, Link, new RectangleF(row.Right - Px(64), row.Y, Px(54), row.Height), StringAlignment.Far);
                 SearchResult target = r;
                 _hits.Add(new KeyValuePair<RectangleF, Action>(row, () => Run(target)));
+                // Las apps de la búsqueda también tienen clic derecho
+                if (r.Type == SearchResult.Kind.App) _appHits.Add(new KeyValuePair<RectangleF, ShellImage.App>(row, new ShellImage.App { Name = r.Title, Id = r.Target }));
             }
         }
 

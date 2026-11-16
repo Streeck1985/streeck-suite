@@ -1302,6 +1302,7 @@ namespace StreeckSuite.Modules
             {
                 new { Title = "Claude en la isla", Detail = "Ctrl + Alt + C · claude.ai con tu cuenta, sin API", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenClaude)) },
                 new { Title = "Historial del portapapeles", Detail = "Ctrl + Alt + V · lo último que copiaste, con buscador", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenClipboard)) },
+                new { Title = "Copiar texto de la pantalla", Detail = "Ctrl + Alt + T · arrastra sobre cualquier texto y queda copiado", Button = "Probar", Action = (Action)(() => { Close(); IslandTools.Run(IslandTools.CopyScreenText); }) },
                 new { Title = "Enviar y recibir con el celular", Detail = "Ctrl + Alt + R · QR por tu Wi-Fi, sin internet", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenPhone)) },
                 new { Title = "Calculadora", Detail = "Escribe la cuenta en la isla · Enter copia el resultado", Button = "Abrir", Action = (Action)(() => IslandTools.Run(IslandTools.OpenCalculator)) },
                 new { Title = "Captura de pantalla", Detail = "Win + Shift + S · el recorte de Windows", Button = "Capturar", Action = (Action)(() => { Close(); IslandTools.Screenshot(); }) },
@@ -1317,8 +1318,24 @@ namespace StreeckSuite.Modules
                 DrawAssistantRow(g, y + 4 + i * 56, rows[i].Title, rows[i].Detail, Gray, rows[i].Button, rows[i].Action);
                 if (i < rows.Length - 1) DrawRowDivider(g, y + 4 + i * 56 + 54);
             }
-            DrawText(g, "Los botones Claude, Portapapeles y Celular también están en el Centro de control de la isla.", _reg12, Gray,
-                new RectangleF(InnerX, y + 8 + rows.Length * 56 + 10, InnerW, 18), StringAlignment.Near);
+            // Idioma de «Copiar texto»: Automático prueba español e inglés y se queda con el que mejor lea
+            float langY = y + 8 + rows.Length * 56 + 12;
+            DrawCard(g, langY, 52);
+            DrawText(g, "Idioma al copiar texto", _semi14, TextColor, new RectangleF(InnerX, langY + 6, 220, 40), StringAlignment.Near);
+            string[] languages = { "Automático", "Español", "Inglés" };
+            float segW = 96, segX = ContentRight - 16 - 3 * segW - 2 * 6;
+            for (int i = 0; i < languages.Length; i++)
+            {
+                SuiteSettings.OcrLanguageKind kind = (SuiteSettings.OcrLanguageKind)i;
+                RectangleF seg = new RectangleF(segX + i * (segW + 6), langY + 10, segW, 32);
+                bool selected = SuiteSettings.OcrLanguage == kind;
+                FillRound(g, seg, 9, selected ? Color.FromArgb(46, Accent) : Hover(seg) ? Color.FromArgb(40, 47, 62) : Field);
+                StrokeRound(g, seg, 9, selected ? Color.FromArgb(140, Accent) : SoftBorder, 1, false);
+                DrawText(g, languages[i], _reg13, selected ? ValueColor : TextColor, seg, StringAlignment.Center);
+                AddHit(seg, () => { SuiteSettings.OcrLanguage = kind; SuiteSettings.Save(); });
+            }
+            DrawText(g, "Los botones Claude, Portapapeles, Copiar texto y Celular también están en la tarjeta Herramientas de la isla.", _reg12, Gray,
+                new RectangleF(InnerX, langY + 52 + 10, InnerW, 18), StringAlignment.Near);
         }
 
         #endregion

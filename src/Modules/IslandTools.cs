@@ -13,7 +13,7 @@ namespace StreeckSuite.Modules
     /// </summary>
     internal static class IslandTools
     {
-        public static Action OpenClaude, OpenClipboard, OpenPhone, SendToPhone, ToggleMic, OpenCalculator;
+        public static Action OpenClaude, OpenClipboard, OpenPhone, SendToPhone, ToggleMic, OpenCalculator, CopyScreenText;
 
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool LockWorkStation();
 
@@ -50,6 +50,7 @@ namespace StreeckSuite.Modules
             {
                 new Tool { Glyph = "\u2733", Name = "Claude", Keys = "Ctrl+Alt+C", Action = () => IslandTools.OpenClaude },
                 new Tool { Glyph = "\uE77F", Name = "Portapapeles", Keys = "Ctrl+Alt+V", Action = () => IslandTools.OpenClipboard },
+                new Tool { Glyph = "\uE8E9", Name = "Copiar texto", Keys = "Ctrl+Alt+T", Action = () => IslandTools.CopyScreenText },
                 new Tool { Glyph = "\uE8EF", Name = "Calcular", Keys = "En la isla", Action = () => IslandTools.OpenCalculator }
             },
             new[]
@@ -68,7 +69,7 @@ namespace StreeckSuite.Modules
 
         private int _category;
         private readonly RectangleF[] _tabs = new RectangleF[3];
-        private readonly RectangleF[] _buttons = new RectangleF[3];
+        private readonly RectangleF[] _buttons = new RectangleF[4];
 
         public override string TabName { get { return "Herramientas"; } }
         public override string TabGlyph { get { return "\uE90F"; } }
@@ -93,9 +94,11 @@ namespace StreeckSuite.Modules
                 p.DrawText(g, Categories[i], p.Bold12, on ? Color.FromArgb(alpha, IslandPainter.InkContrast) : gray, _tabs[i], StringAlignment.Center);
             }
 
-            // Tres botones grandes
-            float top = p.Px(32), buttonW = (width - 2 * gap) / 3, buttonH = size.Height - top;
-            for (int i = 0; i < 3; i++)
+            // Botones grandes: tres por categoría (cuatro en Productividad, con «Copiar texto»)
+            int count = Tools[_category].Length;
+            float top = p.Px(32), buttonW = (width - (count - 1) * gap) / count, buttonH = size.Height - top;
+            for (int i = 0; i < 4; i++) _buttons[i] = RectangleF.Empty;
+            for (int i = 0; i < count; i++)
             {
                 Tool tool = Tools[_category][i];
                 RectangleF b = new RectangleF(x + i * (buttonW + gap), top, buttonW, buttonH);
@@ -110,10 +113,9 @@ namespace StreeckSuite.Modules
         public override bool OnClick(PointF point)
         {
             for (int i = 0; i < 3; i++)
-            {
                 if (_tabs[i].Contains(point)) { _category = i; return true; }
+            for (int i = 0; i < Tools[_category].Length; i++)
                 if (_buttons[i].Contains(point)) { IslandTools.Run(Tools[_category][i].Action()); return true; }
-            }
             return false;
         }
 

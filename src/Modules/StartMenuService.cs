@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
@@ -360,6 +362,186 @@ namespace StreeckSuite.Modules
             string path = Path.Combine(root, id.Substring(id.IndexOf('}') + 2));
             return File.Exists(path) ? path : null;
         }
+
+        #region Clic derecho: administrador, ubicación y desinstalar en todas las apps (mockup «Clic derecho en el inicio»)
+
+        private static Dictionary<string, string> _shortcuts;
+
+        // Accesos directos del menú de Windows (los de todos los usuarios y los tuyos), por nombre de la app
+        private static string ShortcutFor(ShellImage.App app)
+        {
+            if (_shortcuts == null)
+            {
+                Dictionary<string, string> found = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (Environment.SpecialFolder folder in new[] { Environment.SpecialFolder.Programs, Environment.SpecialFolder.CommonPrograms })
+                {
+                    try
+                    {
+                        foreach (string link in Directory.GetFiles(Environment.GetFolderPath(folder), "*.lnk", SearchOption.AllDirectories))
+                        {
+                            string name = Path.GetFileNameWithoutExtension(link);
+                            if (!found.ContainsKey(name)) found[name] = link;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error("[StartMenuService] No se pudieron leer los accesos directos: {0}", ex.Message);
+                    }
+                }
+                _shortcuts = found;
+            }
+            string path;
+            return app != null && app.Name != null && _shortcuts.TryGetValue(app.Name, out path) && File.Exists(path) ? path : null;
+        }
+
+        private static string ShortcutTarget(string link)
+        {
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                object shell = Activator.CreateInstance(shellType);
+                try
+                {
+                    object shortcut = shellType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { link });
+                    string target = shortcut.GetType().InvokeMember("TargetPath", System.Reflection.BindingFlags.GetProperty, null, shortcut, null) as string;
+                    Marshal.ReleaseComObject(shortcut);
+                    return target;
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(shell);
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// El .exe de una app de escritorio: por su ruta o por el acceso directo del menú de Windows. null en las de la tienda.
+        /// </summary>
+        public static string ResolveExe(ShellImage.App app)
+        {
+            string exe = ExePath(app.Id);
+            if (exe != null) return exe;
+            string link = ShortcutFor(app);
+            if (link == null) return null;
+            string target = ShortcutTarget(link);
+            return target != null && target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(target) ? target : null;
+        }
+
+        public static bool IsDesktopApp(ShellImage.App app)
+        {
+            return ResolveExe(app) != null;
+        }
+
+        public static void RunAsAdmin(ShellImage.App app)
+        {
+            try
+            {
+                // El acceso directo conserva los argumentos y la carpeta de trabajo que la app espera
+                string target = ShortcutFor(app) ?? ResolveExe(app);
+                if (target == null) return;
+                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true, Verb = "runas" });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Dijiste «No» en el aviso de Windows
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[StartMenuService] No se pudo abrir como administrador {0}: {1}", app.Name, ex.Message);
+            }
+        }
+
+        public static void OpenLocation(ShellImage.App app)
+        {
+            string exe = ResolveExe(app);
+            if (exe != null) Process.Start("explorer.exe", "/select,\"" + exe + "\"");
+        }
+
+        /// <summary>
+        /// Abre el desinstalador del programa (siempre después de confirmar); las apps de la tienda van a Configuración.
+        /// </summary>
+        public static void Uninstall(ShellImage.App app)
+        {
+            string exe = ResolveExe(app);
+            string command = exe != null ? FindUninstaller(app.Name, Path.GetDirectoryName(exe)) : null;
+            if (command == null)
+            {
+                Process.Start("ms-settings:appsfeatures");
+                return;
+            }
+            if (MessageBox.Show("¿Desinstalar " + app.Name + "?\n\nSe abrirá su desinstalador.", "Streeck Suite", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            try
+            {
+                string file, arguments;
+                SplitCommand(command, out file, out arguments);
+                Process.Start(new ProcessStartInfo(file, arguments) { UseShellExecute = true });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+            }
+            catch (Exception ex)
+            {
+                Log.Error("[StartMenuService] No se pudo abrir el desinstalador de {0}: {1}", app.Name, ex.Message);
+                Process.Start("ms-settings:appsfeatures");
+            }
+        }
+
+        // Busca en «Programas instalados» por nombre o por la carpeta donde vive el .exe
+        private static string FindUninstaller(string name, string folder)
+        {
+            string byName = null, byFolder = null;
+            foreach (RegistryKey root in new[] { Registry.CurrentUser, Registry.LocalMachine })
+            {
+                foreach (string path in new[] { @"Software\Microsoft\Windows\CurrentVersion\Uninstall", @"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall" })
+                {
+                    using (RegistryKey list = root.OpenSubKey(path))
+                    {
+                        if (list == null) continue;
+                        foreach (string sub in list.GetSubKeyNames())
+                        {
+                            using (RegistryKey key = list.OpenSubKey(sub))
+                            {
+                                if (key == null) continue;
+                                string display = key.GetValue("DisplayName") as string;
+                                string command = key.GetValue("UninstallString") as string;
+                                if (string.IsNullOrEmpty(display) || string.IsNullOrEmpty(command)) continue;
+                                string location = (key.GetValue("InstallLocation") as string ?? "").Trim('"', ' ').TrimEnd('\\');
+                                if (byName == null && (display.Equals(name, StringComparison.OrdinalIgnoreCase) || display.StartsWith(name + " ", StringComparison.OrdinalIgnoreCase))) byName = command;
+                                if (byFolder == null && location.Length > 3 && folder.StartsWith(location, StringComparison.OrdinalIgnoreCase)) byFolder = command;
+                            }
+                        }
+                    }
+                }
+            }
+            return byName ?? byFolder;
+        }
+
+        private static void SplitCommand(string command, out string file, out string arguments)
+        {
+            command = command.Trim();
+            if (command.StartsWith("\""))
+            {
+                int end = command.IndexOf('"', 1);
+                file = command.Substring(1, end - 1);
+                arguments = command.Substring(end + 1).Trim();
+                return;
+            }
+            int exe = command.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exe > 0)
+            {
+                file = command.Substring(0, exe + 4);
+                arguments = command.Substring(exe + 4).Trim();
+                return;
+            }
+            file = command;
+            arguments = "";
+        }
+
+        #endregion
 
         [DllImport("shell32.dll")]
         private static extern int SHGetKnownFolderPath(ref Guid folder, uint flags, IntPtr token, out IntPtr path);

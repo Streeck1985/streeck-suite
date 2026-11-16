@@ -92,6 +92,8 @@ namespace StreeckSuite.Core
         public static double WeatherLat = double.NaN, WeatherLon = double.NaN;
         public enum TimeFormatKind { Auto, H24, H12 }
         public static TimeFormatKind TimeFormat = TimeFormatKind.Auto; // Automático: el mismo que tiene Windows
+        public enum OcrLanguageKind { Auto, Spanish, English }
+        public static OcrLanguageKind OcrLanguage = OcrLanguageKind.Auto; // Copiar texto de la pantalla
         public static int IslandScalePercent = 100;     // 70..120: tamaño de toda la isla (letras incluidas)
         public static IslandStyleKind IslandStyle = IslandStyleKind.Attached;
 
@@ -218,6 +220,8 @@ namespace StreeckSuite.Core
                 if (values.TryGetValue("clima.ciudad", out raw)) WeatherCity = raw;
                 TimeFormatKind timeFormat;
                 if (values.TryGetValue("hora.formato", out raw) && Enum.TryParse(raw, out timeFormat)) TimeFormat = timeFormat;
+                OcrLanguageKind ocrLanguage;
+                if (values.TryGetValue("texto.idioma", out raw) && Enum.TryParse(raw, out ocrLanguage)) OcrLanguage = ocrLanguage;
                 double coord;
                 if (values.TryGetValue("clima.lat", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLat = coord;
                 if (values.TryGetValue("clima.lon", out raw) && double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out coord)) WeatherLon = coord;
@@ -331,6 +335,7 @@ namespace StreeckSuite.Core
                     "actualizar.sola=" + (UpdateInstallAuto ? 1 : 0),
                     "clima.ciudad=" + WeatherCity,
                     "hora.formato=" + TimeFormat,
+                    "texto.idioma=" + OcrLanguage,
                     "clima.lat=" + (double.IsNaN(WeatherLat) ? "" : WeatherLat.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     "clima.lon=" + (double.IsNaN(WeatherLon) ? "" : WeatherLon.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                     "isla.monitor=" + IslandMonitor,

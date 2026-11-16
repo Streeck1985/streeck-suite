@@ -131,6 +131,26 @@ namespace StreeckSuite
                 return;
             }
 
+            // Herramienta de desarrollo: StreeckSuite.exe --test-ocr <imagen> <salida.txt>: «Copiar texto» sobre una imagen
+            if (args != null && args.Length >= 3 && args[0] == "--test-ocr")
+            {
+                SuiteSettings.Load();
+                string result;
+                try
+                {
+                    int lines;
+                    string language;
+                    string text = StreeckSuite.Modules.ScreenText.TestRead(args[1], out lines, out language);
+                    result = "Idioma: " + language + "\r\nLineas: " + lines + "\r\n---\r\n" + text;
+                }
+                catch (Exception ex)
+                {
+                    result = "ERROR: " + ex;
+                }
+                System.IO.File.WriteAllText(args[2], result, System.Text.Encoding.UTF8);
+                return;
+            }
+
             // Herramienta de desarrollo: StreeckSuite.exe --preview-eyes <archivo.png>: todos los estilos con sus 8 caras
             if (args != null && args.Length >= 2 && args[0] == "--preview-eyes")
             {

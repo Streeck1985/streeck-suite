@@ -21,6 +21,7 @@ namespace StreeckSuite.Modules
         public Bitmap Image;         // Solo imágenes
         public Bitmap Thumb;         // Miniatura para la lista
         public bool Pinned;
+        public bool FromScreen;      // Leído de la pantalla con «Copiar texto»
         public DateTime Time = DateTime.Now;
     }
 
@@ -40,6 +41,10 @@ namespace StreeckSuite.Modules
         private static readonly List<ClipItem> _items = new List<ClipItem>();
         private static Listener _listener;
         internal static bool IgnoreNext; // Lo que copia la propia lista al pegar no se vuelve a anotar
+        private static bool _nextFromScreen;
+
+        /// <summary>Lo próximo que se copie viene de «Copiar texto de la pantalla» (se marca en la lista).</summary>
+        public static void MarkNextFromScreen() { _nextFromScreen = true; }
 
         public static event Action Changed;
 
@@ -97,7 +102,12 @@ namespace StreeckSuite.Modules
                     image.Dispose();
                     item = new ClipItem { Kind = ClipItem.ItemKind.Image, Image = copy, Thumb = Thumbnail(copy), Text = string.Format("Imagen {0}×{1}", copy.Width, copy.Height) };
                 }
-                if (item != null) Add(item);
+                if (item != null)
+                {
+                    item.FromScreen = _nextFromScreen;
+                    _nextFromScreen = false;
+                    Add(item);
+                }
             }
             catch (Exception ex)
             {
@@ -521,12 +531,13 @@ namespace StreeckSuite.Modules
 
                 // Texto (una línea) y cuándo
                 string text = item.Kind == ClipItem.ItemKind.Files ? FilesLabel(item.Text) : item.Text.Replace("\r", " ").Replace("\n", " ");
-                string when = item.Pinned ? "fijado" : Ago(item.Time);
+                string when = (item.FromScreen ? "de la pantalla · " : "") + (item.Pinned ? "fijado" : Ago(item.Time));
                 Size whenSize = TextRenderer.MeasureText(when, _smallFont);
                 RectangleF textRect = new RectangleF(icon.Right + Px(8), row.Y, phone.X - icon.Right - Px(10) - whenSize.Width, row.Height);
                 TextRenderer.DrawText(g, text, _rowFont, Rectangle.Round(textRect), Color.White,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
-                TextRenderer.DrawText(g, when, _smallFont, Rectangle.Round(new RectangleF(textRect.Right + Px(4), row.Y, whenSize.Width + Px(2), row.Height)), gray,
+                TextRenderer.DrawText(g, when, _smallFont, Rectangle.Round(new RectangleF(textRect.Right + Px(4), row.Y, whenSize.Width + Px(2), row.Height)),
+                    item.FromScreen ? Color.FromArgb(74, 222, 128) : gray,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.Right);
                 y += Px(RowH);
             }

@@ -34,6 +34,7 @@ namespace StreeckSuite.Modules
         private IslandHotkey _clipboardHotkey;
         private ClipboardWindow _clipboard;
         private IslandHotkey _phoneHotkey;
+        private IslandHotkey _textHotkey;
         private IslandHotkey _micHotkey;
         private PhoneWindow _phone;
         private Action<bool> _dndChangedHandler;
@@ -157,6 +158,22 @@ namespace StreeckSuite.Modules
             // Celular: Ctrl + Alt + R para recibir; el portapapeles manda cosas al celular
             _phoneHotkey = new IslandHotkey(0x5352, Keys.R, () => { if (!_isGameActive) Phone.ShowReceive(); });
             if (!_phoneHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + R ya lo usa otro programa");
+            // Copiar texto de la pantalla: Ctrl + Alt + T o el botón de Herramientas (sustituye al de PowerToys)
+            IslandTools.CopyScreenText = () => { if (!_isGameActive) ScreenText.Start(); };
+            _textHotkey = new IslandHotkey(0x5354, Keys.T, () => IslandTools.CopyScreenText());
+            if (!_textHotkey.Apply()) _eventBus.Publish(Events.NotchShowMessage, "⚠️ Ctrl + Alt + T ya lo usa otro programa");
+            ScreenText.Copied += (text, lines, language) =>
+            {
+                if (_overlayForm == null || _overlayForm.IsDisposed) return;
+                string first = text.Replace("\r", "").Replace("\n", " ");
+                if (first.Length > 70) first = first.Substring(0, 70) + "…";
+                _overlayForm.ShowTextPeek("Texto copiado · " + lines + (lines == 1 ? " línea" : " líneas"), first, language);
+                IslandEyes.React(IslandEyes.Mood.Happy, 2);
+            };
+            ScreenText.NotFound += () =>
+            {
+                if (_overlayForm != null && !_overlayForm.IsDisposed) _overlayForm.ShowPeek("", "No encontré texto ahí", IslandPainter.Gray);
+            };
             ClipboardWindow.SendToPhone = item => Phone.SendItem(item);
             PhoneLink.FileReceived += (path, size) =>
             {
@@ -236,6 +253,7 @@ namespace StreeckSuite.Modules
             if (_clipboardHotkey != null) { _clipboardHotkey.Dispose(); _clipboardHotkey = null; }
             ClipboardHistory.Stop();
             if (_phoneHotkey != null) { _phoneHotkey.Dispose(); _phoneHotkey = null; }
+            if (_textHotkey != null) { _textHotkey.Dispose(); _textHotkey = null; }
             if (_micHotkey != null) { _micHotkey.Dispose(); _micHotkey = null; }
             SystemTweaks.Stop();
             PhoneLink.Stop();
@@ -728,8 +746,23 @@ namespace StreeckSuite.Modules
             _peek.Text = text;
             _peek.GlyphColor = color;
             _peek.Click = null;
+            _peek.Detail = null;
+            _peek.Chip = null;
             _alertView = _peek;
             _alertUntil = DateTime.Now.AddMilliseconds(PeekMs);
+            UpdateMode();
+        }
+
+        /// <summary>
+        /// «Texto copiado» (mockup «Copiar texto»): título, las primeras palabras y el idioma que leyó.
+        /// </summary>
+        internal void ShowTextPeek(string title, string detail, string chip)
+        {
+            ShowPeek("", title, Color.FromArgb(74, 222, 128));
+            if (_alertView != _peek) return;
+            _peek.Detail = detail;
+            _peek.Chip = chip;
+            _alertUntil = DateTime.Now.AddSeconds(4);
             UpdateMode();
         }
 
