@@ -19,6 +19,40 @@
 
 > ℹ️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
 
+## ✨ Novedades de la 1.4.6
+
+### Camino a casa
+Configura tu trabajo, tu casa, tu hora de salida y los días. Unos minutos antes de salir, la isla te dice **cuánto vas a tardar con el tráfico de ese momento** y qué ruta te conviene, con un mini mapa. Al abrirla ves las rutas que da TomTom, cuánto ahorrarías si sales más tarde y un botón para **navegar en Google Maps**. Usa una clave gratis de TomTom (en Ajustes › Tiempo y agenda › Camino a casa vienen los pasos para sacarla).
+
+<p align="center"><img src="imagenes/isla-camino-casa-aviso.png" width="500" alt="Aviso de Camino a casa con mini mapa"></p>
+<p align="center"><img src="imagenes/isla-camino-casa.png" width="540" alt="Rutas de Camino a casa en la isla"></p>
+
+### La isla cobra vida
+Rebote suave al abrir, carrusel al cambiar de tarjeta, una respiración cuando te avisa, el brillo con el **color de la canción**, números que ruedan en la hora y el temporizador, **play/pausa que se transforma** y ojitos que miran hacia el aviso. Se apagan en Ajustes › Apariencia.
+
+<p align="center">
+  <img src="imagenes/isla-pausa.png" width="250" alt="Play/pausa animado">
+  <img src="imagenes/isla-descarga.png" width="400" alt="Descarga lista">
+</p>
+
+### Avisos nuevos
+- **Va a llover en 20 min:** la isla te avisa antes de que llueva en tu zona.
+- **Reuniones con «Unirse»:** un minuto antes de una reunión con enlace, un aviso con el botón para entrar.
+- **Descargas junto a los ojitos:** el avance de lo que bajas o te llega del celular, y «Descarga lista» con un clic para abrirla. También puedes poner la **velocidad de internet** junto a los ojitos.
+
+<p align="center">
+  <img src="imagenes/isla-lluvia.png" width="380" alt="Aviso de lluvia">
+  <img src="imagenes/isla-unirse.png" width="420" alt="Aviso de reunión con Unirse">
+</p>
+
+### Y más
+- **Gestos en la isla cerrada:** rueda = volumen, clic central = pausa, doble clic = Música.
+- **Notas rápidas:** una tarjeta para apuntar al vuelo; se guarda sola y la mandas al celular.
+- **Modo enfoque:** «No molestar» durante el Pomodoro y la cuenta de enfoques del día.
+- **Claude en la isla** abre donde lo dejaste, carga escondido para abrir al instante y pega lo que copiaste.
+
+<p align="center"><img src="imagenes/isla-notas.png" width="420" alt="Notas rápidas"></p>
+
 ## ✨ Novedades de la 1.4.5
 
 ### Papelera en la barra
