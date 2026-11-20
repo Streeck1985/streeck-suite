@@ -19,7 +19,9 @@
 
 > ℹ️ **¿Ya la tenías instalada (versión 1.3.2 o anterior)?** Descarga e instala la versión nueva a mano una vez: el buscador de actualizaciones de esas versiones no veía las nuevas. Desde la 1.3.3 se actualiza sola.
 
-## ✨ Novedades de la 1.4.6
+## ✨ Novedades de la 1.4.6 y 1.4.7
+
+> **1.4.7:** las páginas de Ajustes que no caben (como Ojitos) ahora se desplazan con la rueda o la barrita de la derecha.
 
 ### Camino a casa
 Configura tu trabajo, tu casa, tu hora de salida y los días. Unos minutos antes de salir, la isla te dice **cuánto vas a tardar con el tráfico de ese momento** y qué ruta te conviene, con un mini mapa. Al abrirla ves las rutas que da TomTom, cuánto ahorrarías si sales más tarde y un botón para **navegar en Google Maps**. Usa una clave gratis de TomTom (en Ajustes › Tiempo y agenda › Camino a casa vienen los pasos para sacarla).
