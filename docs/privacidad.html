@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streeck Suite · Política de privacidad</title>
+<meta name="description" content="Qué datos usa Streeck Suite, dónde se guardan y con quién se comparten.">
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --text: #1a1f2b; --muted: #5b6474; --line: #e2e6ec; --accent: #0b84c6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0f17; --card: #141a25; --text: #e6e9ef; --muted: #9aa4b5; --line: #263042; --accent: #38bdf8; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 "Segoe UI", system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-size: 1.25rem; margin: 36px 0 8px; }
+  p, li { color: var(--text); }
+  .muted { color: var(--muted); }
+  .summary { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 16px 20px; margin: 24px 0; }
+  .summary ul { margin: 0; padding-left: 20px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: .95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  a { color: var(--accent); }
+  code { font-family: Consolas, monospace; font-size: .9em; background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Política de privacidad de Streeck Suite</h1>
+  <p class="muted">Última actualización: 22 de noviembre de 2026 · Desarrollador: Streeck</p>
+
+  <div class="summary">
+    <ul>
+      <li>Streeck Suite <strong>no tiene cuentas, anuncios ni analíticas</strong>. El desarrollador no recibe ningún dato tuyo.</li>
+      <li>Tu configuración y los registros de la app <strong>se quedan en tu PC</strong>.</li>
+      <li>Solo algunas <strong>funciones opcionales</strong> se conectan a servicios de terceros, y únicamente cuando tú las activas.</li>
+      <li>El micrófono se usa solo para el dictado por voz, y la voz se convierte en texto <strong>en tu propio equipo</strong>.</li>
+    </ul>
+  </div>
+
+  <h2>1. Datos que se quedan en tu PC</h2>
+  <p>Para funcionar, la app guarda y usa la siguiente información solo en tu equipo, en la carpeta <code>%LocalAppData%\StreeckSuite</code>:</p>
+  <ul>
+    <li><strong>Configuración</strong>: tus preferencias, apps ancladas, notas, widgets y ubicaciones que tú escribas (por ejemplo, las direcciones de casa y trabajo para «Camino a casa»).</li>
+    <li><strong>Claves de servicios</strong> que tú introduzcas (Google AI Studio, TomTom). La clave de Gemini se guarda cifrada con la protección de datos de Windows, así que solo tu usuario de Windows puede leerla.</li>
+    <li><strong>Registros técnicos</strong> (archivos <code>.log</code>) para diagnosticar fallos. No se envían a nadie; puedes compartirlos tú si reportas un problema.</li>
+    <li><strong>Notificaciones de Windows</strong>, que la app lee para mostrarlas en la isla. Solo se muestran en pantalla.</li>
+    <li><strong>Calendario de Windows</strong> (solo lectura), para mostrar tu agenda y avisarte de reuniones. Los eventos no salen de tu PC.</li>
+    <li><strong>Texto de la pantalla</strong>, solo cuando usas «Copiar texto» (Ctrl + Alt + T): se reconoce con el lector de Windows en tu equipo y no se sube a internet.</li>
+    <li><strong>Uso del sistema</strong> (CPU, memoria, GPU) y la <strong>música que suena</strong> en tu PC, para mostrarlos en la isla.</li>
+  </ul>
+
+  <h2>2. Micrófono</h2>
+  <p>El micrófono se activa solo cuando usas el dictado del asistente. El audio se convierte en texto con Whisper <strong>dentro de tu PC, sin internet</strong>. La grabación temporal se borra en cuanto se transcribe. El texto resultante sigue las reglas del asistente que elijas (ver la sección 3).</p>
+
+  <h2>3. Funciones opcionales que usan servicios de terceros</h2>
+  <p>Estas funciones vienen apagadas o necesitan que las configures. Cuando las usas, la app envía directamente a cada servicio solo lo necesario. Cada servicio trata esos datos según su propia política de privacidad.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Función</th><th>Servicio</th><th>Qué se envía</th></tr></thead>
+    <tbody>
+      <tr><td>Clima</td><td>ipapi.co y Open-Meteo</td><td>Tu dirección IP (para estimar una ubicación aproximada) y las coordenadas aproximadas para pedir el pronóstico, o la ciudad que tú busques.</td></tr>
+      <tr><td>Letras de canciones</td><td>LRCLIB (lrclib.net)</td><td>Artista, título y duración de la canción que suena.</td></tr>
+      <tr><td>Camino a casa</td><td>TomTom</td><td>Las direcciones que configuraste y tu clave de TomTom, para calcular la ruta con tráfico.</td></tr>
+      <tr><td>Asistente con Gemini</td><td>Google (Gemini API)</td><td>Tus preguntas, las últimas respuestas de la conversación y, si activas la voz de Gemini, el texto que se va a leer en voz alta. Se usa tu propia clave de Google AI Studio.</td></tr>
+      <tr><td>Asistente local</td><td>Ollama (en tu PC)</td><td>Nada sale de tu equipo: la conversación va a Ollama instalado en tu propia computadora.</td></tr>
+      <tr><td>Claude en la isla</td><td>Anthropic (claude.ai)</td><td>La app abre claude.ai en una ventana integrada (Microsoft Edge WebView2). Lo que escribas ahí y tu inicio de sesión se rigen por la cuenta y la política de Anthropic.</td></tr>
+      <tr><td>Reloj 3D y recorte de fondo</td><td>Hugging Face y GitHub</td><td>Solo se descarga un modelo de visión una vez. Tu fondo de pantalla se analiza en tu PC y no se sube.</td></tr>
+      <tr><td>Búsquedas y mapas</td><td>Tu navegador (Google, Bing, DuckDuckGo, Google Maps)</td><td>Abre el navegador con lo que buscaste. A partir de ahí aplica la política de ese sitio.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>4. Cambios en Windows</h2>
+  <p>Streeck Suite cambia ajustes de personalización de tu propio usuario de Windows (tema claro u oscuro, fondo de pantalla, barra de tareas) y dibuja la isla sobre la barra de tareas. Estos cambios ocurren solo en tu equipo y se revierten al cerrar la app o al desactivar cada función.</p>
+
+  <h2>5. Microsoft Store</h2>
+  <p>Si instalas la app desde Microsoft Store, Microsoft puede recopilar datos de instalación, uso y fallos según la <a href="https://privacy.microsoft.com/es-mx/privacystatement">Declaración de privacidad de Microsoft</a>. El desarrollador solo ve estadísticas agregadas y anónimas en el panel de la Store.</p>
+
+  <h2>6. Menores de edad</h2>
+  <p>La app no está dirigida a niños y no recopila a sabiendas datos de menores.</p>
+
+  <h2>7. Cómo borrar tus datos</h2>
+  <p>Desinstala Streeck Suite desde <em>Configuración → Aplicaciones</em> y borra la carpeta <code>%LocalAppData%\StreeckSuite</code>. Para los datos enviados a servicios de terceros (Google, TomTom, Anthropic), usa las opciones de cada servicio.</p>
+
+  <h2>8. Cambios a esta política</h2>
+  <p>Si la app empieza a usar datos de otra forma, esta página se actualizará y cambiará la fecha de arriba.</p>
+
+  <h2>9. Contacto</h2>
+  <p>Para dudas sobre privacidad, abre un reporte en <a href="https://github.com/Streeck1985/streeck-suite/issues">github.com/Streeck1985/streeck-suite/issues</a>.</p>
+</main>
+</body>
+</html>
